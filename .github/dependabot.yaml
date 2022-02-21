@@ -1,0 +1,37 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+version: 2
+updates:
+- package-ecosystem: "github-actions"
+  directory: "/../../boilerplate"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../donotsubmit"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../eof-newline"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../gofmt"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../goimports"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../kind-diag"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../nodiff"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/../../trailing-space"
+  schedule:
+    interval: "daily"
