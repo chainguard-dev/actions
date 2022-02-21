@@ -1,0 +1,185 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup KinD'
+description: |
+  This action sets up a KinD cluster based on the supplied
+  configuration knobs.
+
+inputs:
+  k8s-version:
+    description: |
+      The minor version of Kubernetes to use in the form: 1.23.x
+    required: true
+    default: 1.21.x
+
+  kind-version:
+    description: |
+      The exact version of KinD to use in the form: 0.11.1
+    required: true
+    default: 0.11.1
+
+  registry-authority:
+    description: |
+      The authority of the registry in the form {hostname}:{port}
+    required: true
+    default: registry.local:5000
+
+  registry-mirror:
+    description: |
+      The hostname of a registry mirror to configure KinD to use (to avoid DockerHub rate limits).
+    required: true # TODO(mattmoor): Make this optional
+    default: mirror.gcr.io
+
+  cluster-suffix:
+    description: |
+      The suffix to use for Kubernetes services on this cluster.
+    required: true
+    default: cluster.local
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install KinD
+      shell: bash
+      run: |
+        # Disable swap otherwise memory enforcement does not work
+        # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600009955324200
+        sudo swapoff -a
+        sudo rm -f /swapfile
+
+        # Use in-memory storage to avoid etcd server timeouts.
+        # https://kubernetes.slack.com/archives/CEKK1KTN2/p1615134111016300
+        # https://github.com/kubernetes-sigs/kind/issues/845
+        sudo mkdir -p /tmp/etcd
+        sudo mount -t tmpfs tmpfs /tmp/etcd
+
+        curl -Lo ./kind "https://github.com/kubernetes-sigs/kind/releases/download/v${{ inputs.kind-version }}/kind-$(uname)-amd64"
+        chmod +x ./kind
+        sudo mv kind /usr/local/bin
+
+    - name: Determine KinD Image
+      shell: bash
+      run: |
+        case ${{ inputs.k8s-version }} in
+
+          v1.21.x)
+            KIND_IMAGE_SHA="sha256:0fda882e43d425622f045b492f8bd83c2e0b4984fc03e2e05ec101ca1a685fb7"
+            echo "KIND_IMAGE=kindest/node:1.21.2@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            ;;
+
+          v1.22.x)
+            KIND_IMAGE_SHA="sha256:f240c00ffb1d82a2a2225ca0f5c85d1c45aa2b97921327cb3f6da4eee7eae5c3"
+            echo "KIND_IMAGE=kindest/node:1.22.4@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            ;;
+
+          v1.23.x)
+            KIND_IMAGE_SHA="sha256:377370274d04f4976a40f0498e47ebbdec672b951cb7b8212a1897465ddd1e9a"
+            echo "KIND_IMAGE=kindest/node:1.23.1@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            ;;
+
+          *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
+        esac
+
+    - name: Determine Registry Host and Port
+      shell: bash
+      run: |
+        echo "REGISTRY_NAME=$(echo ${{ inputs.registry-authority }} | cut -d':' -f 1)" >> $GITHUB_ENV
+        echo "REGISTRY_PORT=$(echo ${{ inputs.registry-authority }} | cut -d':' -f 2)" >> $GITHUB_ENV
+
+    - name: Create KinD Cluster
+      shell: bash
+      run: |
+        cat > kind.yaml <<EOF
+        apiVersion: kind.x-k8s.io/v1alpha4
+        kind: Cluster
+        nodes:
+        - role: control-plane
+          image: "${KIND_IMAGE}"
+          extraMounts:
+          - containerPath: /var/lib/etcd
+            hostPath: /tmp/etcd
+        - role: worker
+          image: "${KIND_IMAGE}"
+
+        # Configure registry for KinD.
+        containerdConfigPatches:
+        - |-
+          [plugins."io.containerd.grpc.v1.cri".registry.mirrors."$REGISTRY_NAME:$REGISTRY_PORT"]
+            endpoint = ["http://$REGISTRY_NAME:$REGISTRY_PORT"]
+          [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+            endpoint = ["https://${{ inputs.registry-mirror }}"]
+
+        # This is needed in order to support projected volumes with service account tokens.
+        # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
+        kubeadmConfigPatches:
+          - |
+            apiVersion: kubeadm.k8s.io/v1beta2
+            kind: ClusterConfiguration
+            metadata:
+              name: config
+            apiServer:
+              extraArgs:
+                "service-account-issuer": "https://kubernetes.default.svc"
+                "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
+                "service-account-jwks-uri": "https://kubernetes.default.svc/openid/v1/jwks"
+                "service-account-key-file": "/etc/kubernetes/pki/sa.pub"
+            networking:
+              dnsDomain: "${{ inputs.cluster-suffix }}"
+        EOF
+
+        echo '::group:: KinD config'
+        cat kind.yaml
+        echo '::endgroup::'
+
+        kind create cluster --config kind.yaml --wait 5m
+
+    - name: Expose OIDC Discovery
+      shell: bash
+      run: |
+        # From: https://banzaicloud.com/blog/kubernetes-oidc/
+        # To be able to fetch the public keys and validate the JWT tokens against
+        # the Kubernetes cluster's issuer we have to allow external unauthenticated
+        # requests. To do this, we bind this special role with a ClusterRoleBinding
+        # to unauthenticated users (make sure that this is safe in your environment,
+        # but only public keys are visible on this URL)
+        kubectl create clusterrolebinding oidc-reviewer \
+          --clusterrole=system:service-account-issuer-discovery \
+          --group=system:unauthenticated
+
+    - name: Install metallb
+      shell: bash
+      run: |
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/namespace.yaml
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/metallb.yaml
+        kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+
+        network=$(docker network inspect kind -f "{{(index .IPAM.Config 0).Subnet}}" | cut -d '.' -f1,2)
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          namespace: metallb-system
+          name: config
+        data:
+          config: |
+            address-pools:
+            - name: default
+              protocol: layer2
+              addresses:
+              - $network.255.1-$network.255.250
+        EOF
+
+    - name: Setup Container Registry
+      shell: bash
+      run: |
+        docker run -d --restart=always \
+              -p "$REGISTRY_PORT:$REGISTRY_PORT" --name "$REGISTRY_NAME" registry:2
+
+        # Connect the registry to the KinD network.
+        docker network connect "kind" "$REGISTRY_NAME"
+
+        # Make the $REGISTRY_NAME -> 127.0.0.1, to tell pushes on the host to publish to
+        # this registry, even when pushing $REGISTRY_NAME:$REGISTRY_PORT/some/image
+        sudo echo "127.0.0.1 $REGISTRY_NAME" | sudo tee -a /etc/hosts
