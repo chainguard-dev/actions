@@ -1,0 +1,37 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Verify No Diffs'
+description: |
+  This action verifies that the output of a preceding tool had no effect
+  on the working tree.
+
+inputs:
+  fixup-command:
+    description: |
+      The command that users should invoke to fix up their working tree
+      to adhere to this repo's code standards.
+    required: true
+
+
+runs:
+  using: "composite"
+  steps:
+  - name: Verify No Diffs
+    shell: bash
+    run: |
+      # From: https://backreference.org/2009/12/23/how-to-match-newlines-in-sed/
+      # This is to leverage this workaround:
+      # https://github.com/actions/toolkit/issues/193#issuecomment-605394935
+      function urlencode() {
+        sed ':begin;$!N;s/\n/%0A/;tbegin'
+      }
+
+      if [[ $(git diff-index --name-only HEAD --) ]]; then
+          for x in $(git diff-index --name-only HEAD --); do
+            echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$(git diff $x | urlencode)"
+          done
+          echo "${{ github.repository }} is incorrectly formatted. Please run ${{ inputs.fixup-command }}."
+          exit 1
+      fi
+      echo "${{ github.repository }} is formatted correctly."
