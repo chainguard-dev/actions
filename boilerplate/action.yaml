@@ -1,0 +1,75 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'boilerplate'
+description: |
+  This action runs a tool over the files in the working tree
+  to check for boilerplate license headers.
+
+inputs:
+  extension:
+    description: |
+      The file extension (no '.') for files to match.
+    required: true
+    default: go
+
+  language:
+    description: |
+      The human-readable language name (matching extension)
+    required: true
+    default: Go
+
+  boilerplate-directory:
+    description: |
+      The directory in which to look for `boilerplate.{extension}.txt` files.
+    required: true
+    default: ./hack/boilerplate
+
+runs:
+  using: "composite"
+  steps:
+  # Go is an implementation detail of this action (go get below)
+  # TODO(mattmoor): Cut a release of `boilerplate-check` we can use instead.
+  - name: Set up Go
+    uses: actions/setup-go@v2
+    with:
+      go-version: 1.17.x
+
+  - uses: reviewdog/action-setup@v1
+    with:
+      reviewdog_version: latest
+
+  - name: Install Tools
+    shell: bash
+    run: |
+      TEMP_PATH="$(mktemp -d)"
+
+      echo '::group:: Installing boilerplate-check ... https://github.com/mattmoor/boilerplate-check'
+      go get github.com/mattmoor/boilerplate-check/cmd/boilerplate-check
+      echo '::endgroup::'
+
+      echo "${TEMP_PATH}" >> $GITHUB_PATH
+
+  - name: check boilerplate
+    shell: bash
+    env:
+      REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+    run: |
+      set -e
+      cd "${GITHUB_WORKSPACE}" || exit 1
+
+      echo '::group:: Running github.com/mattmoor/boilerplate-check for ${{ inputs.language }} with reviewdog 🐶 ...'
+      # Don't fail because of boilerplate-check
+      set +o pipefail
+      boilerplate-check check \
+        --boilerplate ${{ inputs.boilerplate-directory }}/boilerplate.${{ inputs.extension }}.txt \
+        --file-extension ${{ inputs.extension }} \
+        --exclude "((vendor|third_party)/|.pb(.gw)?.go)" |
+      reviewdog -efm="%A%f:%l: %m" \
+            -efm="%C%.%#" \
+            -name="${{ inputs.language }} headers" \
+            -reporter="github-pr-check" \
+            -filter-mode="diff_context" \
+            -fail-on-error="true" \
+            -level="error"
+      echo '::endgroup::'
