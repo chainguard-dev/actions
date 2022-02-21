@@ -13,18 +13,15 @@ inputs: {}
 runs:
   using: "composite"
   steps:
+  - uses: reviewdog/action-setup@v1
+    with:
+      reviewdog_version: latest
+
   - name: Do Not Submit
     shell: bash
     run: |
       set -e
       cd "${GITHUB_WORKSPACE}" || exit 1
-
-      TEMP_PATH="$(mktemp -d)"
-      PATH="${TEMP_PATH}:$PATH"
-
-      echo '::group::🐶 Installing reviewdog ... https://github.com/reviewdog/reviewdog'
-      curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b "${TEMP_PATH}" 2>&1
-      echo '::endgroup::'
 
       echo '::group:: Running DO NOT SUBMIT with reviewdog 🐶 ...'
       # Don't fail because of grep
