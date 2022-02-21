@@ -1,0 +1,41 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'goimports'
+description: |
+  This action runs goimports over the working tree and then verifies
+  that there are no differences from running the tool.
+
+inputs: {}
+
+runs:
+  using: "composite"
+  steps:
+  - name: install goimports
+    run: |
+      cd $(mktemp -d)
+      GO111MODULE=on go get golang.org/x/tools/cmd/goimports
+
+  - name: goimports
+    shell: bash
+    run: |
+      # We limit the depth to 3 mostly to avoid go.mod files that get pulled into `third_party` like some hashicorp repos.
+      for dir in $(find . -name go.mod -maxdepth 3 -exec dirname {} \; ); do
+        echo "::group:: $dir"
+        pushd $dir
+        goimports -w \
+          $(find . \
+          -path './vendor' -prune \
+          -o -path '*/third_party' -prune \
+          -o -name '*.pb.go' -prune \
+          -o -name '*.pb.gw.go' -prune \
+          -o -name 'wire_gen.go' -prune \
+          -o -type f -name '*.go' -print)
+        popd
+        echo ::endgroup::
+      done
+
+  - name: Verify goimports
+    uses: chainguard-dev/actions/nodiff@main
+    with:
+      fixup-command: "goimports"
