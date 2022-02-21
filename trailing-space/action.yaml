@@ -1,0 +1,43 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Trailing Whitespace'
+description: |
+  This action flags occurrences of trailing whitespace at line endings.
+
+inputs: {}
+
+runs:
+  using: "composite"
+  steps:
+  - uses: reviewdog/action-setup@v1
+    with:
+      reviewdog_version: latest
+
+  - name: Trailing Whitespace
+    shell: bash
+    env:
+      REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+    run: |
+      set -e
+      cd "${GITHUB_WORKSPACE}" || exit 1
+
+      echo '::group:: Flagging trailing whitespace with reviewdog 🐶 ...'
+      # Don't fail because of grep
+      set +o pipefail
+
+      # Exclude generated and vendored files, plus some legacy
+      # paths until we update all .gitattributes
+      git ls-files |
+      git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$' | cut -d: -f1 |
+      git check-attr --stdin linguist-vendored | grep -Ev ': (set|true)$' | cut -d: -f1 |
+      git check-attr --stdin ignore-lint | grep -Ev ': (set|true)$' | cut -d: -f1 |
+      grep -Ev '^(vendor/|third_party/|.git)' |
+      xargs grep -nE " +$" |
+      reviewdog -efm="%f:%l:%m" \
+            -name="trailing whitespace" \
+            -reporter="github-pr-check" \
+            -filter-mode="added" \
+            -fail-on-error="true" \
+            -level="error"
+      echo '::endgroup::'
