@@ -1,0 +1,40 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Do Not Submit'
+description: |
+  This action flags occurrences of the string "DO NOT SUBMIT"
+  throughout the source tree.  This enables developers to flag
+  pieces of code they intend to revisit before submitting with
+  this string and have CI block the change from merging.
+
+inputs: {}
+
+runs:
+  using: "composite"
+  steps:
+  - name: Do Not Submit
+    shell: bash
+    run: |
+      set -e
+      cd "${GITHUB_WORKSPACE}" || exit 1
+
+      TEMP_PATH="$(mktemp -d)"
+      PATH="${TEMP_PATH}:$PATH"
+
+      echo '::group::🐶 Installing reviewdog ... https://github.com/reviewdog/reviewdog'
+      curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b "${TEMP_PATH}" 2>&1
+      echo '::endgroup::'
+
+      echo '::group:: Running DO NOT SUBMIT with reviewdog 🐶 ...'
+      # Don't fail because of grep
+      set +o pipefail
+      find . -type f -not -path './vendor/*' -not -path './third_party/*' -not -path './.git/*' |
+      xargs grep -n "DO NOT SUBMIT" |
+      reviewdog -efm="%f:%l:%m" \
+            -name="DO NOT SUBMIT" \
+            -reporter="github-pr-check" \
+            -filter-mode="added" \
+            -fail-on-error="true" \
+            -level="error"
+      echo '::endgroup::'
