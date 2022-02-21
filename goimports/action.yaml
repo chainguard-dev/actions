@@ -12,6 +12,7 @@ runs:
   using: "composite"
   steps:
   - name: install goimports
+    shell: bash
     run: |
       cd $(mktemp -d)
       GO111MODULE=on go get golang.org/x/tools/cmd/goimports
