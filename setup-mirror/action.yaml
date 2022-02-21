@@ -1,0 +1,25 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup Mirror'
+description: |
+  This action configures the actions runner's docker daemon to use
+  a particular mirror for preferentially fetching cached images.
+
+inputs:
+  mirror:
+    description: |
+      The hostname of the registry mirror to configure.
+    required: true
+    default: mirror.gcr.io
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure DockerHub mirror
+      shell: bash
+      run: |
+        tmp=$(mktemp)
+        jq '."registry-mirrors" = ["https://${{ inputs.mirror }}"]' /etc/docker/daemon.json > "$tmp"
+        sudo mv "$tmp" /etc/docker/daemon.json
+        sudo service docker restart
