@@ -1,0 +1,64 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Collect KinD diagnostics'
+description: |
+  This action describes a handful of core resources, such as
+  nodes and pods.  It then uploads the logs from the KinD
+  cluster to the action run.
+
+inputs:
+  cluster-resources:
+    description: |
+      A comma delimited list of cluster-scoped resources
+      to describe and dump.
+    required: true
+    default: nodes
+
+  namespace-resources:
+    description: |
+      A comma delimited list of namespace-scoped resources
+      to describe and dump.
+    required: true
+    default: pods
+
+runs:
+  using: "composite"
+  steps:
+    - name: Collect cluster diagnostics
+      shell: bash
+      run: |
+        for resource in $(echo "${{ inputs.cluster-resources }}" | sed 's/,/ /g'); do
+          for x in $(kubectl get $resource -oname); do
+            echo "::group:: describe $resource $x"
+            kubectl describe $x
+            echo '::endgroup::'
+          done
+        done
+
+    - name: Collect namespace diagnostics
+      shell: bash
+      run: |
+        for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
+          for resource in $(echo "${{ inputs.namespace-resources }}" | sed 's/,/ /g'); do
+            echo --- $ns $resource ---
+            kubectl get $resource -n${ns}
+            for x in $(kubectl get $resource -n${ns} -oname); do
+              echo "::group:: describe $resource $x"
+              kubectl describe -n${ns} $x
+              echo '::endgroup::'
+            done
+          done
+        done
+
+    - name: Collect logs
+      shell: bash
+      run: |
+        mkdir -p /tmp/logs
+        kind export logs /tmp/logs
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs
+        path: /tmp/logs
