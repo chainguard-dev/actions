@@ -1,0 +1,24 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup mink'
+description: |
+  This action sets up the mink CLI on the runner's PATH.
+
+inputs:
+  version:
+    description: |
+      The minor version of the mink CLI to install, e.g. 1.1.0
+    required: true
+    default: 1.1.0
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install mink CLI
+      shell: bash
+      run: |
+        curl -L https://github.com/mattmoor/mink/releases/download/v${{ inputs.version }}/mink_${{ inputs.version }}_Linux_x86_64.tar.gz | tar xzf - -O mink_${{ inputs.version }}_Linux_x86_64/mink > ./mink
+        chmod +x ./mink
+        sudo mv mink /usr/local/bin
