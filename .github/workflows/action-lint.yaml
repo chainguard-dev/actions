@@ -1,0 +1,20 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Action lint
+
+on:
+  pull_request:
+    branches: [ 'main' ]
+
+jobs:
+
+  check:
+    name: Action lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - uses: chainguard-dev/actions/actionlint@main

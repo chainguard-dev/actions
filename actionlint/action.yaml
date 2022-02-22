@@ -1,0 +1,14 @@
+name: 'action-lint'
+description: |
+  This action performs a lint check on action yamls.
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check workflow files
+      shell: bash
+      run: |
+        set +o errexit 
+        cd "${GITHUB_WORKSPACE}" || exit 1
+        bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        ./actionlint -color
