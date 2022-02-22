@@ -9,7 +9,7 @@ on:
 
 jobs:
 
-  donotsubmit:
+  action-lint:
     name: Action lint
     runs-on: ubuntu-latest
 
