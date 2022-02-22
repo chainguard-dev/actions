@@ -9,9 +9,9 @@ context.
 - uses: chainguard-dev/actions/setup-knative@main
   with:
     # Version is the version of Knative to install.
-    # For example, 1.2.
+    # For example, 1.2.0.
     # Required.
-    version: 1.2
+    version: 1.2.0
     # Serving Features is the encoded JSON containing the features to enable
     # in this installation of Knative Serving.
     # For example, {"kubernetes.podspec-fieldref":"enabled"}.
@@ -35,7 +35,7 @@ context.
 steps:
 - uses: chainguard-dev/actions/setup-knative@main
   with:
-    version: 1.2
+    version: 1.2.0
     serving-features: >
       {
         "kubernetes.podspec-fieldref": "enabled",
