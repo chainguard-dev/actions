@@ -1,0 +1,20 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'golangci-lint'
+description: |
+  The action runs golangci-lint and reports issues from linters.
+
+inputs:
+  args:
+    description: |
+      The arguments to pass to golangci-lint
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name:  golangci-lint ${{ inputs.args }}
+      uses: golangci/golangci-lint-action@5c56cd6c9dc07901af25baab6f2b0d9f3b7c3018 #v2.5.2
+      with:
+        args: ${{ inputs.args }}
