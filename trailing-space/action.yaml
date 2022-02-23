@@ -5,7 +5,12 @@ name: 'Trailing Whitespace'
 description: |
   This action flags occurrences of trailing whitespace at line endings.
 
-inputs: {}
+inputs:
+  path:
+    description: |
+      The path where the git repository resides.
+    required: true
+    default: ""
 
 runs:
   using: "composite"
@@ -20,7 +25,7 @@ runs:
       REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
     run: |
       set -e
-      cd "${GITHUB_WORKSPACE}" || exit 1
+      pushd "${GITHUB_WORKSPACE}/${{ inputs.path }}" || exit 1
 
       echo '::group:: Flagging trailing whitespace with reviewdog 🐶 ...'
       # Don't fail because of grep
@@ -41,3 +46,4 @@ runs:
             -fail-on-error="true" \
             -level="error"
       echo '::endgroup::'
+      popd

@@ -11,6 +11,8 @@ performs formatting.
 ```yaml
 - uses: chainguard-dev/actions/nodiff@main
   with:
+    # Set when checkout to a non-default path.
+    path: ""
     # Fixup Command. For example, gofmt -w -s
     # Required.
     fixup-command: ""
@@ -28,5 +30,6 @@ steps:
 # Flag any differences from gofmt.
 - uses: chainguard-dev/actions/nodiff@main
   with:
+    path: "src/github.com/${{ github.repository }}"
     fixup-command: "gofmt -w"
 ```

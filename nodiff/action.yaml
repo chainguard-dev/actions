@@ -7,6 +7,11 @@ description: |
   on the working tree.
 
 inputs:
+  path:
+    description: |
+      The path where the git repository resides.
+    required: true
+    default: ""
   fixup-command:
     description: |
       The command that users should invoke to fix up their working tree
@@ -20,6 +25,9 @@ runs:
   - name: Verify No Diffs
     shell: bash
     run: |
+      set -e
+      pushd "${GITHUB_WORKSPACE}/${{ inputs.path }}" || exit 1
+
       # From: https://backreference.org/2009/12/23/how-to-match-newlines-in-sed/
       # This is to leverage this workaround:
       # https://github.com/actions/toolkit/issues/193#issuecomment-605394935
@@ -35,3 +43,4 @@ runs:
           exit 1
       fi
       echo "${{ github.repository }} is formatted correctly."
+      popd

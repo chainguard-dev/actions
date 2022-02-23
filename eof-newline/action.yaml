@@ -5,7 +5,12 @@ name: 'EOF Newline'
 description: |
   This action flags files that are missing newlines at EOF.
 
-inputs: {}
+inputs:
+  path:
+    description: |
+      The path where the git repository resides.
+    required: true
+    default: ""
 
 runs:
   using: "composite"
@@ -20,7 +25,8 @@ runs:
       REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
     run: |
       set -e
-      cd "${GITHUB_WORKSPACE}" || exit 1
+      pushd "${GITHUB_WORKSPACE}/${{ inputs.path }}" || exit 1
+      git status
 
       echo '::group:: Flagging missing EOF newlines with reviewdog 🐶 ...'
       # Don't fail because of misspell
@@ -53,3 +59,4 @@ runs:
             -fail-on-error="true" \
             -level="error"
       echo '::endgroup::'
+      popd

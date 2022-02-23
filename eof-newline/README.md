@@ -9,6 +9,9 @@ Knative.
 
 ```yaml
 - uses: chainguard-dev/actions/eof-newline@main
+  with:
+    # Set when checkout to a non-default path.
+    path: ""
 ```
 
 ## Scenarios
@@ -17,4 +20,6 @@ Knative.
 steps:
   - uses: actions/checkout@v2
   - uses: chainguard-dev/actions/eof-newline@main
+    with:
+      path: "src/github.com/${{ github.repository }}"
 ```
