@@ -35,6 +35,17 @@ runs:
         sed ':begin;$!N;s/\n/%0A/;tbegin'
       }
 
+      echo '::group:: diagnostic output'
+      # For some reason sometimes running this
+      # first changes the result.
+      git status
+
+      # Show the raw diff, since the stuff below
+      # isn't always useful in its raw log form
+      # coming out of actions.
+      git diff
+      echo '::endgroup::'
+
       if [[ $(git diff-index --name-only HEAD --) ]]; then
           for x in $(git diff-index --name-only HEAD --); do
             echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$(git diff $x | urlencode)"
