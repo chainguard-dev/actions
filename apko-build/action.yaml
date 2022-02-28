@@ -1,0 +1,26 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Build image with apko'
+description: |
+  This action build an OCI image with apko, given a config file
+  and tag to use.
+
+inputs:
+  config:
+    description: |
+      The config file to use for building the image.
+    default: .apko.yaml
+
+  tag:
+    description: |
+      The tag to use for publishing the image.
+    required: true
+
+runs:
+  using: docker
+  image: 'docker://ghcr.io/chainguard-dev/apko:v0.1'
+  args:
+    - 'publish'
+    - ${{ inputs.config }}
+    - ${{ inputs.tag }}
