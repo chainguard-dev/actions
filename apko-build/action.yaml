@@ -17,9 +17,23 @@ inputs:
       The tag to use for publishing the image.
     required: true
 
+  repository_owner:
+    description: |
+      The repository owner's GitHub username.
+    default: ${{ github.repository_owner }}
+
+  token:
+    description: |
+      The repository owner's GitHub token.
+    default: ${{ github.token }}
+
 runs:
   using: docker
   image: 'docker://ghcr.io/chainguard-dev/apko:v0.1'
+  env:
+    # Set up go-containerregistry's GitHub keychain.
+    GITHUB_ACTOR: ${{ inputs.repository_owner }}
+    GITHUB_TOKEN: ${{ inputs.token }}
   args:
     - 'publish'
     - ${{ inputs.config }}
