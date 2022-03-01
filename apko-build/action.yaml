@@ -1,0 +1,40 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Build image with apko'
+description: |
+  This action build an OCI image with apko, given a config file
+  and tag to use.
+
+inputs:
+  config:
+    description: |
+      The config file to use for building the image.
+    default: .apko.yaml
+
+  tag:
+    description: |
+      The tag to use for publishing the image.
+    required: true
+
+  repository_owner:
+    description: |
+      The repository owner's GitHub username.
+    default: ${{ github.repository_owner }}
+
+  token:
+    description: |
+      The repository owner's GitHub token.
+    default: ${{ github.token }}
+
+runs:
+  using: docker
+  image: 'docker://ghcr.io/chainguard-dev/apko:v0.1'
+  env:
+    # Set up go-containerregistry's GitHub keychain.
+    GITHUB_ACTOR: ${{ inputs.repository_owner }}
+    GITHUB_TOKEN: ${{ inputs.token }}
+  args:
+    - 'publish'
+    - ${{ inputs.config }}
+    - ${{ inputs.tag }}
