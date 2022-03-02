@@ -27,6 +27,12 @@ inputs:
       The repository owner's GitHub token.
     default: ${{ github.token }}
 
+outputs:
+  digest:
+    description: |
+      The digest of the published container image.
+
+
 runs:
   using: docker
   image: "docker://ghcr.io/chainguard-dev/apko:v0.1.2"
@@ -34,7 +40,8 @@ runs:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
     GITHUB_TOKEN: ${{ inputs.token }}
+  entrypoint: /bin/sh
   args:
-    - 'publish'
-    - ${{ inputs.config }}
-    - ${{ inputs.tag }}
+    - '-c'
+    - |
+      echo "::set-output name=digest::$(/ko-app/apko publish ${{ inputs.config }} ${{ inputs.tag }})"

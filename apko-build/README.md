@@ -15,12 +15,19 @@ This action builds an image with APKO given a config file and tag to use.
     tag: ghcr.io/chainguard-dev/apko-example:latest
 ```
 
+
+
 ## Scenarios
 
 ```yaml
 steps:
 - uses: chainguard-dev/actions/apko-build@main
+  id: apko
   with:
     config: nginx.yaml
     tag: ghcr.io/chainguard-dev/apko-example:nginx
+
+- shell: bash
+  run: |
+    COSIGN_EXPERIMENTAL=true cosign sign ${{ steps.apko.outputs.digest }}
 ```
