@@ -29,7 +29,7 @@ inputs:
 
 runs:
   using: docker
-  image: "docker://ghcr.io/chainguard-dev/apko:v0.1.1"
+  image: "docker://ghcr.io/chainguard-dev/apko:v0.1.2"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
