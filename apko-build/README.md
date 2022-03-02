@@ -13,9 +13,11 @@ This action builds an image with APKO given a config file and tag to use.
     # Tag is the tag that will be published.
     # Required.
     tag: ghcr.io/chainguard-dev/apko-example:latest
+    # Image Refs is the path to a file where apko should emit a newline
+    # delimited list of published image digests.
+    # Optional, will use a temporary file when unspecified.
+    image_refs: foo.images
 ```
-
-
 
 ## Scenarios
 

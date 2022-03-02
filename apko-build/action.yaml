@@ -27,6 +27,11 @@ inputs:
       The repository owner's GitHub token.
     default: ${{ github.token }}
 
+  image_refs:
+    description: |
+      The value to pass to --image-refs.
+    default: /tmp/apko.images
+
 outputs:
   digest:
     description: |
@@ -44,4 +49,8 @@ runs:
   args:
     - '-c'
     - |
-      echo "::set-output name=digest::$(/ko-app/apko publish ${{ inputs.config }} ${{ inputs.tag }})"
+      set -o errexit
+
+      /ko-app/apko publish --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }}
+      echo EXIT CODE: $?
+      echo ::set-output name=digest::$(cat "${{ inputs.image_refs }}")
