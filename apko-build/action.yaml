@@ -27,14 +27,9 @@ inputs:
       The repository owner's GitHub token.
     default: ${{ github.token }}
 
-  apko_version:
-    description: |
-      The apko version to use.
-    default: v0.1.1
-
 runs:
   using: docker
-  image: "docker://ghcr.io/chainguard-dev/apko:${{ inputs.apko_version }}"
+  image: "docker://ghcr.io/chainguard-dev/apko:v0.1.1"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
