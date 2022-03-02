@@ -13,6 +13,10 @@ This action builds an image with APKO given a config file and tag to use.
     # Tag is the tag that will be published.
     # Required.
     tag: ghcr.io/chainguard-dev/apko-example:latest
+    # Image Refs is the path to a file where apko should emit a newline
+    # delimited list of published image digests.
+    # Optional, will use a temporary file when unspecified.
+    image_refs: foo.images
 ```
 
 ## Scenarios
@@ -20,7 +24,12 @@ This action builds an image with APKO given a config file and tag to use.
 ```yaml
 steps:
 - uses: chainguard-dev/actions/apko-build@main
+  id: apko
   with:
     config: nginx.yaml
     tag: ghcr.io/chainguard-dev/apko-example:nginx
+
+- shell: bash
+  run: |
+    COSIGN_EXPERIMENTAL=true cosign sign ${{ steps.apko.outputs.digest }}
 ```
