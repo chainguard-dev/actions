@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-
-      - name: Action lint
-        uses: reviewdog/action-actionlint@v1
+      - id: get_yamls
+        run: |
+          yamls=$(find . -name "*.yaml")
+          echo "::set-output name=files::${yamls}"
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          actionlint_flags: ${{ steps.get_yamls.outputs.files }}
