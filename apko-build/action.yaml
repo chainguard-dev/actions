@@ -7,6 +7,12 @@ description: |
   and tag to use.
 
 inputs:
+  apko_image_tag:
+    description: |
+      The APKO Image tag to be used in the build.
+    default: v0.2.2
+    required: false
+
   config:
     description: |
       The config file to use for building the image.
@@ -40,7 +46,7 @@ outputs:
 
 runs:
   using: docker
-  image: "docker://ghcr.io/chainguard-dev/apko:v0.2.2"
+  image: "docker://ghcr.io/chainguard-dev/apko:${{ inputs.apko_image_tag }}"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
