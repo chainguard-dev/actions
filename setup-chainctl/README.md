@@ -17,6 +17,10 @@ and authenticates with it using identity tokens.
     # (for now).
     # Required.
     audience: oscar-the-grouch
+    # invite-code is an invitation code that may be used to have this workload
+    # register itself with the Chainguard API the first time it executes.
+    # Optional.
+    invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
 ```
 
 ## Scenarios
@@ -30,4 +34,5 @@ steps:
   with:
     environment: big-bird
     audience: elmo
+    invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
 ```
