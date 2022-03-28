@@ -1,0 +1,51 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup chainctl'
+description: |
+  This action sets up the Chainguard chainctl CLI and authenticates
+  it against the target environment.
+
+inputs:
+  environment:
+    description: |
+      Determines the environment from which to download the chainctl
+      binary from, it is required and has no default (for now).
+    required: true
+
+  audience:
+    description: |
+      Specifies the identity token audience to use when creating an
+      identity token to authenticate with Chainguard, it is rquired
+      and has no default (for now).
+    required: true
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install chainctl
+      shell: bash
+      run: |
+        wget -O chainctl "https://storage.googleapis.com/us.artifacts.${{ inputs.environment }}.appspot.com/chainctl_$(uname -s)_$(uname -m)"
+        chmod +x chainctl
+        sudo mv chainctl /usr/local/bin
+
+    - name: Authenticate with Chainguard
+      shell: bash
+      env:
+        CHAINGUARD_INVITE_CODE: ${{ secrets.CHAINGUARD_INVITE_CODE }}
+      run: |
+        AUDIENCE="${{ inputs.audience }}"
+        IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
+
+        if chainctl auth login --identity-token "${IDTOKEN}"; then
+          echo Logged in!
+        elif [[ -z "${CHAINGUARD_INVITE_CODE}" ]]; then
+          echo No invite code is present!  Failing since registration will not do any good.
+          echo Configure a secret named CHAINGUARD_INVITE_CODE to have this workload register itself.
+          exit 1
+        else
+          # This will start failing once the invite code expires, which is why we have the login guard.
+          chainctl auth register --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"
+        fi
