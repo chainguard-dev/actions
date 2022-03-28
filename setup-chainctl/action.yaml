@@ -20,6 +20,13 @@ inputs:
       and has no default (for now).
     required: true
 
+  invite-code:
+    description: |
+      Optionally specifies an invite code that allows this workflow
+      register itself when run for the first time.
+    required: false
+
+
 runs:
   using: "composite"
 
@@ -34,7 +41,7 @@ runs:
     - name: Authenticate with Chainguard
       shell: bash
       env:
-        CHAINGUARD_INVITE_CODE: ${{ secrets.CHAINGUARD_INVITE_CODE }}
+        CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
       run: |
         AUDIENCE="${{ inputs.audience }}"
         IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
