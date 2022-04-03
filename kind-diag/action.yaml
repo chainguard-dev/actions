@@ -21,6 +21,12 @@ inputs:
       to describe and dump.
     required: true
     default: pods
+    
+  artifact-name:
+    description: |
+      The name of the artifact to upload.
+    required: true
+    default: logs
 
 runs:
   using: "composite"
@@ -60,5 +66,5 @@ runs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: logs
+        name: ${{ input.artifact-name }}
         path: /tmp/logs
