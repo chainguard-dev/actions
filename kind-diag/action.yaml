@@ -21,7 +21,7 @@ inputs:
       to describe and dump.
     required: true
     default: pods
-    
+
   artifact-name:
     description: |
       The name of the artifact to upload.
@@ -60,11 +60,13 @@ runs:
     - name: Collect logs
       shell: bash
       run: |
-        mkdir -p /tmp/logs
-        kind export logs /tmp/logs
+        mkdir -p /tmp/${{ inputs.artifact-name }}
+        kind export logs /tmp/${{ inputs.artifact-name }}
+        tar -zcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp ${{ inputs.artifact-name }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ inputs.artifact-name }}
-        path: /tmp/logs
+        name: ${{ inputs.artifact-name }}.tar.gz
+        path: /tmp/${{ inputs.artifact-name }}.tar.gz
+
