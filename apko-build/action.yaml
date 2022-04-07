@@ -32,6 +32,16 @@ inputs:
       The value to pass to --image-refs.
     default: /tmp/apko.images
 
+  keyring-append:
+    description: |
+      The value to pass to --keyring-append.
+    default: ''
+
+  archs:
+    description: |
+      The architectures to build for.
+    default: ''
+
 outputs:
   digest:
     description: |
@@ -51,6 +61,8 @@ runs:
     - |
       set -o errexit
 
-      /ko-app/apko publish --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }}
+      [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
+      [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
+      /ko-app/apko publish --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
       echo EXIT CODE: $?
       echo ::set-output name=digest::$(cat "${{ inputs.image_refs }}")
