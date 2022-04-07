@@ -19,9 +19,10 @@ runs:
       shell: bash
       run: |
         sudo apk add --initdb --root=/
-        cat <<_EOF_
+        (cat <<_EOF_
         https://dl-cdn.alpinelinux.org/alpine/edge/main
-        _EOF_ | sudo tee /etc/apk/repositories
+        _EOF_
+        ) | sudo tee /etc/apk/repositories
     - name: 'Fetch and install alpine keyring'
       shell: bash
       run: |
