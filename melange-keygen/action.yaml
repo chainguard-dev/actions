@@ -24,9 +24,9 @@ runs:
     - name: 'Generate melange signing key'
       shell: bash
       run: |
-        melange keygen ${{ inputs.signing-key-path }}
+        sudo melange keygen ${{ inputs.signing-key-path }}
     - name: 'Install public key in system APK keyring'
       shell: bash
       run: |
-        cp ${{ inputs.signing-key-path }}.pub /etc/apk/keys/
+        sudo cp ${{ inputs.signing-key-path }}.pub /etc/apk/keys/
       if: ${{ inputs.install-public-key }}
