@@ -1,0 +1,45 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup melange'
+description: |
+  Sets up melange, so it can run in an Ubuntu environment.
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: 'Fetch apk-tools'
+      shell: bash
+      run: |
+        wget 'https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/apk-tools-static-2.12.9-r2.apk'
+        tar zxf apk-tools-static-2.12.9-r2.apk sbin/apk.static
+        mv sbin/apk.static /sbin/apk
+    - name: 'Set up apk-tools in overlay mode'
+      shell: bash
+      run: |
+        apk add --initdb --root=/
+        cat >/etc/apk/repositories <<_EOF_
+        https://dl-cdn.alpinelinux.org/alpine/edge/main
+        _EOF_
+    - name: 'Fetch and install alpine keyring'
+      shell: bash
+      run: |
+        apk update --allow-untrusted
+        apk add --allow-untrusted alpine-keys
+    - uses: actions/setup-go@f6164bd8c8acb4a71fb2791a8b6c4024ff038dab # v2.1.5
+      with:
+        go-version: 1.18.x
+    - name: 'Install dependencies'
+      shell: bash
+      run: |
+        apt update
+        apt install -y build-essential git
+    - name: 'Install melange'
+      shell: bash
+      run: |
+        git clone https://github.com/chainguard-dev/melange
+        cd melange
+        make melange
+        make install
+        melange version
