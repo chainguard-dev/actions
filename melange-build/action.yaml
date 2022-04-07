@@ -41,7 +41,7 @@ runs:
       shell: bash
       run: |
         ${{ inputs.sign-with-temporary-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} $signarg
+        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} $signarg --use-proot
     - name: 'Index packages'
       shell: bash
       run: |
