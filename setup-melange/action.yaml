@@ -34,7 +34,7 @@ runs:
       shell: bash
       run: |
         apt update
-        apt install -y build-essential git
+        apt install -y build-essential git bubblewrap
     - name: 'Install melange'
       shell: bash
       run: |
