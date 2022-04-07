@@ -25,7 +25,7 @@ inputs:
   signing-key-path:
     description: |
       The path for the temporary key if signing is enabled.
-    default: /root/melange.rsa
+    default: ${{ github.workspace }}/melange.rsa
 
 runs:
   using: 'composite'
