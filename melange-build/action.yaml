@@ -1,0 +1,53 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Build package with melange'
+description: |
+  This action builds a package using Melange, given a config file.
+
+inputs:
+  config:
+    description: |
+      The config file to use for building the package.
+    default: .melange.yaml
+
+  archs:
+    description: |
+      The architectures to use.
+    default: x86_64
+
+  sign-with-temporary-key:
+    description: |
+      Sign packages with a temporary key, useful for multi-stage
+      pipelines.
+    default: false
+
+  signing-key-path:
+    description: |
+      The path for the temporary key if signing is enabled.
+    default: /root/melange.rsa
+
+runs:
+  using: 'composite'
+
+  steps:
+    - uses: chainguard-dev/actions/setup-melange@main
+    # TODO(kaniini): enable keyless signing once it lands
+    - uses: chainguard-dev/actions/melange-keygen@main
+      if: ${{ inputs.sign-with-temporary-key }}
+      with:
+        signing-key-path: ${{ inputs.signing-key-path }}
+    - name: 'Build package with Melange'
+      shell: bash
+      run: |
+        ${{ inputs.sign-with-temporary-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
+        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} $signarg
+    - name: 'Index packages'
+      shell: bash
+      run: |
+        for arch in $(echo ${{ inputs.archs }} | tr "," " "); do
+          pushd packages/$arch
+          apk index -o APKINDEX.tar.gz *.apk
+          ${{ inputs.sign-with-temporary-key }} && melange sign-index --signing-key=${{ inputs.signing-key-path }} APKINDEX.tar.gz
+          popd
+        done
