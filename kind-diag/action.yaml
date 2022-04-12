@@ -28,6 +28,42 @@ inputs:
     required: true
     default: logs
 
+  start-time:
+    description: |
+      The start time to query the Grafana Dashboard, in timestamp (default: now).
+    required: false
+    default: "now"
+
+  grafana-dashboards:
+    description: |
+      List of Grafana dashboards to be collected with namespace/dashboard name.
+    required: false
+    default: ""
+
+  grafana-namespace:
+    description: |
+      Name of the Grafana namespace to be used for port forward.
+    required: false
+    default: "monitoring-system"
+
+  grafana-svc:
+    description: |
+      Name of the Grafana service to be used for port forward.
+    required: false
+    default: "svc/prometheus-grafana"
+
+  grafana-username:
+    description: |
+      Name of the Grafana service to be used for port forward.
+    required: false
+    default: "admin"
+
+  grafana-password:
+    description: |
+      Name of the Grafana service to be used for port forward.
+    required: false
+    default: "prom-operator"
+
 runs:
   using: "composite"
   steps:
@@ -70,3 +106,26 @@ runs:
         name: ${{ inputs.artifact-name }}.tar.gz
         path: /tmp/${{ inputs.artifact-name }}.tar.gz
 
+    - name: Collect grafana dashboards
+      shell: bash
+      if: ${{ inputs.grafana-dashboards != '' }}
+      run: |
+        mkdir -p /tmp/graphs
+
+        kubectl port-forward -n ${{ inputs.grafana-namespace }} ${{ inputs.grafana-svc }} 3000:80 &
+        until curl --max-time 5 http://localhost:3000 ; do echo waiting for grafana; sleep 5; done;
+
+        IFS=',' read -r -a grafs <<< ${{ inputs.grafana-dashboards }}
+        for graf in "${grafs[@]}"
+        do
+          curl "http://${{ inputs.grafana-username }}:${{ inputs.grafana-password }}@localhost:3000/render/d/"$graf"?width=2000&height=2000&from=${{ inputs.start-time }}&to=now" > /tmp/graphs/"${graf#*/}".png
+        done
+
+        tar -zcf /tmp/graphs.tar.gz -C /tmp graphs
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      if: ${{ inputs.grafana-dashboards != '' }}
+      with:
+        name: graphs.tar.gz
+        path: /tmp/graphs.tar.gz
