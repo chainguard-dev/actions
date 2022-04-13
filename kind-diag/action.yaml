@@ -98,13 +98,6 @@ runs:
       run: |
         mkdir -p /tmp/${{ inputs.artifact-name }}
         kind export logs /tmp/${{ inputs.artifact-name }}
-        tar -zcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp ${{ inputs.artifact-name }}
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ inputs.artifact-name }}.tar.gz
-        path: /tmp/${{ inputs.artifact-name }}.tar.gz
 
     - name: Collect grafana dashboards
       shell: bash
@@ -121,11 +114,17 @@ runs:
           curl "http://${{ inputs.grafana-username }}:${{ inputs.grafana-password }}@localhost:3000/render/d/"$graf"?width=2000&height=2000&from=${{ inputs.start-time }}&to=now" > /tmp/graphs/"${graf#*/}".png
         done
 
-        tar -zcf /tmp/graphs.tar.gz -C /tmp graphs
+    - name: Package logs
+      shell: bash
+      run: |
+        tar -cvf /tmp/temp.tar -C /tmp ${{ inputs.artifact-name }}
+        if [ -d "/tmp/graphs" ]; then
+          tar -rvkf /tmp/temp.tar -C /tmp graphs
+        fi
+        tar -zvcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp temp.tar
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
-      if: ${{ inputs.grafana-dashboards != '' }}
       with:
-        name: graphs.tar.gz
-        path: /tmp/graphs.tar.gz
+        name: ${{ inputs.artifact-name }}.tar.gz
+        path: /tmp/${{ inputs.artifact-name }}.tar.gz
