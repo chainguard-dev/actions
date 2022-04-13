@@ -1,0 +1,21 @@
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[*]
+    - deployments=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+grafana:
+  sidecar:
+    dashboards:
+      searchNamespace: ALL
+  plugins:
+    enabled: true
+  extraContainers: |
+    - name: renderer
+      image: docker.io/grafana/grafana-image-renderer:latest
+  env:
+    GF_RENDERING_SERVER_URL: http://localhost:8081/render
+    GF_RENDERING_CALLBACK_URL: http://localhost:3000/

@@ -1,0 +1,46 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup Monitoring'
+description: |
+  This action sets up the Prometheus Stack using the Helm chart using the basic configuration
+  (https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack).
+
+inputs:
+  helm-version:
+    description: |
+      Helm version to install (default v3.8.1)
+    required: false
+    default: v3.8.1
+
+  prometheus-chart-version:
+    description: |
+      kube-prometheus-stack helm chart version to be installed (default 34.5.1)
+    required: false
+    default: 34.5.1
+
+  monitoring-namespace:
+    description: |
+      In which namespace the stack will be deployed (default monitoring-system)
+    required: false
+    default: monitoring-system
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install Helm
+      uses: azure/setup-helm@18bc76811624f360dbd7f18c2d4ecb32c7b87bab # v1.1
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: Install Prometheus
+      shell: bash
+      run: |
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          --create-namespace -n ${{ inputs.monitoring-namespace }} \
+          -f "$GITHUB_ACTION_PATH/values.yaml" \
+          --version ${{ inputs.prometheus-chart-version }} \
+          --wait
