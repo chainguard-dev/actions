@@ -37,6 +37,12 @@ inputs:
     required: true
     default: cluster.local
 
+outputs:
+  kind-start-time:
+    description: |
+      The timestamp when the Kind cluster started.
+    value: ${{ steps.start-time.outputs.kind-start-time }}
+
 runs:
   using: "composite"
 
@@ -183,3 +189,8 @@ runs:
         # Make the $REGISTRY_NAME -> 127.0.0.1, to tell pushes on the host to publish to
         # this registry, even when pushing $REGISTRY_NAME:$REGISTRY_PORT/some/image
         sudo echo "127.0.0.1 $REGISTRY_NAME" | sudo tee -a /etc/hosts
+
+    - name: Set start time output
+      id: start-time
+      run:  echo ::set-output name=kind-start-time::$(echo $(($(date +%s%N)/1000000)))
+      shell: bash
