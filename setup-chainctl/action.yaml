@@ -54,5 +54,5 @@ runs:
           exit 1
         else
           # This will start failing once the invite code expires, which is why we have the login guard.
-          chainctl auth register --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"
+          chainctl auth login --register --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"
         fi
