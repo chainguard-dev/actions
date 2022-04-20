@@ -13,6 +13,7 @@ grafana:
       searchNamespace: ALL
   plugins:
     enabled: true
+  plugins: []
   extraContainers: |
     - name: renderer
       image: docker.io/grafana/grafana-image-renderer:latest
