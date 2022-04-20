@@ -22,6 +22,10 @@ runs:
 
         if [ -n "$images" ]; then
             for i in "${!images2[@]}"; do
+              if [[ ${images2[i]} != *":"* ]]; then
+                echo "Image ${images2[i]} in file $file does not have a tag, ignoring..."
+                continue
+              fi
               echo "Processing ${images2[i]} in file $file"
               updated_digest=$(crane digest "${images2[i]}")
               if [ "$updated_digest" != "${digests2[i]}" ] && [ -n "$updated_digest" ]; then

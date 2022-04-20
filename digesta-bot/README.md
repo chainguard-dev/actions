@@ -1,4 +1,4 @@
-# Image Digest Update
+# Image Digest Update (digesta-bot)
 
 This action updates a image digest when using the tag+digest pattern.
 If the tag is mutable it will have a new digest when the tag is updated.
@@ -8,7 +8,7 @@ and open a PR
 ## Usage
 
 ```yaml
-    - uses: chainguard-dev/actions/update-digest@main
+    - uses: chainguard-dev/actions/digesta-bot@main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -16,7 +16,7 @@ and open a PR
 ## Scenarios
 
 ```yaml
-name: image digest update
+name: Image digest update
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ on:
 
 jobs:
   image-update:
-    name: Test image digest update
+    name: Image digest update
     runs-on: ubuntu-latest
 
     permissions:
@@ -35,7 +35,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: chainguard-dev/actions/update-digest@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: chainguard-dev/actions/digesta-bot@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
 ```
