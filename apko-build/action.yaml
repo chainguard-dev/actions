@@ -42,6 +42,12 @@ inputs:
       The architectures to build for.
     default: ''
 
+  source-date-epoch: |
+    description: |
+      The UNIX timestamp to use as the source date when building an image.
+      This is set as the SOURCE_DATE_EPOCH environment variable.
+    default: ''
+
 outputs:
   digest:
     description: |
@@ -61,6 +67,7 @@ runs:
     - |
       set -o errexit
 
+      [ -n "${{ inputs.source-date-epoch }}" ] && export SOURCE_DATE_EPOCH='${{ inputs.source-date-epoch }}'
       [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
       [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
       /ko-app/apko publish --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
