@@ -42,7 +42,7 @@ inputs:
       The architectures to build for.
     default: ''
 
-  source-date-epoch: |
+  source-date-epoch:
     description: |
       The UNIX timestamp to use as the source date when building an image.
       This is set as the SOURCE_DATE_EPOCH environment variable.
