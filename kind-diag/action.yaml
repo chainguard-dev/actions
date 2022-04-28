@@ -13,7 +13,7 @@ inputs:
       A comma delimited list of cluster-scoped resources
       to describe and dump.
     required: true
-    default: nodes
+    default: nodes,namespaces,crds
 
   namespace-resources:
     description: |
