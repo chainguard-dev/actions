@@ -73,7 +73,7 @@ runs:
         for resource in $(echo "${{ inputs.cluster-resources }}" | sed 's/,/ /g'); do
           for x in $(kubectl get $resource -oname); do
             echo "::group:: describe $resource $x"
-            kubectl describe $x
+            kubectl describe $x || true
             echo '::endgroup::'
           done
         done
@@ -87,7 +87,8 @@ runs:
             kubectl get $resource -n${ns}
             for x in $(kubectl get $resource -n${ns} -oname); do
               echo "::group:: describe $resource $x"
-              kubectl describe -n${ns} $x
+              # Don't fail if the resource disappears midway.
+              kubectl describe -n${ns} $x || true
               echo '::endgroup::'
             done
           done
