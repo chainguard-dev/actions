@@ -45,7 +45,7 @@ runs:
       fi
 
   - name: Create Pull Request
-    uses: peter-evans/create-pull-request@v3.11.0
+    uses: peter-evans/create-pull-request@v4.0.2
     if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
     with:
       token: ${{ inputs.token }}
@@ -54,6 +54,5 @@ runs:
       body: >
         Update images digests
       labels: feature, automated pr
-      branch-suffix: timestamp
       branch: update-digests
       delete-branch: true
