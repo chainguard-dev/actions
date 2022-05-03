@@ -14,7 +14,7 @@ on:
         required: false
 
 jobs:
-  plan:
+  terraform-plan:
     runs-on: ubuntu-latest
     env:
       tf_actions_working_dir: ${{ inputs.dir }}

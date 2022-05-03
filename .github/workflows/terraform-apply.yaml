@@ -14,7 +14,7 @@ on:
         required: false
 
 jobs:
-  apply:
+  terraform-apply:
     runs-on: ubuntu-latest
     env:
       tf_actions_working_dir: ${{ inputs.dir }}
@@ -29,6 +29,10 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           cli_config_credentials_token: ${{ secrets.tfc_token }}
+
+      - name: Terraform init
+        id: init
+        run: terraform init
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
