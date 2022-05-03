@@ -2,6 +2,10 @@ name: "Terraform plan"
 description: "Workflow for terraform plan"
 
 inputs:
+  github_token:
+    description: "Github token"
+    required: true
+
   cli_config_credentials_token:
     description: "Terraform cloud api token"
     required: false
@@ -44,7 +48,7 @@ runs:
       env:
         PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ inputs.github_token }}
         script: |
           const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
           #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
