@@ -9,8 +9,8 @@ on:
         default: "."
         type: string
     secrets:
-      tfc_token:
-        description: "Terraform cloud api token"
+      cli_config_credentials_token:
+        description: "Credentials for Terraform Cloud"
         required: false
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
       - name: Terraform setup
         uses: hashicorp/setup-terraform@v2
         with:
-          cli_config_credentials_token: ${{ secrets.tfc_token }}
+          cli_config_credentials_token: ${{ secrets.cli_config_credentials_token }}
 
       - name: Terraform fmt
         id: fmt
