@@ -1,0 +1,29 @@
+name: Terraform apply
+
+on:
+  workflow_call:
+    inputs:
+      dir:
+        description: "Terraform working directory"
+        required: false
+        default: "."
+        type: string
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Terraform setup
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -input=false
