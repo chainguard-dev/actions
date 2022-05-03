@@ -28,16 +28,20 @@ jobs:
           cli_config_credentials_token: ${{ secrets.tfc_token }}
 
       - name: Terraform fmt
+        id: fmt
         run: terraform fmt -check
         continue-on-error: true
 
       - name: Terraform init
+        id: init
         run: terraform init
 
       - name: Terraform validate
+        id: validate
         run: terraform validate -no-color
 
       - name: Terraform plan
+        id: plan
         if: github.event_name == 'pull_request'
         run: terraform plan -no-color
         continue-on-error: true
