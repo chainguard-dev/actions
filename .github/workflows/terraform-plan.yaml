@@ -16,9 +16,8 @@ on:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.dir }}
+    env:
+      tf_actions_working_dir: ${{ inputs.dir }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
