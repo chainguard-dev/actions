@@ -25,6 +25,12 @@ inputs:
     required: true
     default: ./hack/boilerplate
 
+  exclude:
+    description: |
+      Regular expression of paths to exclude.
+    required: false
+    default: ((vendor|third_party)/|.pb(.gw)?.go)
+
 runs:
   using: "composite"
   steps:
@@ -64,7 +70,7 @@ runs:
       boilerplate-check check \
         --boilerplate ${{ inputs.boilerplate-directory }}/boilerplate.${{ inputs.extension }}.txt \
         --file-extension ${{ inputs.extension }} \
-        --exclude "((vendor|third_party)/|.pb(.gw)?.go)" |
+        --exclude "${{ inputs.exclude }}" |
       reviewdog -efm="%A%f:%l: %m" \
             -efm="%C%.%#" \
             -name="${{ inputs.language }} headers" \
