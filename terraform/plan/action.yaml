@@ -2,8 +2,8 @@ name: "Terraform plan"
 description: "Workflow for terraform plan"
 
 inputs:
-  dir:
-    description: "Directory to run in"
+  cli_config_credentials_token:
+    description: "Terraform cloud api token"
     required: false
     default: "."
 
@@ -16,7 +16,7 @@ runs:
     - name: Terraform setup
       uses: hashicorp/setup-terraform@v2
       with:
-        cli_config_credentials_token: ${{ secrets.cli_config_credentials_token }}
+        cli_config_credentials_token: ${{ inputs.cli_config_credentials_token }}
 
     - name: Terraform fmt
       id: fmt
