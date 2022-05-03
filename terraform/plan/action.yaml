@@ -20,22 +20,24 @@ runs:
 
     - name: Terraform fmt
       id: fmt
+      shell: bash
       run: terraform fmt -check
-      continue-on-error: true
 
     - name: Terraform init
       id: init
+      shell: bash
       run: terraform init
 
     - name: Terraform validate
       id: validate
+      shell: bash
       run: terraform validate -no-color
 
     - name: Terraform plan
       id: plan
       if: github.event_name == 'pull_request'
+      shell: bash
       run: terraform plan -no-color
-      continue-on-error: true
 
     - name: Comment plan
       uses: actions/github-script@v6
