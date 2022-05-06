@@ -31,6 +31,18 @@ inputs:
     required: true # TODO(mattmoor): Make this optional
     default: mirror.gcr.io
 
+  registry-username:
+    description: |
+      Username for setting up a private registry (optional).
+    required: false
+    default: ""
+
+  registry-password:
+    description: |
+      Password for setting up a private registry (optional).
+    required: false
+    default: ""
+
   cluster-suffix:
     description: |
       The suffix to use for Kubernetes services on this cluster.
@@ -180,8 +192,24 @@ runs:
     - name: Setup Container Registry
       shell: bash
       run: |
-        docker run -d --restart=always \
-              -p "$REGISTRY_PORT:$REGISTRY_PORT" --name "$REGISTRY_NAME" registry:2
+        # If username/password provided, create an htpasswd file which
+        # will be mounted into the registry container
+        EXTRA_ARGS=()
+        USERNAME="${{ inputs.registry-username }}"
+        PASSWORD="${{ inputs.registry-password }}"
+        if [[ "${USERNAME}" != "" ]] && [[ "${PASSWORD}" != "" ]]; then
+          AUTH_DIR="$(mktemp -d)"
+          htpasswd -Bbn "${USERNAME}" "${PASSWORD}" > "${AUTH_DIR}/htpasswd"
+          EXTRA_ARGS=(
+            -v "${AUTH_DIR}:/auth"
+            -e "REGISTRY_AUTH=htpasswd"
+            -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"
+            -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd"
+          )
+        fi
+
+        docker run -d --restart=always "${EXTRA_ARGS[@]}" \
+          -p "$REGISTRY_PORT:$REGISTRY_PORT" --name "$REGISTRY_NAME" registry:2
 
         # Connect the registry to the KinD network.
         docker network connect "kind" "$REGISTRY_NAME"
