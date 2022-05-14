@@ -6,7 +6,11 @@ description: |
   This action runs goimports over the working tree and then verifies
   that there are no differences from running the tool.
 
-inputs: {}
+inputs:
+  local:
+    description: |
+      The goimports -local flag value
+    default: ''
 
 runs:
   using: "composite"
@@ -24,7 +28,7 @@ runs:
       for dir in $(find . -name go.mod -maxdepth 3 -exec dirname {} \; ); do
         echo "::group:: $dir"
         pushd $dir
-        goimports -w \
+        goimports -local="${{ inputs.local }}" -w \
           $(find . \
           -path './vendor' -prune \
           -o -path '*/third_party' -prune \
