@@ -29,12 +29,16 @@ inputs:
       The path for the temporary key if signing is enabled.
     default: ${{ github.workspace }}/melange.rsa
 
+  repository-path:
+    description: |
+      The path of the repository being constructed by Melange.
+    default: ${{ github.workspace }}/packages
+
 runs:
   using: 'composite'
 
   steps:
     - uses: chainguard-dev/actions/setup-melange@main
-    # TODO(kaniini): enable keyless signing once it lands
     - uses: chainguard-dev/actions/melange-keygen@main
       if: ${{ inputs.sign-with-temporary-key }}
       with:
@@ -45,8 +49,10 @@ runs:
         archs: ${{ inputs.archs }}
         sign-with-key: ${{ inputs.sign-with-temporary-key }}
         signing-key-path: ${{ inputs.signing-key-path }}
+        repository-path: ${{ inputs.repository-path }}
     - uses: chainguard-dev/actions/melange-index@main
       with:
         archs: ${{ inputs.archs }}
         sign-with-key: ${{ inputs.sign-with-temporary-key }}
         signing-key-path: ${{ inputs.signing-key-path }}
+        repository-path: ${{ inputs.repository-path }}
