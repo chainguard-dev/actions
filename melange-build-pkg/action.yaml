@@ -1,0 +1,44 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Build single package with Melange'
+description: |
+  This action generates a package using Melange.  It assumes that
+  the Melange repository is already configured.
+
+inputs:
+  config:
+    description: |
+      The config file to use for building the package.
+    default: .melange.yaml
+
+  archs:
+    description: |
+      The architectures to use.
+    default: x86_64
+
+  sign-with-key:
+    description: |
+      Sign packages with a key, useful for multi-stage
+      pipelines.
+    default: false
+
+  signing-key-path:
+    description: |
+      The path for the temporary key if signing is enabled.
+    default: ${{ github.workspace }}/melange.rsa
+
+  repository-path:
+    description: |
+      The path of the repository being constructed by Melange.
+    default: ${{ github.workspace }}/packages
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: 'Build package with Melange'
+      shell: bash
+      run: |
+        ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
+        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg --use-proot
