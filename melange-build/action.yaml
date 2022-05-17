@@ -42,12 +42,7 @@ runs:
       run: |
         ${{ inputs.sign-with-temporary-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         melange build ${{ inputs.config }} --arch ${{ inputs.archs }} $signarg --use-proot
-    - name: 'Index packages'
-      shell: bash
-      run: |
-        for arch in $(echo ${{ inputs.archs }} | tr "," " "); do
-          pushd packages/$arch
-          apk index -o APKINDEX.tar.gz *.apk
-          ${{ inputs.sign-with-temporary-key }} && melange sign-index --signing-key=${{ inputs.signing-key-path }} APKINDEX.tar.gz
-          popd
-        done
+    - uses: chainguard-dev/actions/melange-index@main
+      with:
+        sign-with-key: ${{ inputs.sign-with-temporary-key }}
+        signing-key-path: ${{ inputs.signing-key-path }}
