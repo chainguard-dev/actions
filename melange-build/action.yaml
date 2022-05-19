@@ -34,6 +34,18 @@ inputs:
       The path of the repository being constructed by Melange.
     default: ${{ github.workspace }}/packages
 
+  repository-append:
+    description: |
+      A list of paths or URIs of repositories that should be
+      implicitly included in the build environment.
+    default: ''
+
+  keyring-append:
+    description: |
+      A list of paths or URIs of keys that should be included
+      in the build environment.
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -50,6 +62,8 @@ runs:
         sign-with-key: ${{ inputs.sign-with-temporary-key }}
         signing-key-path: ${{ inputs.signing-key-path }}
         repository-path: ${{ inputs.repository-path }}
+        repository-append: ${{ inputs.repository-append }}
+        keyring-append: ${{ inputs.keyring-append }}
     - uses: chainguard-dev/actions/melange-index@main
       with:
         archs: ${{ inputs.archs }}
