@@ -33,6 +33,18 @@ inputs:
       The path of the repository being constructed by Melange.
     default: ${{ github.workspace }}/packages
 
+  repository-append:
+    description: |
+      A list of paths or URIs of repositories that should be
+      implicitly included in the build environment.
+    default: ''
+
+  keyring-append:
+    description: |
+      A list of paths or URIs of keys that should be included
+      in the build environment.
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -40,5 +52,7 @@ runs:
     - name: 'Build package with Melange'
       shell: bash
       run: |
+        [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
+        [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg --use-proot
+        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg --use-proot
