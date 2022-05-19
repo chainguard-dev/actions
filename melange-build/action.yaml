@@ -3,7 +3,9 @@
 
 name: 'Build package with melange'
 description: |
-  This action builds a package using Melange, given a config file.
+  This action builds a single package using Melange, given a config file.
+  It deals with setting up the Melange build tool, repository, and signing
+  key.
 
 inputs:
   config:
@@ -27,27 +29,30 @@ inputs:
       The path for the temporary key if signing is enabled.
     default: ${{ github.workspace }}/melange.rsa
 
+  repository-path:
+    description: |
+      The path of the repository being constructed by Melange.
+    default: ${{ github.workspace }}/packages
+
 runs:
   using: 'composite'
 
   steps:
     - uses: chainguard-dev/actions/setup-melange@main
-    # TODO(kaniini): enable keyless signing once it lands
     - uses: chainguard-dev/actions/melange-keygen@main
       if: ${{ inputs.sign-with-temporary-key }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
-    - name: 'Build package with Melange'
-      shell: bash
-      run: |
-        ${{ inputs.sign-with-temporary-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} $signarg --use-proot
-    - name: 'Index packages'
-      shell: bash
-      run: |
-        for arch in $(echo ${{ inputs.archs }} | tr "," " "); do
-          pushd packages/$arch
-          apk index -o APKINDEX.tar.gz *.apk
-          ${{ inputs.sign-with-temporary-key }} && melange sign-index --signing-key=${{ inputs.signing-key-path }} APKINDEX.tar.gz
-          popd
-        done
+    - uses: chainguard-dev/actions/melange-build-pkg@main
+      with:
+        config: ${{ inputs.config }}
+        archs: ${{ inputs.archs }}
+        sign-with-key: ${{ inputs.sign-with-temporary-key }}
+        signing-key-path: ${{ inputs.signing-key-path }}
+        repository-path: ${{ inputs.repository-path }}
+    - uses: chainguard-dev/actions/melange-index@main
+      with:
+        archs: ${{ inputs.archs }}
+        sign-with-key: ${{ inputs.sign-with-temporary-key }}
+        signing-key-path: ${{ inputs.signing-key-path }}
+        repository-path: ${{ inputs.repository-path }}

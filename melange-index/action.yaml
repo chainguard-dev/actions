@@ -1,0 +1,42 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Index packages with Melange'
+description: |
+  This action generates a Melange repository index.
+
+inputs:
+  archs:
+    description: |
+      The architectures to use.
+    default: x86_64
+
+  sign-with-key:
+    description: |
+      Sign packages with a key, useful for multi-stage
+      pipelines.
+    default: false
+
+  signing-key-path:
+    description: |
+      The path for the temporary key if signing is enabled.
+    default: ${{ github.workspace }}/melange.rsa
+
+  repository-path:
+    description: |
+      The path of the repository being constructed by Melange.
+    default: ${{ github.workspace }}/packages
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: 'Index packages with Melange'
+      shell: bash
+      run: |
+        for arch in $(echo ${{ inputs.archs }} | tr "," " "); do
+          pushd ${{ inputs.repository-path }}/$arch
+          apk index -o APKINDEX.tar.gz *.apk
+          ${{ inputs.sign-with-key }} && melange sign-index --signing-key=${{ inputs.signing-key-path }} APKINDEX.tar.gz
+          popd
+        done
