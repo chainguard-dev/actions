@@ -45,6 +45,11 @@ inputs:
       in the build environment.
     default: ''
 
+  workspace-dir:
+    description: |
+      The directory to use as the workspace.
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -54,5 +59,6 @@ runs:
       run: |
         [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
+        [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg --use-proot
+        melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --use-proot
