@@ -50,6 +50,11 @@ inputs:
       The directory to use as the workspace.
     default: ''
 
+  update-index:
+    description: |
+      Automatically update index when the package is built.
+    default: true
+
 runs:
   using: 'composite'
 
@@ -62,3 +67,10 @@ runs:
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --use-proot
+    - uses: chainguard-dev/actions/melange-index@main
+      if: ${{ inputs.update-index }}
+      with:
+        archs: ${{ inputs.archs }}
+        repository-path: ${{ inputs.repository-path }}
+        sign-with-key: ${{ inputs.sign-with-key }}
+        signing-key-path: ${{ inputs.signing-key-path }}
