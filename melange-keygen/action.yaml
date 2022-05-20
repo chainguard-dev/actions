@@ -10,7 +10,7 @@ inputs:
   signing-key-path:
     description: |
       The path to put the signing key at.
-    default: '/root/melange.rsa'
+    default: ${{ github.workspace }}/melange.rsa
 
   install-public-key:
     description: |
