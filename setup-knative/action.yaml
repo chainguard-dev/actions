@@ -64,7 +64,7 @@ runs:
         kubectl patch configmap/config-network \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}'
+          --patch '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev","autocreateClusterDomainClaims":"true"}}'
 
         resource_blaster eventing in-memory-channel.yaml | kubectl apply -f -
         resource_blaster eventing mt-channel-broker.yaml | kubectl apply -f -
