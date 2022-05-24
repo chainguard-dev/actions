@@ -37,11 +37,18 @@ inputs:
     required: true
     default: '{}'
 
+outputs:
+  load-balancer-ip:
+    description: |
+      The IP of the type LoadBalancer service on which kourier serves.
+    value: ${{ steps.knative.outputs.load-balancer-ip }}
+
 runs:
   using: "composite"
 
   steps:
     - name: Install Knative
+      id: knative
       shell: bash
       run: |
         # Eliminates the resources blocks in a release yaml
@@ -136,3 +143,9 @@ runs:
 
         # Wait for the job to complete, so we can reliably use ksvc hostnames.
         kubectl wait -n knative-serving --timeout=90s --for=condition=Complete jobs --all
+
+        # Add an output for the IP of the LoadBalancer to avoid folks
+        # assuming we use Kourier.
+        export IP=$(kubectl get svc -n kourier-system kourier -ojsonpath={.status.loadBalancer.ingress[0].ip})
+        echo LB IP: ${IP}
+        echo ::set-output name=load-balancer-ip::${IP}
