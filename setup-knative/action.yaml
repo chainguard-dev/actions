@@ -13,6 +13,12 @@ inputs:
     required: true
     default: 1.2.0
 
+  kingress:
+    description: |
+      The Knative ingress layer to install, e.g. kourier, istio
+    required: true
+    default: "kourier"
+
   serving-features:
     description: |
       The serialized JSON for the Knative Serving features configmap
@@ -40,7 +46,7 @@ inputs:
 outputs:
   load-balancer-ip:
     description: |
-      The IP of the type LoadBalancer service on which kourier serves.
+      The IP of the type LoadBalancer service on which knative serves.
     value: ${{ steps.knative.outputs.load-balancer-ip }}
 
 runs:
@@ -62,16 +68,40 @@ runs:
             | grep -v '^{}$'
         }
 
+        # Validate we have a valid kingress, and install its CRDs.
+        case "${{ inputs.kingress }}" in
+          "istio")
+            # If we're using Istio, then install the Istio CRDs first.
+            resource_blaster net-istio istio.yaml | ko resolve -l knative.dev/crd-install=true -f - | kubectl apply -f -
+            ;;
+          "kourier")
+            # Supported, but doesn't have CRDs to install.
+            ;;
+          *)
+            echo Unsupported ingress ${{ inputs.kingress }} ;
+            exit 1 ;;
+        esac
+
         resource_blaster serving serving-crds.yaml | kubectl apply -f -
         resource_blaster eventing eventing-crds.yaml | kubectl apply -f -
+
         sleep 3 # Avoid the race creating CRDs then instantiating them...
+
         resource_blaster serving serving-core.yaml | kubectl apply -f -
         resource_blaster eventing eventing-core.yaml | kubectl apply -f -
-        resource_blaster net-kourier kourier.yaml | kubectl apply -f -
+        case "${{ inputs.kingress }}" in
+          "istio")
+            resource_blaster net-istio istio.yaml | kubectl apply -f -
+            resource_blaster net-istio net-istio.yaml | kubectl apply -f -
+            ;;
+          "kourier")
+            resource_blaster net-kourier kourier.yaml | kubectl apply -f -
+            ;;
+        esac
         kubectl patch configmap/config-network \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev","autocreateClusterDomainClaims":"true"}}'
+          --patch '{"data":{"ingress.class":"${{ inputs.kingress }}.ingress.networking.knative.dev","autocreateClusterDomainClaims":"true"}}'
 
         resource_blaster eventing in-memory-channel.yaml | kubectl apply -f -
         resource_blaster eventing mt-channel-broker.yaml | kubectl apply -f -
@@ -144,8 +174,14 @@ runs:
         # Wait for the job to complete, so we can reliably use ksvc hostnames.
         kubectl wait -n knative-serving --timeout=90s --for=condition=Complete jobs --all
 
-        # Add an output for the IP of the LoadBalancer to avoid folks
-        # assuming we use Kourier.
-        export IP=$(kubectl get svc -n kourier-system kourier -ojsonpath={.status.loadBalancer.ingress[0].ip})
+        # Add an output for the IP of the LoadBalancer to avoid folks assuming stuff.
+        case "${{ inputs.kingress }}" in
+          "istio")
+            export IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath={.status.loadBalancer.ingress[0].ip})
+            ;;
+          "kourier")
+            export IP=$(kubectl get svc -n kourier-system kourier -ojsonpath={.status.loadBalancer.ingress[0].ip})
+            ;;
+        esac
         echo LB IP: ${IP}
         echo ::set-output name=load-balancer-ip::${IP}
