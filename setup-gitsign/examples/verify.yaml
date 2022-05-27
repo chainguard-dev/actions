@@ -1,0 +1,11 @@
+on: [pr]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    name: Verify commit
+    steps:
+      - uses: actions/checkout@v3
+      - uses: chainguard-dev/actions/setup-gitsign@main
+      - shell: bash
+        run: |
+          git verify-commit HEAD
