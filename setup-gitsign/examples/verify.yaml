@@ -1,0 +1,15 @@
+name: Verify Commit
+description: This action verifies the PR commit using Gitsign.
+on: [pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    name: Verify commit
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: chainguard-dev/actions/setup-gitsign@main
+      - shell: bash
+        run: |
+          git verify-commit HEAD

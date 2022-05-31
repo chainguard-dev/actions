@@ -1,0 +1,33 @@
+name: Make a PR
+description: This action makes a new PR using Gitsign on a regular cron.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # At the end of every day
+    - cron: "0 0 * * *"
+
+jobs:
+  new_pr:
+    permissions:
+      id-token: write # Enable OIDC
+      pull-requests: write
+      contents: write
+    runs-on: ubuntu-latest
+    name: Make a new pull request
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+      - uses: chainguard-dev/actions/setup-gitsign@main
+      - name: Change files
+        shell: bash
+        run: |
+          date > date.txt
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v4.0.2
+        with:
+          commit-message: "tacocat is the best palindrome"
+          title: "New PR!"
+          body: >
+            foo
