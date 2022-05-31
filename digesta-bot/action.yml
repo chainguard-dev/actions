@@ -44,6 +44,9 @@ runs:
         echo ::set-output name=create_pr::true
       fi
 
+  # Configure signed commits
+  - uses: ./setup-gitsign
+  
   - name: Create Pull Request
     uses: peter-evans/create-pull-request@v4.0.2
     if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
