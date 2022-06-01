@@ -1,0 +1,23 @@
+name: New Commit
+description: This action makes a new local commit using Gitsign.
+on: [push]
+jobs:
+  commit:
+    permissions:
+      id-token: write # Enable OIDC
+    runs-on: ubuntu-latest
+    name: Create commit
+    steps:
+      - uses: actions/checkout@v3
+      - uses: chainguard-dev/actions/setup-gitsign@main
+      - shell: bash
+        run: |
+          # Required git config unrelated to gitsign
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+
+          # Make the commit
+          git commit --allow-empty --message="Signed commit"
+
+          # Dump out sig data as an example to see what we just committed.
+          git cat-file commit HEAD | sed -n '/BEGIN/, /END/p' | sed 's/^ //g' | sed 's/gpgsig //g' | sed 's/SIGNED MESSAGE/PKCS7/g' | openssl pkcs7 -print -print_certs -text
