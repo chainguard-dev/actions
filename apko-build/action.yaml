@@ -48,9 +48,9 @@ inputs:
       This is set as the SOURCE_DATE_EPOCH environment variable.
     default: ''
 
-  use-oci-mediatypes:
+  use-docker-mediatypes:
     description: |
-      Use OCI standard mediatypes for building the image.
+      Use Docker mediatypes for building the image.
     type: boolean
     required: false
 
@@ -62,7 +62,7 @@ outputs:
 
 runs:
   using: docker
-  image: "docker://ghcr.io/jdolitsky/apko:v9.9.9"
+  image: "docker://ghcr.io/chainguard-dev/apko:canary"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
@@ -77,7 +77,7 @@ runs:
       [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
       [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
       /ko-app/apko publish \
-        ${{ inputs.use-oci-mediatypes && '--use-oci-mediatypes' }} \
+        ${{ inputs.use-docker-mediatypes && '--use-docker-mediatypes' }} \
         --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
       echo EXIT CODE: $?
       echo ::set-output name=digest::$(cat "${{ inputs.image_refs }}")
