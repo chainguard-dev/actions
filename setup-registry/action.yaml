@@ -1,0 +1,22 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup registry'
+description: |
+  This action sets up a simple in-memory OCI registry.
+
+inputs:
+  port:
+    description: The port to run the server on.
+    required: true
+    default: 1338
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install registry
+      shell: bash
+      run: 
+        go install github.com/google/go-containerregistry/cmd/registry@main
+        registry --port=${{ inputs.port }}
