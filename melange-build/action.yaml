@@ -46,6 +46,11 @@ inputs:
       in the build environment.
     default: ''
 
+  empty-workspace:
+    description: |
+      Whether to use an empty workspace or not.
+    default: false
+
 runs:
   using: 'composite'
 
@@ -64,6 +69,7 @@ runs:
         repository-path: ${{ inputs.repository-path }}
         repository-append: ${{ inputs.repository-append }}
         keyring-append: ${{ inputs.keyring-append }}
+        empty-workspace: ${{ inputs.empty-workspace }}
     - uses: chainguard-dev/actions/melange-index@main
       with:
         archs: ${{ inputs.archs }}

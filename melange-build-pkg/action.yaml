@@ -55,6 +55,11 @@ inputs:
       Automatically update index when the package is built.
     default: true
 
+  empty-workspace:
+    description: |
+      Whether to use an empty workspace or not.
+    default: false
+
 runs:
   using: 'composite'
 
@@ -65,6 +70,7 @@ runs:
         [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
+        ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --use-proot
     - uses: chainguard-dev/actions/melange-index@main
