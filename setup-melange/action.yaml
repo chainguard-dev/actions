@@ -40,7 +40,9 @@ runs:
       shell: bash
       run: |
         git clone https://github.com/chainguard-dev/melange
-        cd melange
+        pushd melange
         make melange
         sudo env "PATH=$PATH" make install
         melange version
+        popd
+        rm -rf ./melange
