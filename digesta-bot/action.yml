@@ -45,8 +45,8 @@ runs:
       fi
 
   # Configure signed commits
-  - uses: ./setup-gitsign
-  
+  - uses: chainguard-dev/actions/setup-gitsign@main
+
   - name: Create Pull Request
     uses: peter-evans/create-pull-request@v4.0.2
     if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
