@@ -1,0 +1,44 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Build Inky package with melange'
+description: |
+  This action builds a single package using Melange, given a config file.
+  It deals with setting up the Melange build tool, repository, and signing
+  key.  It composes the melange-build-pkg option with defaults appropriate
+  for Inky.
+
+inputs:
+  package-name:
+    description: |
+      The package name to build.
+
+  archs:
+    description: |
+      The architectures to use.
+    default: x86_64
+
+  signing-key-path:
+    description: |
+      The path for the temporary key if signing is enabled.
+    default: ${{ github.workspace }}/melange.rsa
+
+  repository-path:
+    description: |
+      The path of the repository being constructed by Melange.
+    default: ${{ github.workspace }}/packages
+
+runs:
+  using: 'composite'
+
+  steps:
+    - uses: chainguard-dev/actions/melange-build-pkg@main
+      with:
+        config: ${{ inputs.package-name }}.yaml
+        archs: ${{ inputs.archs }}
+        sign-with-key: true
+        update-index: true
+        repository-append: ${{ github.workspace }}/packages
+        keyring-append: /etc/apk/keys/melange.rsa.pub
+        workspace-dir: ${{ github.workspace }}/build/${{ inputs.package-name }}
+        empty-workspace: true
