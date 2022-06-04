@@ -77,14 +77,23 @@ runs:
         function download_istioctl() {
           ISTIO_VERSION=1.14.0
           ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
+          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          x86|x64) ARCH=amd64;;
+          arm64)   ARCH=arm64;;
+          *)
+            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
+            exit -1
+            ;;
+          esac
           case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
           "linux") OS=linux;;
           "macos") OS=osx;;
           *)
-            echo Unsupported RUNNER_OS \"$RUNNER_OS\";
-            exit -1;;
+            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
+            exit -1
+            ;;
           esac
-          ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-$(arch).tar.gz
+          ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
           wget -v $ISTIO_URL -O istio.tar.gz
           tar xvzf istio.tar.gz
         }
