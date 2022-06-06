@@ -9,13 +9,14 @@ runs:
   using: 'composite'
 
   steps:
-    - name: 'Fetch apk-tools'
+    - name: 'Fetch apk-tools nightly'
       shell: bash
       run: |
-        wget 'https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/apk-tools-static-2.12.9-r3.apk'
-        tar zxf apk-tools-static-2.12.9-r3.apk sbin/apk.static
-        sudo mv sbin/apk.static /sbin/apk
-        rm apk-tools-static-2.12.9-r3.apk
+        sudo apt install -y unzip
+        wget -O apk-tools-nightly.zip 'https://gitlab.alpinelinux.org/alpine/apk-tools/-/jobs/artifacts/2.12-stable/download?job=build-static:+[x86_64]'
+        unzip apk-tools-nightly.zip 'src/apk.static-x86_64'
+        sudo mv 'src/apk.static-x86_64' /sbin/apk
+        rm -rf src apk-tools-nightly.zip
     - name: 'Set up apk-tools in overlay mode'
       shell: bash
       run: |
