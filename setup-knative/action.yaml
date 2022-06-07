@@ -19,6 +19,12 @@ inputs:
     required: true
     default: "kourier"
 
+  cluster-domain:
+    description: |
+      The cluster domain suffix, defaults to cluster.local
+    required: false
+    default: "cluster.local"
+
   serving-features:
     description: |
       The serialized JSON for the Knative Serving features configmap
@@ -68,11 +74,67 @@ runs:
             | grep -v '^{}$'
         }
 
+        function download_istioctl() {
+          ISTIO_VERSION=1.14.0
+          ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
+          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          x86|x64) ARCH=amd64;;
+          arm64)   ARCH=arm64;;
+          *)
+            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
+            exit -1
+            ;;
+          esac
+          case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
+          "linux") OS=linux;;
+          "macos") OS=osx;;
+          *)
+            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
+            exit -1
+            ;;
+          esac
+          ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
+          wget -v $ISTIO_URL -O istio.tar.gz
+          tar xvzf istio.tar.gz
+        }
+
         # Validate we have a valid kingress, and install its CRDs.
         case "${{ inputs.kingress }}" in
           "istio")
-            # If we're using Istio, then install the Istio CRDs first.
-            resource_blaster net-istio istio.yaml | ko resolve -l knative.dev/crd-install=true -f - | kubectl apply -f -
+            download_istioctl
+            cat > istio-profile.yaml <<EOF
+        apiVersion: install.istio.io/v1alpha1
+        kind: IstioOperator
+        spec:
+          values:
+            global:
+              # Ideally for KinD installations we want to blow away the `resources`
+              # sections. However, doing that here will result in Istio's default which
+              # is high. Choosing some nomimal small numbers here:
+              defaultResources: &defaultResources
+                requests:
+                  cpu: 1m
+                  memory: 10Mi
+              proxy:
+                clusterDomain: ${{ inputs.cluster-domain }}
+                resources: *defaultResources
+
+          meshConfig:
+            defaultConfig:
+              terminationDrainDuration: "20s"
+
+          components:
+            ingressGateways:
+              - name: istio-ingressgateway
+                k8s: &defaultK8s
+                  hpaSpec:
+                    maxReplicas: 1
+                    minReplicas: 1
+                  resources: *defaultResources
+            pilot:
+              k8s: *defaultK8s
+        EOF
+            ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
             ;;
           "kourier")
             # Supported, but doesn't have CRDs to install.
@@ -91,7 +153,6 @@ runs:
         resource_blaster eventing eventing-core.yaml | kubectl apply -f -
         case "${{ inputs.kingress }}" in
           "istio")
-            resource_blaster net-istio istio.yaml | kubectl apply -f -
             resource_blaster net-istio net-istio.yaml | kubectl apply -f -
             ;;
           "kourier")
