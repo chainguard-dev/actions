@@ -104,11 +104,16 @@ runs:
       shell: bash
       if: ${{ inputs.grafana-dashboards != '' }}
       run: |
-        mkdir -p /tmp/graphs
-
         kubectl port-forward -n ${{ inputs.grafana-namespace }} ${{ inputs.grafana-svc }} 3000:80 &
-        until curl --max-time 5 http://localhost:3000 ; do echo waiting for grafana; sleep 5; done;
+        sleep 5
+        status=0
+        curl --max-time 5 --retry-max-time 20 --retry 20 --retry-connrefused http://localhost:3000 || status=1
+        if [ $status -ne 0 ]; then
+          echo "failed to connect to grafana, will not collect any logs"
+          exit 0
+        fi
 
+        mkdir -p /tmp/graphs
         IFS=',' read -r -a grafs <<< ${{ inputs.grafana-dashboards }}
         for graf in "${grafs[@]}"
         do
