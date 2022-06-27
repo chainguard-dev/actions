@@ -37,11 +37,12 @@ runs:
   # Go is an implementation detail of this action (go get below)
   # TODO(mattmoor): Cut a release of `boilerplate-check` we can use instead.
   - name: Set up Go
-    uses: actions/setup-go@v2
+    uses: actions/setup-go@b22fbbc2921299758641fab08929b4ac52b32923 # v3.2
     with:
-      go-version: 1.17.x
+      go-version: 1.17
+      check-latest: true
 
-  - uses: reviewdog/action-setup@v1
+  - uses: reviewdog/action-setup@8f2ec89e6b467ca9175527d2a1641bbd0c05783b # v1
     with:
       reviewdog_version: latest
 

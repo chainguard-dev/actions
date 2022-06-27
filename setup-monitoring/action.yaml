@@ -30,7 +30,7 @@ runs:
 
   steps:
     - name: Install Helm
-      uses: azure/setup-helm@18bc76811624f360dbd7f18c2d4ecb32c7b87bab # v1.1
+      uses: azure/setup-helm@217bf70cbd2e930ba2e81ba7e1de2f7faecc42ba # v2
       with:
         version: ${{ inputs.helm-version }}
 
