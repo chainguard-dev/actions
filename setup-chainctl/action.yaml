@@ -34,6 +34,7 @@ runs:
     - name: Install chainctl
       shell: bash
       run: |
+        cd $(mktemp -d)
         wget -O chainctl "https://storage.googleapis.com/us.artifacts.${{ inputs.environment }}.appspot.com/chainctl_$(uname -s)_$(uname -m)"
         chmod +x chainctl
         sudo mv chainctl /usr/local/bin
