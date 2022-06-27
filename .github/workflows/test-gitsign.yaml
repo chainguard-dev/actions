@@ -1,0 +1,30 @@
+name: test-gitsign
+
+on: [pull_request]
+
+jobs:
+  test_gitsign_action:
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    permissions: {}
+
+    name: Install Gitsign and test presence in path
+    steps:
+    - uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
+    - name: Install Gitsign
+      uses: ./setup-gitsign
+    - name: Check install!
+      run: gitsign --version
+    - name: Check root directory
+      run: |
+        if [[ $(git diff --stat) != '' ]]; then
+          echo 'should be clean'
+          exit 1
+        else
+          exit 0
+        fi
+      shell: bash

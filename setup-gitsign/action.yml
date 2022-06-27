@@ -3,19 +3,138 @@ description: "Install and configure gitsign"
 branding:
   icon: edit-3
   color: green
-# TODO: Allow configurable versions / arch
 runs:
   using: "composite"
   steps:
     - shell: bash
       run: |
-        set -ex
+        #!/bin/bash
+        shopt -s expand_aliases
+        if [ -z "$NO_COLOR" ]; then
+          alias log_info="echo -e \"\033[1;32mINFO\033[0m:\""
+          alias log_error="echo -e \"\033[1;31mERROR\033[0m:\""
+        else
+          alias log_info="echo \"INFO:\""
+          alias log_error="echo \"ERROR:\""
+        fi
+        set -e
 
-        # Install
-        curl -fsL https://github.com/sigstore/gitsign/releases/download/v0.1.1/gitsign_0.1.1_linux_amd64 -o /usr/local/bin/gitsign
-        chmod +x /usr/local/bin/gitsign
+        mkdir -p $HOME/.gitsign
+
+        shaprog() {
+          case ${{ runner.os }} in
+            Linux)
+              sha256sum $1 | cut -d' ' -f1
+              ;;
+            macOS)
+              shasum -a256 $1 | cut -d' ' -f1
+              ;;
+            Windows)
+              powershell -command "(Get-FileHash $1 -Algorithm SHA256 | Select-Object -ExpandProperty Hash).ToLower()"
+              ;;
+            *)
+              log_error "unsupported OS ${{ runner.os }}"
+              exit 1
+              ;;
+          esac
+        }
+
+        gitsign_version='0.1.1'
+        gitsign_linux_amd64_sha='79db25fcbc4d4473c82437063907a01570a055d2929438c6d70ced492a0049f7'
+        gitsign_linux_arm64_sha='8da0239392d1add437c7e5cd98a75c4030f922375b70812cbbdbbe02ea6371d6'
+        gitsign_darwin_amd64_sha='1d73033d6507010d9f5aaba3993d98f0a21553eaa43f2fe3d09d3f047c04d2d8'
+        gitsign_darwin_arm64_sha='4f840596f70c580cf4d2c86b926e96b84983f94b1cf2c967b2386ddce3a0f79c'
+        gitsign_windows_amd64_sha='0f026879fae8a7cc503f7829a885ffc14b9d6ae4d52b9086c5ba05b9ca9e1343'
+        gitsign_windows_arm64_sha='68b23284dc4cc3be1119776066047dab286e0c8a7824bc8f60a299d7ba73887d'
+        gitsign_executable_name=gitsign
+
+        trap "popd >/dev/null" EXIT
+
+        pushd $HOME/.gitsign > /dev/null
+
+        case ${{ runner.os }} in
+          Linux)
+            case ${{ runner.arch }} in
+              X64)
+                gitsign_filename=gitsign_${gitsign_version}_linux_amd64
+                gitsign_sha=${gitsign_linux_amd64_sha}
+                ;;
+
+              ARM64)
+                gitsign_filename=gitsign_${gitsign_version}_linux_arm64
+                gitsign_sha=${gitsign_linux_arm64_sha}
+                ;;
+
+              *)
+                log_error "unsupported architecture $arch"
+                exit 1
+                ;;
+            esac
+            ;;
+
+          macOS)
+            case ${{ runner.arch }} in
+              X64)
+                gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
+                gitsign_sha=${gitsign_darwin_amd64_sha}
+                ;;
+
+              ARM64)
+                gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
+                gitsign_sha=${gitsign_darwin_arm64_sha}
+                ;;
+
+              *)
+                log_error "unsupported architecture $arch"
+                exit 1
+                ;;
+            esac
+            ;;
+
+          Windows)
+            case ${{ runner.arch }} in
+              X64)
+                gitsign_filename=gitsign_${gitsign_version}_windows_amd64.exe
+                gitsign_sha=${gitsign_windows_amd64_sha}
+                gitsign_executable_name=gitsign.exe
+                ;;
+
+                ARM64)
+                gitsign_filename=gitsign_${gitsign_version}_windows_arm64.exe
+                gitsign_sha=${gitsign_darwin_arm64_sha}
+                gitsign_executable_name=gitsign.exe
+                ;;
+
+              *)
+                log_error "unsupported architecture $arch"
+                exit 1
+                ;;
+            esac
+            ;;
+          *)
+            log_error "unsupported architecture $arch"
+            exit 1
+            ;;
+        esac
+
+        expected_gitsign_version_digest=${gitsign_sha}
+        log_info "Downloading gitsign version 'v${gitsign_version}' from https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename}"
+        curl -sL https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename} -o ${gitsign_executable_name}
+        shaDownloaded=$(shaprog ${gitsign_executable_name});
+        if [[ $shaDownloaded != ${expected_gitsign_version_digest} ]]; then
+          log_error "Unable to validate gitsign version: 'v${gitsign_version}'"
+          exit 1
+        fi
+        chmod +x ${gitsign_executable_name}
 
         # Configure
         git config --global commit.gpgsign true       # Sign all commits
         git config --global gpg.x509.program gitsign  # Use gitsign for signing
         git config --global gpg.format x509           # gitsign expects x509 args
+
+    - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+      run:  echo "$HOME/.gitsign" >> $GITHUB_PATH
+      shell: bash
+    - if: ${{ runner.os == 'Windows' }}
+      run:  echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      shell: pwsh
