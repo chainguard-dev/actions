@@ -30,9 +30,10 @@ runs:
       run: |
         sudo apk update --allow-untrusted
         sudo apk add --allow-untrusted alpine-keys
-    - uses: actions/setup-go@b22fbbc2921299758641fab08929b4ac52b32923 #v3.2
+    - uses: actions/setup-go@b22fbbc2921299758641fab08929b4ac52b32923 # v3.2
       with:
-        go-version: 1.18.x
+        go-version: 1.18
+        check-latest: true
     - name: 'Install dependencies'
       shell: bash
       run: |

@@ -15,7 +15,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - uses: reviewdog/action-setup@v1
+  - uses: reviewdog/action-setup@8f2ec89e6b467ca9175527d2a1641bbd0c05783b # v1
     with:
       reviewdog_version: latest
 
