@@ -31,9 +31,9 @@ runs:
   steps:
     - uses: chainguard-dev/actions/setup-chainctl@main
       with:
-        environment: inputs.environment
-        audience: inputs.audience
-        invite-code: inputs.invite-code
+        environment: ${{ inputs.environment }}
+        audience: ${{ inputs.audience }}
+        invite-code: ${{ inputs.invite-code }}
 
     - shell: bash
       run: |
