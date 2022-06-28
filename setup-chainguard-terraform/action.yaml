@@ -1,0 +1,55 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup Chainguard terraform provider'
+description: |
+  This action sets up the Chainguard terraform provider for a particular environment.
+
+inputs:
+  environment:
+    description: |
+      Determines the environment from which to download the chainctl
+      binary from, it is required and has no default (for now).
+    required: true
+
+  audience:
+    description: |
+      Specifies the identity token audience to use when creating an
+      identity token to authenticate with Chainguard, it is rquired
+      and has no default (for now).
+    required: true
+
+  invite-code:
+    description: |
+      Optionally specifies an invite code that allows this workflow
+      register itself when run for the first time.
+    required: false
+
+runs:
+  using: "composite"
+
+  steps:
+    - uses: chainguard-dev/actions/setup-chainctl@main
+      with:
+        environment: inputs.environment
+        audience: inputs.audience
+        invite-code: inputs.invite-code
+
+    - shell: bash
+      run: |
+        cat > ~/.terraformrc <<EOF
+        provider_installation {
+          network_mirror {
+            url = "https://storage.googleapis.com/us.artifacts.${{ inputs.environment }}.appspot.com/terraform-provider/"
+            include = [
+              "registry.terraform.io/chainguard/chainguard",
+            ]
+          }
+
+          direct {
+            exclude = [
+              "registry.terraform.io/chainguard/chainguard",
+            ]
+          }
+        }
+        EOF
