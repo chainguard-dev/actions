@@ -1,0 +1,61 @@
+name: 'Connect to Private GKE Cluster'
+description: |
+  This action authenticates to a private GKE cluster through an IAP bastion and returns the appropraiate connection variables.
+
+inputs:
+  cluster_name:
+    description: |
+      The name of the cluster to authenticate against
+    required: true
+  cluster_location:
+    description: |
+      The location of the cluster to authenticate against
+    required: true
+  project_id:
+    description: |
+      The project ID where the cluster resides
+    required: true
+  jumphost_name:
+    description: |
+      The name of the jumphost to use to proxy cluster connections through
+    required: true
+  jumphost_project:
+    description: |
+      The project ID where the jumphost resides
+    required: true
+  jumphost_zone:
+    description: |
+      The zone where the jumphost resides
+    required: true
+  proxy_bind_address:
+    description: |
+      The address to bind the forwarding port to
+    required: false
+    default: "8118"
+outputs:
+  https_proxy:
+    description: |
+      The HTTPS_PROXY address to use to connect to the cluster
+    value: ${{ steps.proxy.outputs.https_proxy }}
+  
+runs:
+  using: "composite"
+
+  steps:
+    - name: Connect to cluster
+      uses: 'google-github-actions/get-gke-credentials@v0'
+      with:
+        cluster_name: ${{ inputs.cluster_name }}
+        location: ${{ inputs.cluster_location }}
+        project_id: ${{ inputs.project_id }}
+        use_internal_ip: true
+        use_auth_provider: false
+
+    - name: Establish proxy through jumphost
+      shell: bash
+      id: proxy
+      run: |
+        gcloud compute ssh --zone "${{ inputs.jumphost_zone }}" "${{ inputs.jumphost_name }}" --tunnel-through-iap --project "${{ inputs.jumphost_project }}" -- -N -D "${{ inputs.proxy_bind_address }}" &
+        echo ::set-output name=https_proxy::$(echo "socks5://localhost:${{ inputs.proxy_bind_address }}")
+        sleep 15
+
