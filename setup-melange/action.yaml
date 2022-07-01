@@ -38,7 +38,7 @@ runs:
       shell: bash
       run: |
         sudo apt update
-        sudo apt install -y build-essential git bubblewrap proot
+        sudo apt install -y build-essential git bubblewrap proot qemu-user-static
     - name: 'Install melange'
       shell: bash
       run: |
