@@ -9,6 +9,11 @@ runs:
   using: 'composite'
 
   steps:
+    # FIXME(kaniini): Switch to qemu-user-static when apko 0.5/melange 0.2 is released.
+    - name: 'Install qemu emulator binaries'
+      shell: bash
+      run: |
+        sudo apt install qemu-user
     - name: 'Fetch apk-tools nightly'
       shell: bash
       run: |
