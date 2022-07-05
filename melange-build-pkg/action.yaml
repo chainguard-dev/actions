@@ -73,6 +73,10 @@ runs:
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --use-proot
+    - name: 'Fix local repository permissions'
+      shell: bash
+      run: |
+        sudo chown -R runner:runner ${{ inputs.repository-path }}
     - uses: chainguard-dev/actions/melange-index@main
       if: ${{ inputs.update-index }}
       with:
