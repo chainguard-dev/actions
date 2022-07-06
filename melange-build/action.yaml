@@ -70,6 +70,7 @@ runs:
         repository-append: ${{ inputs.repository-append }}
         keyring-append: ${{ inputs.keyring-append }}
         empty-workspace: ${{ inputs.empty-workspace }}
+        update-index: false
     - uses: chainguard-dev/actions/melange-index@main
       with:
         archs: ${{ inputs.archs }}
