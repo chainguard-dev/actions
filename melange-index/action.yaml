@@ -34,7 +34,33 @@ runs:
     - name: 'Index packages with Melange'
       shell: bash
       run: |
-        for arch in $(echo ${{ inputs.archs }} | tr "," " "); do
+
+        parsed_archs=""
+        for p_arch in $(echo $inputs.archs | tr "," " "); do
+
+          case $p_arch in
+            "386")
+              parsed_archs+="x86 "
+              ;;
+            "amd64")
+              parsed_archs+="x86_64 "
+              ;;
+            "arm64")
+              parsed_archs+="aarch64 "
+              ;;
+            "arm/v6")
+              parsed_archs+="armhf "
+              ;;
+            "arm/v7")
+              parsed_archs+="armv7 "
+              ;;
+            *)
+              parsed_archs+="$p_arch "
+              ;;
+          esac
+        done
+
+        for arch in $parsed_archs; do
           pushd ${{ inputs.repository-path }}/$arch
           apk index -o APKINDEX.tar.gz *.apk
           ${{ inputs.sign-with-key }} && melange sign-index --signing-key=${{ inputs.signing-key-path }} APKINDEX.tar.gz
