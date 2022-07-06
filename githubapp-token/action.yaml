@@ -1,0 +1,61 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Authenticate as a GitHub App
+description: |
+  This action generates a GitHub App token for a specific app and
+  installation ID. It requires having access to the app's private
+  key.
+
+inputs:
+  app_id:
+    description: |
+      The App ID of the GitHub App
+    required: true
+
+  installation_id:
+    description: |
+      The installation against which to authenticate.
+    required: true
+
+  private_key:
+    description: |
+      The private key of the GitHub App
+    required: true
+
+outputs:
+  token:
+    description: |
+      The GitHub App token.
+    value: ${{ steps.get-token.outputs.token }}
+
+runs:
+  using: "composite"
+  steps:
+  - uses: actions/setup-node@v2
+    with:
+      node-version: 16
+  - run: npm install @octokit/app
+    shell: bash
+  - uses: actions/github-script@v6
+    id: get-token
+    name: Get GitHub App token
+    env:
+      APP_ID: ${{ inputs.app_id }}
+      INSTALLATION_ID: ${{ inputs.installation_id }}
+      PRIVATE_KEY: ${{ inputs.private_key }}
+    with:
+      script: |
+        const {App} = require('@octokit/app');
+
+        const { APP_ID, INSTALLATION_ID, PRIVATE_KEY } = process.env
+
+        const app = new App({
+          appId: +APP_ID,
+          privateKey: PRIVATE_KEY,
+        });
+        const octokit = await app.getInstallationOctokit(+INSTALLATION_ID);
+        const {token} = await octokit.auth({
+          type: "installation",
+        });
+        core.setOutput('token', token);
