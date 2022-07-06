@@ -36,7 +36,7 @@ runs:
       run: |
 
         parsed_archs=""
-        for p_arch in $(echo $inputs.archs | tr "," " "); do
+        for p_arch in $(echo ${{ inputs.archs }} | tr "," " "); do
 
           case $p_arch in
             "386")
