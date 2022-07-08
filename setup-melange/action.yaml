@@ -10,10 +10,14 @@ runs:
 
   steps:
     # FIXME(kaniini): Switch to qemu-user-static when apko 0.5/melange 0.2 is released.
+    - name: 'Update package repository indexes'
+      shell: bash
+      run: |
+        sudo apt update
     - name: 'Install qemu emulator binaries'
       shell: bash
       run: |
-        sudo apt install qemu-user
+        sudo apt install -y qemu-user
     - name: 'Fetch apk-tools nightly'
       shell: bash
       run: |
@@ -42,7 +46,6 @@ runs:
     - name: 'Install dependencies'
       shell: bash
       run: |
-        sudo apt update
         sudo apt install -y build-essential git bubblewrap proot
     - name: 'Install melange'
       shell: bash
