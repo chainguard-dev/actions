@@ -75,7 +75,7 @@ runs:
         [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
-        [ -n '${{ inputs.template }}' ] && templatearg="--template ${{ inputs.template }}"
+        [ -n '${{ inputs.template }}' ] && templatearg="--template '${{ inputs.template }}'"
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $templatearg --use-proot
