@@ -15,8 +15,8 @@ runs:
   using: "composite"
 
   steps:
-    - name: Install registry
+    - name: Install and run registry
       shell: bash
-      run:
+      run: |
         go install github.com/google/go-containerregistry/cmd/registry@main
         registry --port=${{ inputs.port }}
