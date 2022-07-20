@@ -19,4 +19,4 @@ runs:
       shell: bash
       run: |
         go install github.com/google/go-containerregistry/cmd/registry@main
-        registry --port=${{ inputs.port }}
+        registry --port=${{ inputs.port }} &
