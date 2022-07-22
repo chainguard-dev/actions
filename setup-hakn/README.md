@@ -1,4 +1,4 @@
-# Setup Knative
+# Setup chainguard-dev/hakn 
 
 This action installs chainguard-dev/hakn Knative into the current kubectl context.
 
