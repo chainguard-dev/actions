@@ -121,8 +121,8 @@ runs:
         log_info "Downloading gitsign version 'v${gitsign_version}' from https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename}"
         curl -sL https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename} -o ${gitsign_executable_name}
         shaDownloaded=$(shaprog ${gitsign_executable_name});
-        if [[ $shaDownloaded != ${expected_gitsign_version_digest} ]]; then
-          log_error "Unable to validate gitsign version: 'v${gitsign_version}'"
+        if [[ ${shaDownloaded} != ${expected_gitsign_version_digest} ]]; then
+          log_error "Unable to validate gitsign version: 'v${gitsign_version}': want ${expected_gitsign_version_digest}, got ${shaDownloaded}"
           exit 1
         fi
         chmod +x ${gitsign_executable_name}
