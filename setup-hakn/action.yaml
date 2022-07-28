@@ -19,6 +19,12 @@ inputs:
     required: false
     default: 1.14.0
 
+  enable-auto-injection:
+    description: |
+      Whether to enable sidecar injection by default
+    required: false
+    default: false
+
   cluster-domain:
     description: |
       The cluster domain suffix, defaults to cluster.local
@@ -94,7 +100,7 @@ runs:
         spec:
           values:
             global:
-              # Ideally for KinD installations we want to blow away the `resources`
+              # Ideally for KinD installations we want to blow away the resources
               # sections. However, doing that here will result in Istio's default which
               # is high. Choosing some nomimal small numbers here:
               defaultResources: &defaultResources
@@ -104,8 +110,12 @@ runs:
               proxy:
                 clusterDomain: ${{ inputs.cluster-domain }}
                 resources: *defaultResources
+            sidecarInjectorWebhook:
+              enableNamespacesByDefault: ${{ inputs.enable-auto-injection }}
 
           meshConfig:
+            outboundTrafficPolicy:
+              mode: ALLOW_ANY
             defaultConfig:
               terminationDrainDuration: "20s"
 
@@ -120,6 +130,20 @@ runs:
             pilot:
               k8s: *defaultK8s
         EOF
+
+        # We need opt-out sidecar injector for the namespaces existing before we install Istio.
+        for x in $(kubectl get namespaces -oname); do
+          kubectl label $x istio-injection=disabled --overwrite
+        done
+
+        # Also opt-out injection for knative-serving and knative-eventing
+        #
+        # There may be finergrain options, but this is a start.
+        for x in knative-serving knative-eventing; do
+          kubectl create ns $x
+          kubectl label ns $x istio-injection=disabled --overwrite
+        done
+
         ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
 
         # Eliminates the resources blocks in a release yaml
