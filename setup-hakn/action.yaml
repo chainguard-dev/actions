@@ -136,14 +136,6 @@ runs:
           kubectl label $x istio-injection=disabled --overwrite
         done
 
-        # Also opt-out injection for knative-serving and knative-eventing
-        #
-        # There may be finergrain options, but this is a start.
-        for x in knative-serving knative-eventing; do
-          kubectl create ns $x
-          kubectl label ns $x istio-injection=disabled --overwrite
-        done
-
         ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
 
         # Eliminates the resources blocks in a release yaml
