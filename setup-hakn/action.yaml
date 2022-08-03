@@ -118,6 +118,7 @@ runs:
               mode: ALLOW_ANY
             defaultConfig:
               terminationDrainDuration: "20s"
+              holdApplicationUntilProxyStarts: true
 
           components:
             ingressGateways:
