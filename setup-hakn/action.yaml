@@ -93,7 +93,12 @@ runs:
           tar xzf istio.tar.gz
         }
 
+
         download_istioctl
+
+        # Find out the K8s API server IP address and exclude it from Istio.
+        API_SERVER_IP=$(kubectl get svc kubernetes -o jsonpath='{.spec.clusterIP}')
+
         cat > istio-profile.yaml <<EOF
         apiVersion: install.istio.io/v1alpha1
         kind: IstioOperator
@@ -110,6 +115,7 @@ runs:
               proxy:
                 clusterDomain: ${{ inputs.cluster-domain }}
                 resources: *defaultResources
+                excludeIPRanges: "${API_SERVER_IP}/32"
             sidecarInjectorWebhook:
               enableNamespacesByDefault: ${{ inputs.enable-auto-injection }}
 
