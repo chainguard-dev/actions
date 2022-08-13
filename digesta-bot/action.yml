@@ -15,6 +15,9 @@ runs:
   - shell: bash
     run: |
       while IFS= read -r -d '' file; do
+        if [[ "$file" == *testdata* ]]; then
+          continue
+        fi
         images=$(grep -i -E '[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-z0-9]+' "$file" | cut -d @ -f1 | rev | cut -d ' ' -f1 | cut -d '"' -f1 | rev | sed -e "s/^docker:\/\///" | tr '\n' ',' || true)
         digests=$(grep -i -E '[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-z0-9]+' "$file" | cut -d @ -f2 | cut -d ' ' -f1 | cut -d '"' -f1 | tr '\n' ',' || true)
         IFS=',' read -r -a images2 <<< "$images"
