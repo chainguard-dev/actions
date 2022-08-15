@@ -16,6 +16,7 @@ runs:
     run: |
       while IFS= read -r -d '' file; do
         if [[ "$file" == *testdata* ]]; then
+          echo "Skipping testdata ${file}"
           continue
         fi
         images=$(grep -i -E '[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-z0-9]+' "$file" | cut -d @ -f1 | rev | cut -d ' ' -f1 | cut -d '"' -f1 | rev | sed -e "s/^docker:\/\///" | tr '\n' ',' || true)
@@ -27,6 +28,10 @@ runs:
             for i in "${!images2[@]}"; do
               if [[ ${images2[i]} != *":"* ]]; then
                 echo "Image ${images2[i]} in file $file does not have a tag, ignoring..."
+                continue
+              fi
+              if [[ ${images2[i]} == *\.local:* ]]; then
+                echo "Skipping local registry image ${images2[i]}"
                 continue
               fi
               echo "Processing ${images2[i]} in file $file"
