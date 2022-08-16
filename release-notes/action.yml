@@ -79,6 +79,7 @@ runs:
            --required-author="" \
            --output=${{ inputs.output_filename }} \
            --repo-path="$PWD" \
+           --dependencies=false
 
       - name: Display Notes
         shell: bash
