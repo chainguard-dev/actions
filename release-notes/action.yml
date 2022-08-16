@@ -1,0 +1,117 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Release Notes'
+description: 'Generate Release notes and open a PR to update it'
+
+inputs:
+  branch_name:
+    required: true
+    description: 'Name of the branch that will be used to fetch the changelog'
+    default: 'main'
+  start_rev:
+    required: false
+    description: 'Start Tag (defaults to merge-base(branch, prev-branch))'
+  end_rev:
+    required: false
+    description: 'End Tag (defaults to HEAD of the target branch)'
+  output_filename:
+    required: false
+    description: 'Name of the file that the changelog will be generated'
+    default: 'CHANGELOG.md'
+  token:
+    description: 'GITHUB_TOKEN with `contents` and `pull-requests` permissions or a `repo` scoped Personal Access Token (PAT)'
+    required: true
+    default: ${{ github.token }}
+
+runs:
+    using: "composite"
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@84cbf8094393cdc5fe1fe1671ff2647332956b1a # v3
+        with:
+          go-version: 1.18
+          check-latest: true
+
+      - name: Install Dependencies
+        shell: bash
+        # https://github.com/kubernetes/release/tree/master/cmd/release-notes
+        run: go install k8s.io/release/cmd/release-notes@latest
+
+      - name: Check out code
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
+        with:
+          fetch-depth: 0
+
+      - name: Generate Notes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ inputs.token }}
+        run: |
+          set -x
+          # The release-notes tool access ENV vars as options
+          # https://github.com/kubernetes/release/tree/master/cmd/release-notes#options
+          export ORG=$(echo '${{ github.repository }}' | awk -F '/' '{print $1}')
+          export REPO=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')
+          export BRANCH="${{ inputs.branch_name }}"
+          export START_REV=${{ inputs.start_rev }}
+          export END_REV=${{ inputs.end_rev }}
+          if [[ -z "$END_REV" ]]; then
+            END_REV="origin/$BRANCH"
+          fi
+          # If start rev isn't set find the merge base of
+          # the target branch and the previous branch
+          if [[ -z "$START_REV" ]]; then
+            BRANCHES=$(mktemp)
+            # List of branches sorted by semver descending
+            git branch -r -l "origin/release-[0-9]*\.[0-9]*" | sed 's/ //g' | sort -Vr > "$BRANCHES"
+            if [[ "$BRANCH" == "main" ]]; then
+              LAST_BRANCH="$(head -n1 "$BRANCHES")"
+            else
+              # use grep magic to find the next branch
+              # '-A 1' - prints the line after the match which we can parse
+              LAST_BRANCH="$(grep -A 1 "$BRANCH" "$BRANCHES" | tail -n1)"
+            fi
+            export START_SHA=$(git merge-base $LAST_BRANCH origin/$BRANCH)
+          fi
+          release-notes \
+           --required-author="" \
+           --output=${{ inputs.output_filename }} \
+           --repo-path="$PWD" \
+
+      - name: Display Notes
+        shell: bash
+        run: |
+          cat ${{ inputs.output_filename }}
+
+      - name: Archive Release Notes
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.output_filename }}
+          path: ${{ inputs.output_filename }}
+
+      - name: Check workspace
+        id: create_pr
+        shell: bash
+        run: |
+          if [[ $(git diff --stat) != '' ]]; then
+            echo ::set-output name=create_pr::true
+          fi
+
+      # Configure signed commits
+      - uses: chainguard-dev/actions/setup-gitsign@main
+        if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@923ad837f191474af6b1721408744feb989a4c27 # v4
+        if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+        with:
+          token: ${{ inputs.token }}
+          commit-message: Update Changelog
+          title: 'Update Changelog'
+          body: >
+            Update ${{ inputs.output_filename }}
+          labels: automated pr, release-note-none, kind/documentation
+          branch: update-changelog
+          delete-branch: true
