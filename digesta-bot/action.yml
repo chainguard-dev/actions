@@ -64,6 +64,6 @@ runs:
       title: 'Update images digests'
       body: >
         Update images digests
-      labels: feature, automated pr
+      labels: automated pr, kind/cleanup, release-note-none
       branch: update-digests
       delete-branch: true
