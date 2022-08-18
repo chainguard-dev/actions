@@ -116,8 +116,6 @@ runs:
                 clusterDomain: ${{ inputs.cluster-domain }}
                 resources: *defaultResources
                 excludeIPRanges: "${API_SERVER_IP}/32"
-            sidecarInjectorWebhook:
-              enableNamespacesByDefault: ${{ inputs.enable-auto-injection }}
 
           meshConfig:
             outboundTrafficPolicy:
@@ -137,12 +135,18 @@ runs:
               k8s: *defaultK8s
         EOF
 
-        # We need opt-out sidecar injector for the namespaces existing before we install Istio.
-        for x in $(kubectl get namespaces -oname); do
-          kubectl label $x istio-injection=disabled --overwrite
+
+        for x in knative-serving knative-eventing; do
+          kubectl create ns $x
+          kubectl label ns $x istio-injection=enabled --overwrite
         done
 
         ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
+
+        if [[ "${{ inputs.enable-auto-injection }}" != "true" ]]; then
+          # Delete the sidecar injector when we don't need auto-injection.
+          kubectl delete mutatingwebhookconfigurations -l app=sidecar-injector
+        fi
 
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
