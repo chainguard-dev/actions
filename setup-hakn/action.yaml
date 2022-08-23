@@ -144,6 +144,12 @@ runs:
 
         ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
 
+        # Remove the webhook in cases injection isn't needed.
+        if [[ "${{ inputs.enable-auto-injection }}" != "true" ]]; then
+          # Delete the sidecar injector when we don't need auto-injection.
+          kubectl delete mutatingwebhookconfigurations -l app=sidecar-injector
+        fi
+
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
           local FILE="${1}"
