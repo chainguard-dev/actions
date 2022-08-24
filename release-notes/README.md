@@ -17,9 +17,9 @@ and generate the release notes for a particular start/end revision and will open
     # End Tag (defaults to HEAD of the target branch)
     # Optional.
     end_rev: 6937ed05c9dvdv59ac67528365c2d3964e793b517
-    # Name of the file that the changelog will be generated
+    # Name of the file that the changelog will be updated
     # Optional.
-    output_filename:  'CHANGELOG.md'
+    changelog_filename:  'CHANGELOG.md'
     # GITHUB_TOKEN with `contents` and `pull-requests` permissions or a `repo` scoped Personal Access Token (PAT)
     # Required.
     token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,6 +32,7 @@ and generate the release notes for a particular start/end revision and will open
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 steps:
 - uses: chainguard-dev/actions/release-notes@main
@@ -39,6 +40,6 @@ steps:
     branch_name: 'main'
     start_rev: 6937ed05c9dvdv59ac67528365c2d3964e793b516
     end_rev: 6937ed05c9dvdv59ac67528365c2d3964e793b517
-    output_filename:  'CHANGELOG.md'
+    changelog_filename:  'CHANGELOG.md'
     token: ${{ secrets.GITHUB_TOKEN }}
 ```
