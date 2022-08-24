@@ -15,9 +15,9 @@ inputs:
   end_rev:
     required: false
     description: 'End Tag (defaults to HEAD of the target branch)'
-  output_filename:
+  changelog_filename:
     required: false
-    description: 'Name of the file that the changelog will be generated'
+    description: 'Name of the file that the changelog will be updated'
     default: 'CHANGELOG.md'
   token:
     description: 'GITHUB_TOKEN with `contents` and `pull-requests` permissions or a `repo` scoped Personal Access Token (PAT)'
@@ -77,20 +77,29 @@ runs:
           fi
           release-notes \
            --required-author="" \
-           --output=${{ inputs.output_filename }} \
+           --output=CHANGELOG_NEW.md \
            --repo-path="$PWD" \
            --dependencies=false
 
       - name: Display Notes
         shell: bash
         run: |
-          cat ${{ inputs.output_filename }}
+          cat CHANGELOG_NEW.md
 
       - name: Archive Release Notes
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ inputs.output_filename }}
-          path: ${{ inputs.output_filename }}
+          name: CHANGELOG_${{ inputs.end_rev }}.md
+          path: CHANGELOG_NEW.md
+
+      - name: Append notes to the exiting file
+        shell: bash
+        run: |
+          echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+          cat CHANGELOG_NEW.md | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+          echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+          echo "## ${{ inputs.end_rev }}" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+          rm CHANGELOG_NEW.md
 
       - name: Check workspace
         id: create_pr
@@ -110,9 +119,13 @@ runs:
         with:
           token: ${{ inputs.token }}
           commit-message: Update Changelog
-          title: 'Update Changelog'
-          body: >
-            Update ${{ inputs.output_filename }}
+          title: 'Update Changelog for ${{ inputs.end_rev }}'
+          body: |
+            Update ${{ inputs.changelog_filename }} for ${{ inputs.end_rev }}
+
+            ```release-note
+            NONE
+            ```
           labels: automated pr, release-note-none, kind/documentation
           branch: update-changelog
           delete-branch: true
