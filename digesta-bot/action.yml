@@ -62,8 +62,12 @@ runs:
       token: ${{ inputs.token }}
       commit-message: update index
       title: 'Update images digests'
-      body: >
+      body: |
         Update images digests
+
+        ```release-note
+        NONE
+        ```
       labels: automated pr, kind/cleanup, release-note-none
       branch: update-digests
       delete-branch: true
