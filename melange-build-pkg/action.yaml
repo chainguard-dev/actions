@@ -60,6 +60,11 @@ inputs:
       Whether to use an empty workspace or not.
     default: false
 
+  source-dir:
+    description: |
+      The source directory to use if empty-workspace is false.
+    default: ${{ github.workspace }}
+
   template:
     description: |
       Optional `--template` flag to pass in to `melange build`
@@ -76,6 +81,7 @@ runs:
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
+        ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --template='${{ inputs.template }}' --use-proot
     - name: 'Fix local repository permissions'
