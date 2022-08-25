@@ -18,10 +18,15 @@ inputs:
       The architectures to use.
     default: x86_64
 
+  signing-key-name:
+    description: |
+      The name of the signing key to use if signing is enabled.
+    default: melange.rsa
+
   signing-key-path:
     description: |
       The path for the temporary key if signing is enabled.
-    default: ${{ github.workspace }}/melange.rsa
+    default: ${{ github.workspace }}/${{ inputs.signing-key-name }}
 
   repository-path:
     description: |
@@ -39,6 +44,6 @@ runs:
         sign-with-key: true
         update-index: true
         repository-append: ${{ github.workspace }}/packages
-        keyring-append: /etc/apk/keys/melange.rsa.pub
+        keyring-append: /etc/apk/keys/${{ inputs.signing-key-name }}.pub
         workspace-dir: ${{ github.workspace }}/build/${{ inputs.package-name }}
         empty-workspace: true
