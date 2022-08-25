@@ -23,11 +23,6 @@ inputs:
       The name of the signing key to use if signing is enabled.
     default: melange.rsa
 
-  signing-key-path:
-    description: |
-      The path for the temporary key if signing is enabled.
-    default: ${{ github.workspace }}/${{ inputs.signing-key-name }}
-
   repository-path:
     description: |
       The path of the repository being constructed by Melange.
@@ -47,3 +42,4 @@ runs:
         keyring-append: /etc/apk/keys/${{ inputs.signing-key-name }}.pub
         workspace-dir: ${{ github.workspace }}/build/${{ inputs.package-name }}
         empty-workspace: true
+        signing-key-path: ${{ github.workspace }}/${{ inputs.signing-key-name }}
