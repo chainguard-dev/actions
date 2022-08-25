@@ -52,6 +52,6 @@ runs:
         repository-append: ${{ github.workspace }}/packages
         keyring-append: /etc/apk/keys/${{ inputs.signing-key-name }}.pub
         workspace-dir: ${{ github.workspace }}/build/${{ inputs.package-name }}
-        empty-workspace: true
+        empty-workspace: ${{ inputs.empty-workspace }}
         signing-key-path: ${{ github.workspace }}/${{ inputs.signing-key-name }}
         source-dir: ${{ inputs.source-dir }}
