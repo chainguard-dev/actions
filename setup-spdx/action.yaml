@@ -39,19 +39,13 @@ inputs:
     - XLSX    
     - RDFXML
 
-on:
-  pull_request:
-    branches: ['main']
-  push:
-  workflow_dispatch:
-
 runs:
   using: composite
   steps:
   - name: Install SPDX Tools
     shell: bash
     run: |
-      wget https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
+      wget --progress=dot:giga https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
       unzip tools-java-${{ inputs.spdx-tools-version }}.zip
   - name: Validate SBOM
     if: ${{ inputs.sbom-path != '' }}
