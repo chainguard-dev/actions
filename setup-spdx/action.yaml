@@ -11,10 +11,30 @@ inputs:
     description: |
       Path to the SBOM to be validated. The SBOM file name must have its extension
       matching its encoding type
-    default: 
+    required: false
 
-env:
-  SPDX_TOOLS_VERSION: 1.1.0
+  spdx-tools-version:
+    description: |
+      Version of the SPDX tools. 
+    default:  1.1.0
+    options:
+    - 1.1.0
+    - 1.0.4
+
+  sbom-format:
+    description: |
+      Encoding format of the SPDX document. The default is blank meaning that
+      the SPDX Verify subcommand will try to infer it from the file extension.
+    default:
+    options:
+    - 
+    - JSON
+    - TAG
+    - YAML
+    - XML
+    - XLS
+    - XLSX    
+    - RDFXML
 
 on:
   pull_request:
@@ -28,9 +48,9 @@ jobs:
     steps:
       - name: Install SPDX Tools
         run: |
-          wget https://github.com/spdx/tools-java/releases/download/v${SPDX_TOOLS_VERSION}/tools-java-${SPDX_TOOLS_VERSION}.zip
-          unzip tools-java-${SPDX_TOOLS_VERSION}.zip
+          wget https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
+          unzip tools-java-${{ inputs.spdx-tools-version }}.zip
       - name: Validate SBOM
         if: ${{ inputs.sbom-path != '' }}
         run: |
-          java -jar ./tools-java-${SPDX_TOOLS_VERSION}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }}
+          java -jar ./tools-java-${{ inputs.spdx-tools-version }}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }} ${{ inputs.sbom-format }}
