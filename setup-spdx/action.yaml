@@ -45,16 +45,16 @@ on:
   push:
   workflow_dispatch:
 
-jobs:
-  runs-on: ubuntu-latest
-  sbom:
-    name: SPDX Verification Tools
-    steps:
-      - name: Install SPDX Tools
-        run: |
-          wget https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
-          unzip tools-java-${{ inputs.spdx-tools-version }}.zip
-      - name: Validate SBOM
-        if: ${{ inputs.sbom-path != '' }}
-        run: |
-          java -jar ./tools-java-${{ inputs.spdx-tools-version }}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }} ${{ inputs.sbom-format }}
+runs:
+  using: composite
+  steps:
+  - name: Install SPDX Tools
+    shell: bash
+    run: |
+      wget https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
+      unzip tools-java-${{ inputs.spdx-tools-version }}.zip
+  - name: Validate SBOM
+    if: ${{ inputs.sbom-path != '' }}
+    shell: bash
+    run: |
+      java -jar ./tools-java-${{ inputs.spdx-tools-version }}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }} ${{ inputs.sbom-format }}
