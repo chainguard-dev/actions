@@ -1,0 +1,62 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Originally adapted from the ko SBOM verification action:
+# https://github.com/google/ko/blob/main/.github/workflows/sbom.yaml
+
+name: 'Setup SPDX Tools'
+description: |
+  This action sets up the SPDX tools jar in the workflow environment 
+  and optionally verifies an SBOM. 
+
+inputs:
+  sbom-path:
+    description: |
+      Path to the SBOM to be validated. The SBOM file name must have its extension
+      matching its encoding type
+    required: false
+
+  spdx-tools-version:
+    description: |
+      Version of the SPDX tools. 
+    default:  1.1.0
+    options:
+    - 1.1.0
+    - 1.0.4
+
+  download:
+    description: |
+      When true, the action will try to download the SPDX tools jar. Useful
+      when running more than one validation.
+    default: true
+    type: boolean
+
+  sbom-format:
+    description: |
+      Encoding format of the SPDX document. The default is blank meaning that
+      the SPDX Verify subcommand will try to infer it from the file extension.
+    default:
+    options:
+    - 
+    - JSON
+    - TAG
+    - YAML
+    - XML
+    - XLS
+    - XLSX    
+    - RDFXML
+
+runs:
+  using: composite
+  steps:
+  - name: Install SPDX Tools
+    if: ${{ inputs.download == 'true' }}
+    shell: bash
+    run: |
+      wget --progress=dot:giga https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
+      unzip tools-java-${{ inputs.spdx-tools-version }}.zip
+  - name: Validate SBOM
+    if: ${{ inputs.sbom-path != '' }}
+    shell: bash
+    run: |
+      java -jar ./tools-java-${{ inputs.spdx-tools-version }}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }} ${{ inputs.sbom-format }}
