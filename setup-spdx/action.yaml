@@ -50,7 +50,7 @@ runs:
   using: composite
   steps:
   - name: Install SPDX Tools
-    if: ${{ inputs.download }}
+    if: ${{ inputs.download == 'true' }}
     shell: bash
     run: |
       wget --progress=dot:giga https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
