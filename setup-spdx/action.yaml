@@ -1,11 +1,14 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+# Originally adapted from the ko SBOM verification action:
+# https://github.com/google/ko/blob/main/.github/workflows/sbom.yaml
+
 name: 'Setup SPDX Tools'
 description: |
-  This actions sets up the SPDX tools jar in the environment 
-  and optionally verifies an SBOM specified in the input
-  
+  This action sets up the SPDX tools jar in the workflow environment 
+  and optionally verifies an SBOM. 
+
 inputs:
   sbom-path:
     description: |
@@ -40,6 +43,7 @@ on:
   pull_request:
     branches: ['main']
   push:
+  workflow_dispatch:
 
 jobs:
   runs-on: ubuntu-latest
