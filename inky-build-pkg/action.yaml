@@ -21,7 +21,7 @@ inputs:
   signing-key-name:
     description: |
       The name of the signing key to use if signing is enabled.
-    default: melange.rsa
+    default: wolfi-signing.rsa
 
   repository-path:
     description: |
