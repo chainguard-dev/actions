@@ -39,13 +39,13 @@ runs:
           esac
         }
 
-        gitsign_version='0.1.1'
-        gitsign_linux_amd64_sha='79db25fcbc4d4473c82437063907a01570a055d2929438c6d70ced492a0049f7'
-        gitsign_linux_arm64_sha='8da0239392d1add437c7e5cd98a75c4030f922375b70812cbbdbbe02ea6371d6'
-        gitsign_darwin_amd64_sha='1d73033d6507010d9f5aaba3993d98f0a21553eaa43f2fe3d09d3f047c04d2d8'
-        gitsign_darwin_arm64_sha='4f840596f70c580cf4d2c86b926e96b84983f94b1cf2c967b2386ddce3a0f79c'
-        gitsign_windows_amd64_sha='0f026879fae8a7cc503f7829a885ffc14b9d6ae4d52b9086c5ba05b9ca9e1343'
-        gitsign_windows_arm64_sha='68b23284dc4cc3be1119776066047dab286e0c8a7824bc8f60a299d7ba73887d'
+        gitsign_version='0.3.0'
+        gitsign_linux_amd64_sha='2445c1b443b95a3652ab9af074f8d13fc9a45a3c98ed0c7ef4f299f2f2ca5c8a'
+        gitsign_linux_arm64_sha='a21f8d6b7624975c0d9cfe278b01907c1daa3b62168f147fab544738ae9c9cf7'
+        gitsign_darwin_amd64_sha='db13a32e2c4915cd11a2a01c5b93daaaee6db1b64c66d310430ed3e2d167701e'
+        gitsign_darwin_arm64_sha='24c02598bbf75833f17a6bde28aca97b27a19d779ea55c3dbd72a750195431be'
+        gitsign_windows_amd64_sha='4497a038168113195b7a9bc1b4957aef029cbfb33b739f1ee21cf22b826284e4'
+        gitsign_windows_arm64_sha='6a50d1721a6fb4558823422d676e48922806842a25850d8bf251fa003243a926'
         gitsign_executable_name=gitsign
 
         trap "popd >/dev/null" EXIT
