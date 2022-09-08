@@ -83,15 +83,9 @@ runs:
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg --template='${{ inputs.template }}' --use-proot
+        ${{ inputs.update-index }} || indexarg="--generate-index=false"
+        sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --template='${{ inputs.template }}' --use-proot
     - name: 'Fix local repository permissions'
       shell: bash
       run: |
         sudo chown -R runner:runner ${{ inputs.repository-path }}
-    - uses: chainguard-dev/actions/melange-index@main
-      if: ${{ inputs.update-index }}
-      with:
-        archs: ${{ inputs.archs }}
-        repository-path: ${{ inputs.repository-path }}
-        sign-with-key: ${{ inputs.sign-with-key }}
-        signing-key-path: ${{ inputs.signing-key-path }}

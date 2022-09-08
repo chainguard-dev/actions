@@ -75,10 +75,3 @@ runs:
         keyring-append: ${{ inputs.keyring-append }}
         empty-workspace: ${{ inputs.empty-workspace }}
         template: ${{ inputs.template }}
-        update-index: false
-    - uses: chainguard-dev/actions/melange-index@main
-      with:
-        archs: ${{ inputs.archs }}
-        sign-with-key: ${{ inputs.sign-with-temporary-key }}
-        signing-key-path: ${{ inputs.signing-key-path }}
-        repository-path: ${{ inputs.repository-path }}
