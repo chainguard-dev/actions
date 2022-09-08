@@ -15,9 +15,9 @@ inputs:
 
   kind-version:
     description: |
-      The exact version of KinD to use in the form: 0.14.0
+      The exact version of KinD to use in the form: 0.15.0
     required: true
-    default: 0.14.0
+    default: 0.15.0
 
   registry-authority:
     description: |
@@ -83,23 +83,28 @@ runs:
         case ${{ inputs.k8s-version }} in
 
           v1.21.x)
-            KIND_IMAGE_SHA="sha256:f316b33dd88f8196379f38feb80545ef3ed44d9197dca1bfd48bcb1583210207"
-            echo "KIND_IMAGE=kindest/node:v1.21.12@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            KIND_IMAGE_SHA="sha256:f9b4d3d1112f24a7254d2ee296f177f628f9b4c1b32f0006567af11b91c1f301"
+            echo "KIND_IMAGE=kindest/node:v1.21.14@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
             ;;
 
           v1.22.x)
-            KIND_IMAGE_SHA="sha256:8135260b959dfe320206eb36b3aeda9cffcb262f4b44cda6b33f7bb73f453105"
-            echo "KIND_IMAGE=kindest/node:v1.22.9@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            KIND_IMAGE_SHA="sha256:4904eda4d6e64b402169797805b8ec01f50133960ad6c19af45173a27eadf959"
+            echo "KIND_IMAGE=kindest/node:v1.22.13@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
             ;;
 
           v1.23.x)
-            KIND_IMAGE_SHA="sha256:b1fa224cc6c7ff32455e0b1fd9cbfd3d3bc87ecaa8fcb06961ed1afb3db0f9ae"
-            echo "KIND_IMAGE=kindest/node:v1.23.6@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            KIND_IMAGE_SHA="sha256:f047448af6a656fae7bc909e2fab360c18c487ef3edc93f06d78cdfd864b2d12"
+            echo "KIND_IMAGE=kindest/node:v1.23.10@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
             ;;
 
           v1.24.x)
-            KIND_IMAGE_SHA="sha256:0866296e693efe1fed79d5e6c7af8df71fc73ae45e3679af05342239cdc5bc8e"
-            echo "KIND_IMAGE=kindest/node:v1.24.0@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            KIND_IMAGE_SHA="sha256:adfaebada924a26c2c9308edd53c6e33b3d4e453782c0063dc0028bdebaddf98"
+            echo "KIND_IMAGE=kindest/node:v1.24.4@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            ;;
+
+          v1.25.x)
+            KIND_IMAGE_SHA="sha256:428aaa17ec82ccde0131cb2d1ca6547d13cf5fdabcc0bbecf749baa935387cbf"
+            echo "KIND_IMAGE=kindest/node:v1.25.0@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
             ;;
 
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
