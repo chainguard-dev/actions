@@ -8,8 +8,8 @@ This action installs chainguard-dev/hakn Knative into the current kubectl contex
 - uses: chainguard-dev/actions/setup-hakn@main
   with:
     # Version is the version of hakn to install.
-    # (defaults to 1.5.0)
-    version: 1.5.0
+    # (defaults to 1.7.0)
+    version: 1.7.0
     # istio-version is the version of Istio to install.
     # (defaults to 1.14.0)
     istio-version: 1.14.0
@@ -36,7 +36,7 @@ This action installs chainguard-dev/hakn Knative into the current kubectl contex
 steps:
 - uses: chainguard-dev/actions/setup-hakn@main
   with:
-    version: 1.5.0
+    version: 1.7.0
     istio-version: 1.14.0
     serving-features: >
       {
