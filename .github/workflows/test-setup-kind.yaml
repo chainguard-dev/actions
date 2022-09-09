@@ -1,0 +1,36 @@
+name: Test setup-kind github action
+
+on:
+  pull_request:
+    branches: [ main ]
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+concurrency:
+  group: test-github-action${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-github-action:
+    name: Test setup-kind github action
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Keep running if one leg fails.
+      matrix:
+        k8s-version:
+        - v1.22.x
+        - v1.23.x
+        - v1.24.x
+        - v1.25.x
+
+    steps:
+    - name: Checkout the current action
+      uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3.0.2
+
+    - name: Test running the action
+      uses: ./setup-kind
+      with:
+        k8s-version: ${{ matrix.k8s-version }}
