@@ -9,7 +9,9 @@ description: |
 inputs:
   version:
     description: |
-      The version of Knative to install, e.g. 1.5.0
+      The version of Knative to install, e.g. 1.5.0. Sometimes (like v1.7.x) of
+      Knative, the components are out of sync, so to work around that you can
+      specify "latest" and it will fetch the latest ones for all the components.
     required: true
     default: 1.5.0
 
@@ -67,8 +69,17 @@ runs:
         function resource_blaster() {
           local REPO="${1}"
           local FILE="${2}"
+          local REAL_KNATIVE_VERSION=${{ inputs.version }}
 
-          curl -L -s "https://github.com/knative/${REPO}/releases/download/knative-v${{ inputs.version }}/${FILE}" \
+          # If latest specified, fetch that instead. Note that this can vary
+          # between versions, so have to fetch for each component.
+          if [ ${{ inputs.version }} == "latest" ]; then
+            REAL_KNATIVE_VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/releases/latest | jq -r '.tag_name')
+          else
+            REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
+          fi
+
+          curl -L -s "https://github.com/knative/${REPO}/releases/download/${REAL_KNATIVE_VERSION}/${FILE}" \
             | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
