@@ -24,7 +24,9 @@ jobs:
         - v1.22.x
         - v1.23.x
         - v1.24.x
-        - v1.25.x
+        # Do not test with this yet, 1.7.1 of knative breaks everything.
+        # and versions before it do not work with this.
+        # - v1.25.x
 
     steps:
     - name: Checkout the current action
@@ -34,3 +36,9 @@ jobs:
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
+
+    - name: Test spinning up Knative also
+      id: knative
+      uses: ./setup-knative
+      with:
+        version: 1.6.0
