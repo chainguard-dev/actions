@@ -24,9 +24,7 @@ jobs:
         - v1.22.x
         - v1.23.x
         - v1.24.x
-        # Do not test with this yet, 1.7.1 of knative breaks everything.
-        # and versions before it do not work with this.
-        # - v1.25.x
+        - v1.25.x
 
     steps:
     - name: Checkout the current action
@@ -41,4 +39,4 @@ jobs:
       id: knative
       uses: ./setup-knative
       with:
-        version: 1.6.0
+        version: latest
