@@ -28,21 +28,12 @@ inputs:
       The path of the repository being constructed by Melange.
     default: ${{ github.workspace }}/packages
 
-  empty-workspace:
-    description: |
-      Whether to begin with an empty workspace.
-    default: true
-
-  source-dir:
-    description: |
-      The directory to use for the --source-dir option if
-      empty-workspace is false.
-    default: ${{ github.workspace }}
-
 runs:
   using: 'composite'
 
   steps:
+    - run: |
+        mkdir -p ${{ github.workspace }}/${{ inputs.package-name }}
     - uses: chainguard-dev/actions/melange-build-pkg@main
       with:
         config: ${{ inputs.package-name }}.yaml
@@ -52,6 +43,6 @@ runs:
         repository-append: ${{ github.workspace }}/packages
         keyring-append: /etc/apk/keys/${{ inputs.signing-key-name }}.pub
         workspace-dir: ${{ github.workspace }}/build/${{ inputs.package-name }}
-        empty-workspace: ${{ inputs.empty-workspace }}
         signing-key-path: ${{ github.workspace }}/${{ inputs.signing-key-name }}
-        source-dir: ${{ inputs.source-dir }}
+        source-dir: ${{ github.workspace }}/${{ inputs.package-name }}
+        empty-workspace: false
