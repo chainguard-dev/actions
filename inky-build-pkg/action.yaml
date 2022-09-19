@@ -32,7 +32,8 @@ runs:
   using: 'composite'
 
   steps:
-    - run: |
+    - shell: bash
+      run: |
         mkdir -p ${{ github.workspace }}/${{ inputs.package-name }}
     - uses: chainguard-dev/actions/melange-build-pkg@main
       with:
