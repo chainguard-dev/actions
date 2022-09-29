@@ -118,7 +118,7 @@ runs:
         if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
         with:
           token: ${{ inputs.token }}
-          commit-message: Update Changelog
+          commit-message: 'Update Changelog for ${{ inputs.end_rev }}'
           title: 'Update Changelog for ${{ inputs.end_rev }}'
           body: |
             Update ${{ inputs.changelog_filename }} for ${{ inputs.end_rev }}
@@ -127,5 +127,5 @@ runs:
             NONE
             ```
           labels: automated pr, release-note-none, kind/documentation
-          branch: update-changelog
+          branch: update-changelog-${{ inputs.end_rev }}
           delete-branch: true
