@@ -75,6 +75,10 @@ runs:
           # between versions, so have to fetch for each component.
           if [ ${{ inputs.version }} == "latest" ]; then
             REAL_KNATIVE_VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/releases/latest | jq -r '.tag_name')
+          elif [[ ${{ inputs.version }} == *".x"* ]]; then
+            INPUT=$(echo ${{ inputs.version }} | sed 's/.x//g')
+            VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/git/refs/tags | jq -r '.[].ref' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -n | tail -1)
+            REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
             REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
           fi
