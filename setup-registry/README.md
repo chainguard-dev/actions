@@ -23,7 +23,7 @@ steps:
 - uses: chainguard-dev/actions/setup-registry@main
 
 # Copy an image to the registry.
-- run: crane cp ghcr.io/distroless/static localhost:1338/static
+- run: crane cp cgr.dev/chainguard/static localhost:1338/static
 
 # Build an image to the registry.
 - env:
