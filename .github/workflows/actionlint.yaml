@@ -19,7 +19,7 @@ jobs:
       - id: get_yamls
         run: |
           yamls=$(find . -name "*.yaml")
-          echo "::set-output name=files::${yamls}"
+          echo "files="${yamls}"" >> $GITHUB_OUTPUT
       - uses: reviewdog/action-actionlint@v1
         with:
           actionlint_flags: ${{ steps.get_yamls.outputs.files }}
