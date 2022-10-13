@@ -29,7 +29,7 @@ inputs:
     description: |
       Regular expression of paths to exclude.
     required: false
-    default: ((vendor|third_party)/|.pb(.gw)?.go)
+    default: ((vendor|third_party)/|.pb(.gw)?.go|.generated.go)
 
 runs:
   using: "composite"
