@@ -11,13 +11,13 @@ inputs:
     description: |
       The version of Knative to install, e.g. 1.7.0
     required: false
-    default: 1.7.0
+    default: 1.7.4
 
   istio-version:
     description: |
-      The version of Istio to install, e.g. 1.14.0
+      The version of Istio to install, e.g. 1.14.5
     required: false
-    default: 1.14.0
+    default: 1.14.5
 
   enable-auto-injection:
     description: |
@@ -103,6 +103,8 @@ runs:
         apiVersion: install.istio.io/v1alpha1
         kind: IstioOperator
         spec:
+          # Test with the distroless images.
+          tag: ${{ inputs.istio-version }}-distroless
           values:
             global:
               # Ideally for KinD installations we want to blow away the resources
