@@ -107,7 +107,7 @@ runs:
         shell: bash
         run: |
           if [[ $(git diff --stat) != '' ]]; then
-            echo ::set-output name=create_pr::true
+            echo "create_pr=true" >> $GITHUB_OUTPUT
           fi
 
       # Configure signed commits

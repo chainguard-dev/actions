@@ -84,4 +84,4 @@ runs:
         ${{ inputs.use-docker-mediatypes && '--use-docker-mediatypes' }} \
         --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
       echo EXIT CODE: $?
-      echo ::set-output name=digest::$(cat "${{ inputs.image_refs }}")
+      echo "digest=$(cat "${{ inputs.image_refs }}")" >> $GITHUB_OUTPUT
