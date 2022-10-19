@@ -9,11 +9,17 @@ description: |
 inputs:
   version:
     description: |
-      The version of Knative to install, e.g. 1.5.0. Sometimes (like v1.7.x) of
+      The version of Knative to install, e.g. 1.8.0. Sometimes (like v1.7.x) of
       Knative, the components are out of sync, so to work around that you can
       specify "latest" and it will fetch the latest ones for all the components.
     required: true
-    default: 1.5.0
+    default: 1.8.0
+
+  istio-version:
+    description: |
+      The version of Istion to install, e.g. 1.14.5
+    required: false
+    default: 1.14.5
 
   kingress:
     description: |
@@ -91,7 +97,7 @@ runs:
         }
 
         function download_istioctl() {
-          ISTIO_VERSION=1.14.0
+          ISTIO_VERSION=${{ inputs.istio-version }}
           ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
           case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
           x86|x64) ARCH=amd64;;
