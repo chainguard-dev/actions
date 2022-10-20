@@ -205,7 +205,7 @@ runs:
 
         export IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath={.status.loadBalancer.ingress[0].ip})
         echo LB IP: ${IP}
-        echo ::set-output name=load-balancer-ip::${IP}
+        echo "load-balancer-ip=${IP}" >> $GITHUB_OUTPUT
 
         # Required for minio
         kubectl patch cm config-domain -n knative-serving \

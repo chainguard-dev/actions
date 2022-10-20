@@ -251,5 +251,5 @@ runs:
 
     - name: Set start time output
       id: start-time
-      run:  echo ::set-output name=kind-start-time::$(echo $(($(date +%s%N)/1000000)))
+      run: echo "kind-start-time=$(echo $(($(date +%s%N)/1000000)))" >> $GITHUB_OUTPUT
       shell: bash
