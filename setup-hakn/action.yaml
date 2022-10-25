@@ -9,9 +9,9 @@ description: |
 inputs:
   version:
     description: |
-      The version of Knative to install, e.g. 1.7.0
+      The version of Hakn to install, e.g. 1.8.0
     required: false
-    default: 1.7.4
+    default: 1.8.0
 
   istio-version:
     description: |
