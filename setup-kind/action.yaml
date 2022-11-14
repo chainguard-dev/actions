@@ -149,11 +149,9 @@ runs:
 
         # This is needed in order to support projected volumes with service account tokens.
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
-        #
-        # We don't specify the API version since Kind is permissive when patching
-        # https://kubernetes.slack.com/archives/CEKK1KTN2/p1648855849643189?thread_ts=1648855553.841399&cid=CEKK1KTN2
         kubeadmConfigPatches:
           - |
+            apiVersion: kubeadm.k8s.io/v1beta2
             kind: ClusterConfiguration
             metadata:
               name: config
