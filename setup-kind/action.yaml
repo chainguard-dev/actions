@@ -151,7 +151,7 @@ runs:
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
         #
         # We don't specify the API version since Kind is permissive when patching
-        # https://app.slack.com/client/T09NY5SBT/CEKK1KTN2/thread/CEKK1KTN2-1648855553.841399
+        # https://kubernetes.slack.com/archives/CEKK1KTN2/p1648855849643189?thread_ts=1648855553.841399&cid=CEKK1KTN2
         kubeadmConfigPatches:
           - |
             kind: ClusterConfiguration
