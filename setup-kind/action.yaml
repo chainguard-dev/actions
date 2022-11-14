@@ -151,7 +151,6 @@ runs:
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
         kubeadmConfigPatches:
           - |
-            apiVersion: kubeadm.k8s.io/v1beta2
             kind: ClusterConfiguration
             metadata:
               name: config
@@ -161,9 +160,14 @@ runs:
                 "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
                 "service-account-jwks-uri": "https://kubernetes.default.svc/openid/v1/jwks"
                 "service-account-key-file": "/etc/kubernetes/pki/sa.pub"
+        EOF
+
+        if [[ "${{ inputs.cluster-suffix }}" != "cluster.local" ]]; then
+        cat >> kind.yaml <<EOF
             networking:
               dnsDomain: "${{ inputs.cluster-suffix }}"
         EOF
+        fi
 
         echo '::group:: KinD config'
         cat kind.yaml

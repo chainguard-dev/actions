@@ -33,6 +33,7 @@ jobs:
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
+        cluster-suffix: c${{ github.run_id }}.local
 
     - name: Test spinning up Knative also
       id: knative
