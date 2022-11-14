@@ -15,9 +15,15 @@ inputs:
 
   kind-version:
     description: |
-      The exact version of KinD to use in the form: 0.16.0
+      The exact version of KinD to use in the form: 0.17.0
     required: true
-    default: 0.16.0
+    default: 0.17.0
+
+  kind-worker-count:
+    description: |
+      The number of worker nodes in the cluster
+    required: true
+    default: "1"
 
   registry-authority:
     description: |
@@ -83,28 +89,23 @@ runs:
         case ${{ inputs.k8s-version }} in
 
           v1.21.x)
-            KIND_IMAGE_SHA="sha256:ad5b7446dd8332439f22a1efdac73670f0da158c00f0a70b45716e7ef3fae20b"
-            echo "KIND_IMAGE=kindest/node:v1.21.14@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.21.14@sha256:9d9eb5fb26b4fbc0c6d95fa8c790414f9750dd583f5d7cee45d92e8c26670aa1" >> $GITHUB_ENV
             ;;
 
           v1.22.x)
-            KIND_IMAGE_SHA="sha256:bfd5eaae36849bfb3c1e3b9442f3da17d730718248939d9d547e86bbac5da586"
-            echo "KIND_IMAGE=kindest/node:v1.22.15@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.22.15@sha256:7d9708c4b0873f0fe2e171e2b1b7f45ae89482617778c1c875f1053d4cef2e41" >> $GITHUB_ENV
             ;;
 
           v1.23.x)
-            KIND_IMAGE_SHA="sha256:9402cf1330bbd3a0d097d2033fa489b2abe40d479cc5ef47d0b6a6960613148a"
-            echo "KIND_IMAGE=kindest/node:v1.23.12@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.23.13@sha256:ef453bb7c79f0e3caba88d2067d4196f427794086a7d0df8df4f019d5e336b61" >> $GITHUB_ENV
             ;;
 
           v1.24.x)
-            KIND_IMAGE_SHA="sha256:97e8d00bc37a7598a0b32d1fabd155a96355c49fa0d4d4790aab0f161bf31be1"
-            echo "KIND_IMAGE=kindest/node:v1.24.6@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.24.7@sha256:577c630ce8e509131eab1aea12c022190978dd2f745aac5eb1fe65c0807eb315" >> $GITHUB_ENV
             ;;
 
           v1.25.x)
-            KIND_IMAGE_SHA="sha256:9be91e9e9cdf116809841fc77ebdb8845443c4c72fe5218f3ae9eb57fdb4bace"
-            echo "KIND_IMAGE=kindest/node:v1.25.2@${KIND_IMAGE_SHA}" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.25.3@sha256:f52781bc0d7a19fb6c405c2af83abfeb311f130707a0e219175677e366cc45d1" >> $GITHUB_ENV
             ;;
 
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
@@ -128,9 +129,16 @@ runs:
           extraMounts:
           - containerPath: /var/lib/etcd
             hostPath: /tmp/etcd
+        EOF
+
+        for node in {1..${{ inputs.kind-worker-count }}}; do
+        cat >> kind.yaml <<EOF
         - role: worker
           image: "${KIND_IMAGE}"
+        EOF
+        done
 
+        cat >> kind.yaml <<EOF
         # Configure registry for KinD.
         containerdConfigPatches:
         - |-
@@ -141,9 +149,11 @@ runs:
 
         # This is needed in order to support projected volumes with service account tokens.
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
+        #
+        # We don't specify the API version since Kind is permissive when patching
+        # https://kubernetes.slack.com/archives/CEKK1KTN2/p1648855849643189?thread_ts=1648855553.841399&cid=CEKK1KTN2
         kubeadmConfigPatches:
           - |
-            apiVersion: kubeadm.k8s.io/v1beta2
             kind: ClusterConfiguration
             metadata:
               name: config
