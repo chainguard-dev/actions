@@ -29,7 +29,15 @@ jobs:
     - name: Checkout the current action
       uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3.0.2
 
-    - name: Test running the action
+    - name: setup-kind - no cluster suffix
+      uses: ./setup-kind
+      with:
+        k8s-version: ${{ matrix.k8s-version }}
+
+    - name: delete cluster
+      run: kind delete cluster
+
+    - name: setup-kind - with cluster suffix
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
