@@ -25,14 +25,42 @@ jobs:
         - v1.24.x
         - v1.25.x
 
+        # See https://github.com/chainguard-dev/actions/pull/175
+        # We're testing whether setting a custom cluster domain works
+        cluster-suffix:
+        - cluster.local # default value
+        - potato.local
+
     steps:
     - name: Checkout the current action
       uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3.0.2
 
-    - name: Test running the action
+    - name: setup-kind
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
+        cluster-suffix: ${{ matrix.cluster-suffix }}
+
+    - name: check domain
+      run: |
+        expected_value="${{ matrix.cluster-suffix }}"
+        dnsDomain=$(docker exec kind-control-plane cat /kind/kubeadm.conf | { grep dnsDomain || true; } | awk '{ print $2 }')
+
+        if [[ "${expected_value}" == "cluster.local" ]]; then
+          # the action doesn't explicitly set cluster.local - so we expect an empty value
+          if [[ -n "${dnsDomain}" ]]; then
+            echo "Cluster domain was set to '${dnsDomain}' instead of 'cluster.local'"
+            exit 1
+          fi
+        else
+          if [[ -z "${dnsDomain}" ]]; then
+              echo "Cluster domain was not set - expected: '${expected_value}'"
+              exit 1
+          elif [[ "${expected_value}" != "${dnsDomain}" ]]; then
+              echo "Cluster domain expected: '${expected_value}' - actual: '${dnsDomain}'"
+              exit 1
+          fi
+        fi
 
     - name: Test spinning up Knative also
       id: knative
