@@ -65,15 +65,14 @@ inputs:
       The source directory to use if empty-workspace is false.
     default: ${{ github.workspace }}
 
-  template:
-    description: |
-      Optional `--template` flag to pass in to `melange build`
-    default: ''
-
 runs:
   using: 'composite'
 
   steps:
+    - if: inputs.template != ''
+      shell: bash
+      run: |
+        echo "Warning: the --template flag has been removed from melange and will be ignored."
     - name: 'Build package with Melange'
       shell: bash
       run: |
@@ -84,7 +83,7 @@ runs:
         ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         ${{ inputs.update-index }} || indexarg="--generate-index=false"
-        sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --template='${{ inputs.template }}' --use-proot
+        sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --use-proot
     - name: 'Fix local repository permissions'
       shell: bash
       run: |
