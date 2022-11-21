@@ -50,15 +50,14 @@ inputs:
     description: |
       Whether to use an empty workspace or not.
     default: false
-
-  template:
-    description: |
-      Optional `--template` flag to pass in to `melange build`
-    default: ''
 runs:
   using: 'composite'
 
   steps:
+    - if: inputs.template != ''
+      shell: bash
+      run: |
+        echo "Warning: the --template flag has been removed from melange and will be ignored."
     - uses: chainguard-dev/actions/setup-melange@main
     - uses: chainguard-dev/actions/melange-keygen@main
       if: ${{ inputs.sign-with-temporary-key }}
@@ -74,4 +73,3 @@ runs:
         repository-append: ${{ inputs.repository-append }}
         keyring-append: ${{ inputs.keyring-append }}
         empty-workspace: ${{ inputs.empty-workspace }}
-        template: ${{ inputs.template }}
