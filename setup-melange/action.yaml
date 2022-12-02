@@ -59,7 +59,7 @@ runs:
         meson --prefix=/usr -Drequire_userns=true . output
         cd output
         ninja
-        ninja install
+        sudo ninja install
         popd
         rm -rf bubblewrap
     - name: 'Install melange'
