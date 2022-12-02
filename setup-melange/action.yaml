@@ -55,6 +55,7 @@ runs:
         BWRAP_APK_VERSION: 0.6.2-r0
         BWRAP_APK_SHA256: 9fd6136990afd7e5d1223df536518f380d454724d8a2ed2ffa20f671843cee69
       shell: bash
+      run: |
         set -x
         curl -vL -o bwrap.tar.gz "https://packages.wolfi.dev/os/x86_64/bubblewrap-${BWRAP_APK_VERSION}.apk"
         echo "${BWRAP_APK_SHA256}  bwrap.tar.gz" | sha256sum -c
