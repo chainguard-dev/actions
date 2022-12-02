@@ -46,7 +46,21 @@ runs:
     - name: 'Install dependencies'
       shell: bash
       run: |
-        sudo apt install -y build-essential git bubblewrap proot
+        sudo apt install -y build-essential git proot
+    # TODO: the bubblewrap package available from "apt install"
+    # is outdated and missing newer features such as --clearenv flag,
+    # so instead we download the wolfi .apk and use the binary in there
+    - name: 'Install dependencies (bubblewrap)'
+      env:
+        BWRAP_APK_VERSION: 0.6.2-r0
+        BWRAP_APK_SHA256: 9fd6136990afd7e5d1223df536518f380d454724d8a2ed2ffa20f671843cee69
+      shell: bash
+        set -x
+        curl -vL -o bwrap.tar.gz "https://packages.wolfi.dev/os/x86_64/bubblewrap-${BWRAP_APK_VERSION}.apk"
+        echo "${BWRAP_APK_SHA256}  bwrap.tar.gz" | sha256sum -c
+        tar -zxvf bwrap.tar.gz --strip-components=2 usr/bin/bwrap
+        sudo mv bwrap /sbin/bwrap
+        rm -f bwrap.tar.gz
     - name: 'Install melange'
       shell: bash
       run: |
