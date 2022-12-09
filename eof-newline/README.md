@@ -18,7 +18,7 @@ Knative.
 
 ```yaml
 steps:
-  - uses: actions/checkout@v2
+  - uses: actions/checkout@v3
   - uses: chainguard-dev/actions/eof-newline@main
     with:
       path: "src/github.com/${{ github.repository }}"

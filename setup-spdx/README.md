@@ -58,11 +58,11 @@ jobs:
     name: Check SPDX SBOMs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
         with:
           go-version: 1.18
           check-latest: true
-      - uses: actions/checkout@v3.0.2
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
       - run: |
           go run ./cmd/bom/main.go generate -i registry.k8s.io/pause > example-image-pause.spdx
           go run ./cmd/bom/main.go generate --format=json -i registry.k8s.io/pause > example-image-pause.spdx.json

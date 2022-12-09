@@ -19,12 +19,12 @@ Knative.
 
 ```yaml
 steps:
-  - uses: actions/setup-go@v2
+  - uses: actions/setup-go@v3
     with:
-      go-version: '1.17'
+      go-version: '1.19'
       check-latest: true
 
-  - uses: actions/checkout@v2
+  - uses: actions/checkout@v3
 
   - uses: chainguard-dev/actions/goimports@main
 ```

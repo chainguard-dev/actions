@@ -22,7 +22,7 @@ performs formatting.
 
 ```yaml
 steps:
-- uses: actions/checkout@v2
+- uses: actions/checkout@v3
 
 # Format all the Go files in the working tree.
 - run: gofmt -w $(find . -name '*.go')

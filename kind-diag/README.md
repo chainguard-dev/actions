@@ -25,11 +25,11 @@ cluster to the action run.
 
 ```yaml
 steps:
-  - uses: actions/setup-go@v2
+  - uses: actions/setup-go@v3
     with:
-      go-version: 1.17.x
+      go-version: 1.19
 
-  - uses: actions/checkout@v2
+  - uses: actions/checkout@v3
 
   # Run some KinD-based testing.
 
