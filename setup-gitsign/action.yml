@@ -132,6 +132,11 @@ runs:
         git config --global gpg.x509.program gitsign  # Use gitsign for signing
         git config --global gpg.format x509           # gitsign expects x509 args
 
+        # Use workflow name as the username
+        git config --global user.name "${{ github.workflow }}"
+        # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com>"
+
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
       run:  echo "$HOME/.gitsign" >> $GITHUB_PATH
       shell: bash
