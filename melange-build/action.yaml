@@ -13,6 +13,11 @@ inputs:
       The config file to use for building the package.
     default: .melange.yaml
 
+  multi-config:
+    description: |
+      Comma-separated list of config files to use for building package(s).
+    default: ''
+
   archs:
     description: |
       The architectures to use.
@@ -66,6 +71,7 @@ runs:
     - uses: chainguard-dev/actions/melange-build-pkg@main
       with:
         config: ${{ inputs.config }}
+        multi-config: ${{ inputs.multi-config }}
         archs: ${{ inputs.archs }}
         sign-with-key: ${{ inputs.sign-with-temporary-key }}
         signing-key-path: ${{ inputs.signing-key-path }}
