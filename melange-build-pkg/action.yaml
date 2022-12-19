@@ -12,6 +12,11 @@ inputs:
       The config file to use for building the package.
     default: .melange.yaml
 
+  multi-config:
+    description: |
+      Comma-separated list of config files to use for building package(s).
+    default: ''
+
   archs:
     description: |
       The architectures to use.
@@ -83,7 +88,11 @@ runs:
         ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
         ${{ inputs.update-index }} || indexarg="--generate-index=false"
-        sudo melange build ${{ inputs.config }} --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --use-proot
+        melangeconfigs="${{ inputs.multi-config }}"
+        [[ "${melangeconfigs}" == "" ]] || melangeconfigs="${{ inputs.config }}"
+        for config in ${melangeconfigs//,/ }; do
+          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --use-proot
+        done
     - name: 'Fix local repository permissions'
       shell: bash
       run: |
