@@ -55,6 +55,11 @@ inputs:
       The directory to use as the workspace.
     default: ''
 
+  namespace:
+    description: |
+      Namespace string to use in SBOM purls identifying built packages (eg wolfi, alpine)
+    default: ''
+
   update-index:
     description: |
       Automatically update index when the package is built.
@@ -84,6 +89,7 @@ runs:
         [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
+        [ -n '${{ inputs.namespace }}' ] && nsarg="--namespace ${{ inputs.namespace }}"
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
@@ -91,7 +97,7 @@ runs:
         melangeconfigs="${{ inputs.multi-config }}"
         [[ "${melangeconfigs}" != "" ]] || melangeconfigs="${{ inputs.config }}"
         for config in ${melangeconfigs//,/ }; do
-          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg --use-proot
+          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg --use-proot
         done
     - name: 'Fix local repository permissions'
       shell: bash
