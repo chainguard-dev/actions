@@ -51,6 +51,12 @@ inputs:
       in the build environment.
     default: ''
 
+  namespace:
+    description: |
+      Namespace string to use in SBOM purls identifying built packages (eg wolfi, alpine)
+    default: ''
+
+
   empty-workspace:
     description: |
       Whether to use an empty workspace or not.
@@ -79,3 +85,4 @@ runs:
         repository-append: ${{ inputs.repository-append }}
         keyring-append: ${{ inputs.keyring-append }}
         empty-workspace: ${{ inputs.empty-workspace }}
+        namespace: ${{ inputs.namespace }}
