@@ -91,7 +91,7 @@ runs:
     - name: 'Build package with Melange'
       shell: bash
       run: |
-        [ -n '${{ inputs.workdir }}' ] && cd ${{ inputs.workdir }}"
+        [ -n '${{ inputs.workdir }}' ] && cd "${{ inputs.workdir }}"
         [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
         [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
