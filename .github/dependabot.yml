@@ -1,0 +1,13 @@
+version: 2
+updates:
+
+  # workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  # boilerplate
+  - package-ecosystem: "github-actions"
+    directory: "/boilerplate"
+    schedule:
+      interval: "daily"
