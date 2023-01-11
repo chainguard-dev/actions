@@ -17,10 +17,9 @@ inputs:
   audience:
     description: |
       Specifies the identity token audience to use when creating an
-      identity token to authenticate with Chainguard, it is rquired
-      and has no default (for now).
-    required: true
-    default: https://issuer.enforce.dev
+      identity token to authenticate with Chainguard.
+      Defaults to https://issuer.${environment}
+    required: false
 
   invite-code:
     description: |
@@ -46,6 +45,10 @@ runs:
         CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
       run: |
         AUDIENCE="${{ inputs.audience }}"
+        if [[ -z "${AUDIENCE}" ]]; then
+          AUDIENCE=https://issuer.${{ inputs.environment }}
+        fi
+
         IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
 
         if [[ -z "${CHAINGUARD_INVITE_CODE}" ]]; then

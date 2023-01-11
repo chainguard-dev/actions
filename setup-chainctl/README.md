@@ -32,7 +32,5 @@ permissions:
 steps:
 - uses: chainguard-dev/actions/setup-chainctl@main
   with:
-    environment: example.com
-    audience: some-other-audience
     invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
 ```
