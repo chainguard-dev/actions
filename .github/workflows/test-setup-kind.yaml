@@ -21,6 +21,7 @@ jobs:
       fail-fast: false # Keep running if one leg fails.
       matrix:
         k8s-version:
+        - v1.23.x
         - v1.24.x
         - v1.25.x
         - v1.26.x
@@ -64,6 +65,8 @@ jobs:
 
     - name: Test spinning up Knative also
       id: knative
+      # Knative latest supports only v1.24+
+      if: matrix.k8s-version != 'v1.23.x'
       uses: ./setup-knative
       with:
         version: latest
