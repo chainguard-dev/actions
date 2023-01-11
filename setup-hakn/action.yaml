@@ -11,7 +11,7 @@ inputs:
     description: |
       The version of Hakn to install, e.g. 1.8.0
     required: false
-    default: 1.8.0
+    default: 1.8.5
 
   istio-version:
     description: |
