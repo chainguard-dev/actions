@@ -12,6 +12,7 @@ inputs:
       Determines the environment from which to download the chainctl
       binary from, it is required and has no default (for now).
     required: true
+    default: enforce.dev
 
   audience:
     description: |
@@ -19,13 +20,13 @@ inputs:
       identity token to authenticate with Chainguard, it is rquired
       and has no default (for now).
     required: true
+    default: https://issuer.enforce.dev
 
   invite-code:
     description: |
       Optionally specifies an invite code that allows this workflow
       register itself when run for the first time.
     required: false
-
 
 runs:
   using: "composite"
@@ -35,7 +36,7 @@ runs:
       shell: bash
       run: |
         cd $(mktemp -d)
-        wget -O chainctl "https://storage.googleapis.com/us.artifacts.${{ inputs.environment }}.appspot.com/chainctl_$(uname -s)_$(uname -m)"
+        wget -O chainctl "https://dl.${{ inputs.environment }}/chainctl_$(uname -s)_$(uname -m)"
         chmod +x chainctl
         sudo mv chainctl /usr/local/bin
 
