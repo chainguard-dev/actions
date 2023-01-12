@@ -34,7 +34,7 @@ runs:
       run: |
         AUDIENCE="${{ inputs.audience }}"
         if [[ -z "${AUDIENCE}" ]]; then
-          AUDIENCE=https://issuer.${{ inputs.environment }}
+          AUDIENCE=issuer.${{ inputs.environment }}
         fi
         echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
 
