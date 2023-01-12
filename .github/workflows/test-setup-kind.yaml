@@ -1,4 +1,4 @@
-name: Test setup-kind github action
+name: setup-kind
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   test-github-action:
-    name: Test setup-kind github action
+    name: test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false # Keep running if one leg fails.
@@ -24,6 +24,7 @@ jobs:
         - v1.23.x
         - v1.24.x
         - v1.25.x
+        - v1.26.x
 
         # See https://github.com/chainguard-dev/actions/pull/175
         # We're testing whether setting a custom cluster domain works
@@ -64,6 +65,8 @@ jobs:
 
     - name: Test spinning up Knative also
       id: knative
+      # Knative latest supports only v1.24+
+      if: matrix.k8s-version != 'v1.23.x'
       uses: ./setup-knative
       with:
         version: latest
