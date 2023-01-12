@@ -30,10 +30,18 @@ runs:
   using: "composite"
 
   steps:
+    - id: default-audience
+      run: |
+        AUDIENCE="${{ inputs.audience }}"
+        if [[ -z "${AUDIENCE}" ]]; then
+          AUDIENCE=https://issuer.${{ inputs.environment }}
+        fi
+        echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
+
     - uses: chainguard-dev/actions/setup-chainctl@main
       with:
         environment: ${{ inputs.environment }}
-        audience: ${{ inputs.audience }}
+        audience: ${{ steps.default-audience.outputs.audience }}
         invite-code: ${{ inputs.invite-code }}
 
     - shell: bash
