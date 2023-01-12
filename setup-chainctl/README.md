@@ -13,10 +13,9 @@ and authenticates with it using identity tokens.
     # Optional (default is enforce.dev)
     environment: enforce.dev
     # audience is the identity token audience to use when creating an identity
-    # token to authenticate with Chainguard, it is required and has no default
-    # (for now).
-    # Optional (default is https://issuer.enforce.dev)
-    audience: https://issuer.enforce.dev
+    # token to authenticate with Chainguard.
+    # Optional (default is issuer.enforce.dev)
+    audience: issuer.enforce.dev
     # invite-code is an invitation code that may be used to have this workload
     # register itself with the Chainguard API the first time it executes.
     # Optional.

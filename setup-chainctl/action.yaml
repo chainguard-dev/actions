@@ -10,7 +10,7 @@ inputs:
   environment:
     description: |
       Determines the environment from which to download the chainctl
-      binary from, it is required and has no default (for now).
+      binary from.
     required: true
     default: enforce.dev
 
@@ -18,7 +18,7 @@ inputs:
     description: |
       Specifies the identity token audience to use when creating an
       identity token to authenticate with Chainguard.
-      Defaults to https://issuer.${environment}
+      Defaults to issuer.${environment}
     required: false
 
   invite-code:
@@ -46,7 +46,7 @@ runs:
       run: |
         AUDIENCE="${{ inputs.audience }}"
         if [[ -z "${AUDIENCE}" ]]; then
-          AUDIENCE=https://issuer.${{ inputs.environment }}
+          AUDIENCE=issuer.${{ inputs.environment }}
         fi
 
         IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')

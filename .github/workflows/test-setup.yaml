@@ -1,0 +1,29 @@
+name: test-setup
+
+on:
+  # The test requires idtoken permissions, which are not available on
+  # pull_request. This means the workflow config will be taken from HEAD,
+  # so we checkout the PR merge commit explicitly below.
+  pull_request_target:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test-setup:
+    name: test-setup
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout the current action
+      uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    # Test that installers successfully install.
+    - uses: ./setup-chainctl
+    - uses: ./setup-chainguard-terraform

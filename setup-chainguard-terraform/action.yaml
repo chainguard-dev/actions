@@ -9,15 +9,16 @@ inputs:
   environment:
     description: |
       Determines the environment from which to download the chainctl
-      binary from, it is required and has no default (for now).
+      binary from.
     required: true
+    default: enforce.dev
 
   audience:
     description: |
       Specifies the identity token audience to use when creating an
-      identity token to authenticate with Chainguard, it is rquired
-      and has no default (for now).
-    required: true
+      identity token to authenticate with Chainguard.
+      Defaults to issuer.${environment}
+    required: false
 
   invite-code:
     description: |
@@ -29,8 +30,18 @@ runs:
   using: "composite"
 
   steps:
+    - id: default-audience
+      run: |
+        AUDIENCE="${{ inputs.audience }}"
+        if [[ -z "${AUDIENCE}" ]]; then
+          AUDIENCE=issuer.${{ inputs.environment }}
+        fi
+        echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
+
     - uses: chainguard-dev/actions/setup-chainctl@main
       with:
+        environment: ${{ inputs.environment }}
+        audience: ${{ steps.default-audience.outputs.audience }}
         invite-code: ${{ inputs.invite-code }}
 
     - shell: bash
@@ -38,7 +49,7 @@ runs:
         cat > ~/.terraformrc <<EOF
         provider_installation {
           network_mirror {
-            url = "https://storage.googleapis.com/us.artifacts.${{ inputs.environment }}.appspot.com/terraform-provider/"
+            url = "https://dl.${{ inputs.environment }}/terraform-provider/"
             include = [
               "registry.terraform.io/chainguard/chainguard",
             ]

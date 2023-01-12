@@ -11,15 +11,14 @@ particular Chainguard environment.  There are two main things this does:
 ```yaml
 - uses: chainguard-dev/actions/setup-chainguard-terraform@main
   with:
-    # environment determines the environment from which to download the chainctl
-    # binary from, it is required and has no default (for now).
-    # Required.
-    environment: cookie-monster
+    # environment determines the environment from which to download the binary
+    # from.
+    # Optional (default is enforce.dev)
+    environment: enforce.dev
     # audience is the identity token audience to use when creating an identity
-    # token to authenticate with Chainguard, it is required and has no default
-    # (for now).
-    # Required.
-    audience: oscar-the-grouch
+    # token to authenticate with Chainguard.
+    # Optional (default is issuer.enforce.dev)
+    audience: issuer.enforce.dev
     # invite-code is an invitation code that may be used to have this workload
     # register itself with the Chainguard API the first time it executes.
     # Optional.
@@ -33,9 +32,7 @@ permissions:
   id-token: write
 
 steps:
-- uses: chainguard-dev/actions/setup-chainguard@main
+- uses: chainguard-dev/actions/setup-chainguard-terraform@main
   with:
-    environment: big-bird
-    audience: elmo
     invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
 ```
