@@ -10,7 +10,7 @@ inputs:
   environment:
     description: |
       Determines the environment from which to download the chainctl
-      binary from, it is required and has no default (for now).
+      binary from.
     required: true
     default: enforce.dev
 
