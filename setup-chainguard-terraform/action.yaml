@@ -17,7 +17,7 @@ inputs:
     description: |
       Specifies the identity token audience to use when creating an
       identity token to authenticate with Chainguard.
-      Defaults to https://issuer.${environment}
+      Defaults to issuer.${environment}
     required: false
 
   invite-code:
