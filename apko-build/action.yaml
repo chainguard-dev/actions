@@ -62,7 +62,7 @@ outputs:
 
 runs:
   using: docker
-  image: "docker://ghcr.io/chainguard-dev/apko:v0.4.0"
+  image: "docker://ghcr.io/wolfi-dev/apko:latest"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
@@ -80,7 +80,7 @@ runs:
       [ -n "${{ inputs.source-date-epoch }}" ] && export SOURCE_DATE_EPOCH='${{ inputs.source-date-epoch }}'
       [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
       [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
-      /ko-app/apko publish \
+      /usr/bin/apko publish \
         ${{ inputs.use-docker-mediatypes && '--use-docker-mediatypes' }} \
         --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
       echo EXIT CODE: $?
