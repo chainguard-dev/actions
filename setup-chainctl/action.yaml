@@ -14,17 +14,27 @@ inputs:
     required: true
     default: enforce.dev
 
+  identity:
+    description: |
+      The id of the identity that this workflow should assume for
+      performing actions with chainctl.
+    required: false
+
   audience:
     description: |
       Specifies the identity token audience to use when creating an
       identity token to authenticate with Chainguard.
       Defaults to issuer.${environment}
+
+      This field is DEPRECATED, use identity instead.
     required: false
 
   invite-code:
     description: |
       Optionally specifies an invite code that allows this workflow
       register itself when run for the first time.
+
+      Use of invite codes is DEPRECATED, use identity instead.
     required: false
 
 runs:
@@ -39,32 +49,61 @@ runs:
         chmod +x chainctl
         sudo mv chainctl /usr/local/bin
 
-    - name: Authenticate with Chainguard
+    - name: Authenticate with Chainguard (assumed identity)
       shell: bash
+      if: ${{ inputs.identity != '' }}
+      run: |
+        if chainctl auth login --identity "${{ inputs.identity }}"; then
+          echo Logged in as ${{ inputs.identity }}!
+        else
+          echo Unable to assume the identity ${{ inputs.identity }}.
+          exit 1
+        fi
+        if ! chainctl auth configure-docker --identity "${{ inputs.identity }}"; then
+          echo Unable to register credential helper as ${{ inputs.identity }}.
+          exit 1
+        fi
+
+    - name: Authenticate with Chainguard (DEPRECATED invite-code)
+      shell: bash
+      if: ${{ inputs.invite-code != '' }}
       env:
         CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
       run: |
+        echo "::warning::The use of invite codes with Github actions is deprecated, use assumed identities instead."
+
         AUDIENCE="${{ inputs.audience }}"
         if [[ -z "${AUDIENCE}" ]]; then
           AUDIENCE=issuer.${{ inputs.environment }}
         fi
-
         IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
 
-        if [[ -z "${CHAINGUARD_INVITE_CODE}" ]]; then
-          if chainctl auth login --identity-token "${IDTOKEN}"; then
-            echo Logged in!
-          else
-            echo No invite code is present!  Failing since registration will not do any good.
-            echo Configure a secret named CHAINGUARD_INVITE_CODE to have this workload register itself.
-            exit 1
-          fi
+        # This will start failing once the invite code expires, which is why we have the login guard.
+        if chainctl auth login --create-group=false --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"; then
+          echo Logged in!
         else
-          # This will start failing once the invite code expires, which is why we have the login guard.
-          if chainctl auth login --create-group=false --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"; then
-            echo Logged in!
-          else
-            echo Failed to log in with invite code
-            exit 1
-          fi
+          echo Failed to log in with invite code
+          exit 1
+        fi
+
+    - name: Authenticate with Chainguard (DEPRECATED registered identity)
+      shell: bash
+      if: ${{ inputs.identity == '' && inputs.invite-code == '' }}
+      env:
+        CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
+      run: |
+        echo "::warning::The use of registered Github actions identities is deprecated, use assumed identities instead."
+
+        AUDIENCE="${{ inputs.audience }}"
+        if [[ -z "${AUDIENCE}" ]]; then
+          AUDIENCE=issuer.${{ inputs.environment }}
+        fi
+        IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
+
+        if chainctl auth login --identity-token "${IDTOKEN}"; then
+          echo Logged in!
+        else
+          echo No invite code is present!  Failing since registration will not do any good.
+          echo Configure a secret named CHAINGUARD_INVITE_CODE to have this workload register itself.
+          exit 1
         fi

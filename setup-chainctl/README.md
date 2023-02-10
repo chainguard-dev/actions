@@ -12,14 +12,10 @@ and authenticates with it using identity tokens.
     # binary from.
     # Optional (default is enforce.dev)
     environment: enforce.dev
-    # audience is the identity token audience to use when creating an identity
-    # token to authenticate with Chainguard.
-    # Optional (default is issuer.enforce.dev)
-    audience: issuer.enforce.dev
-    # invite-code is an invitation code that may be used to have this workload
-    # register itself with the Chainguard API the first time it executes.
-    # Optional.
-    invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
+
+    # identity holds the ID for the identity this workload should assume when
+    # speaking to Chainguard APIs.
+    identity: "..."
 ```
 
 ## Scenarios
@@ -31,5 +27,5 @@ permissions:
 steps:
 - uses: chainguard-dev/actions/setup-chainctl@main
   with:
-    invite-code: ${{ secrets.CHAINGUARD_INVITE_CODE }}
+    identity: "deadbeef/badf00d"
 ```
