@@ -13,17 +13,27 @@ inputs:
     required: true
     default: enforce.dev
 
+  identity:
+    description: |
+      The id of the identity that this workflow should assume for
+      performing actions with chainctl.
+    required: false
+
   audience:
     description: |
       Specifies the identity token audience to use when creating an
       identity token to authenticate with Chainguard.
       Defaults to issuer.${environment}
+
+      This field is DEPRECATED, use identity instead.
     required: false
 
   invite-code:
     description: |
       Optionally specifies an invite code that allows this workflow
       register itself when run for the first time.
+
+      Use of invite codes is DEPRECATED, use identity instead.
     required: false
 
 runs:
@@ -44,6 +54,7 @@ runs:
         environment: ${{ inputs.environment }}
         audience: ${{ steps.default-audience.outputs.audience }}
         invite-code: ${{ inputs.invite-code }}
+        identity: ${{ inputs.identity }}
 
     - shell: bash
       run: |
