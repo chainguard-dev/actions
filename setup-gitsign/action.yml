@@ -39,13 +39,13 @@ runs:
           esac
         }
 
-        gitsign_version='0.4.1'
-        gitsign_linux_amd64_sha='0c6beed574718e7d0ced0eb39aa38a119ff31707297141272f7f5cb1ebee57e6'
-        gitsign_linux_arm64_sha='37aa1c2fedcd13b781bf90d8a0d62d5927c7199ce5339b0cd46305efc6fa6ad3'
-        gitsign_darwin_amd64_sha='d1773377fc72fcd83eadba7f3a4e5450354a573273e87d02860e92b97a732289'
-        gitsign_darwin_arm64_sha='3c487f918563a29b5bcd802de7c7f4f65ec627845534dc814ebf9da0b8e62737'
-        gitsign_windows_amd64_sha='381f8a30d929b25f1dd0e82158c7d321710de048c95528c324c7698554312ee0'
-        gitsign_windows_arm64_sha='e59945422d006dd0fa4037bc4c139401c9dc504b31d076d8dbb5398921cdc063'
+        gitsign_version='0.5.2'
+        gitsign_linux_amd64_sha='e0ead963a99b966e5bbb3410a79ab330a7c863ee45ecd7b6e9e2247a6702fb1a'
+        gitsign_linux_arm64_sha='43121f61da0431336cf6da9cb5a5b84da32ff9934f2012f96610c5486ff581aa'
+        gitsign_darwin_amd64_sha='4807d0a9c385442a309eddf7d45e5a383ca06e589def58bdf8af387ffb4a4dee'
+        gitsign_darwin_arm64_sha='80251fe4c7f37a515214c329c90d52212cf160d75c41341201042a7741a1144b'
+        gitsign_windows_amd64_sha='53d4c9f65b864e492695d1aa2f32bbc439ce8cc5a4caa53c013b9b6e39fb405b'
+        gitsign_windows_arm64_sha='54988a2d3cb4ecb66d4313cf966cbb77306b5f890bfe4037abc3b1d86611bd7a'
         gitsign_executable_name=gitsign
 
         trap "popd >/dev/null" EXIT
@@ -138,8 +138,8 @@ runs:
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com>"
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run:  echo "$HOME/.gitsign" >> $GITHUB_PATH
+      run: echo "$HOME/.gitsign" >> $GITHUB_PATH
       shell: bash
     - if: ${{ runner.os == 'Windows' }}
-      run:  echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      run: echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       shell: pwsh
