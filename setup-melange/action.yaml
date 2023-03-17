@@ -46,7 +46,7 @@ runs:
     - name: 'Install dependencies'
       shell: bash
       run: |
-        sudo apt install -y build-essential git proot
+        sudo apt install -y build-essential git 
     # TODO: the bubblewrap package available from "apt install"
     # is outdated and missing newer features such as --clearenv flag,
     # so instead we download the wolfi .apk and use the binary in there
