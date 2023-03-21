@@ -20,6 +20,11 @@ inputs:
       performing actions with chainctl.
     required: false
 
+  registry:
+    description: |
+      The registry domain to use with chainctl, e.g. https://cgr.dev
+    required: false
+
   audience:
     description: |
       Specifies the identity token audience to use when creating an
@@ -48,6 +53,12 @@ runs:
         wget -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
         chmod +x chainctl
         sudo mv chainctl /usr/local/bin
+
+    - name: Configure registry domain
+      shell: bash
+      if: ${{ inputs.registry != '' }}
+      run: |
+        chainctl config set platform.registry ${{ inputs.registry }}
 
     - name: Authenticate with Chainguard (assumed identity)
       shell: bash
