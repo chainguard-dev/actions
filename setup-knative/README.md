@@ -13,8 +13,8 @@ context.
     # Required.
     version: 1.9.3
     # Version is the version of Istio to install.
-    # For example, 1.16.3.
-    version: 1.16.3
+    # For example, 1.16.4.
+    version: 1.16.4
     # Serving Features is the encoded JSON containing the features to enable
     # in this installation of Knative Serving.
     # For example, {"kubernetes.podspec-fieldref":"enabled"}.
