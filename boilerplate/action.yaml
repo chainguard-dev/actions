@@ -39,7 +39,7 @@ runs:
   - name: Set up Go
     uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
     with:
-      go-version: 1.19
+      go-version: '1.20'
       check-latest: true
 
   - uses: reviewdog/action-setup@8f2ec89e6b467ca9175527d2a1641bbd0c05783b # v1.0.3
