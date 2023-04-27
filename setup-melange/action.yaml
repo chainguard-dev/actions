@@ -22,7 +22,7 @@ runs:
       shell: bash
       run: |
         sudo apt install -y unzip
-        wget -O apk-tools-nightly.zip 'https://gitlab.alpinelinux.org/alpine/apk-tools/-/jobs/artifacts/2.12-stable/download?job=build-static:+[x86_64]'
+        wget -O apk-tools-nightly.zip 'https://gitlab.alpinelinux.org/alpine/apk-tools/-/jobs/artifacts/2.14-stable/download?job=build-static:+[x86_64]'
         unzip apk-tools-nightly.zip 'src/apk.static-x86_64'
         sudo mv 'src/apk.static-x86_64' /sbin/apk
         rm -rf src apk-tools-nightly.zip
