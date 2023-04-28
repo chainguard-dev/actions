@@ -15,9 +15,9 @@ inputs:
 
   kind-version:
     description: |
-      The exact version of KinD to use in the form: 0.17.0
+      The exact version of KinD to use in the form: 0.18.0
     required: true
-    default: 0.17.0
+    default: 0.18.0
 
   kind-worker-count:
     description: |
@@ -107,8 +107,13 @@ runs:
           v1.25.x)
             echo "KIND_IMAGE=kindest/node:v1.25.3@sha256:f52781bc0d7a19fb6c405c2af83abfeb311f130707a0e219175677e366cc45d1" >> $GITHUB_ENV
             ;;
+
           v1.26.x)
             echo "KIND_IMAGE=kindest/node:v1.26.0@sha256:691e24bd2417609db7e589e1a479b902d2e209892a10ce375fab60a8407c7352" >> $GITHUB_ENV
+            ;;
+
+          v1.27.x)
+            echo "KIND_IMAGE=kindest/node:v1.27.1@sha256:9915f5629ef4d29f35b478e819249e89cfaffcbfeebda4324e5c01d53d937b09" >> $GITHUB_ENV
             ;;
 
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
