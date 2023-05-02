@@ -17,5 +17,5 @@ jobs:
       with:
         port: 8081
     - run: |
-        curl -v https://localhost:8081/v2/
+        curl -v http://localhost:8081/v2/
         crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
