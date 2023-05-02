@@ -3,7 +3,7 @@
 
 name: 'Setup registry'
 description: |
-  This action sets up a simple in-memory OCI registry.
+  This action sets up a simple in-memory OCI registry for basic testing.
 
 inputs:
   port:
@@ -15,8 +15,9 @@ runs:
   using: "composite"
 
   steps:
-    - name: Install and run registry
+    - name: Install crane
+      uses: imjasonh/setup-crane@v0.3
+    - name: Run registry
       shell: bash
       run: |
-        go install github.com/google/go-containerregistry/cmd/registry@main
-        registry --port=${{ inputs.port }} &
+        PORT=${{inputs.port}} crane registry serve &
