@@ -1,0 +1,21 @@
+name: test-setup-registry
+
+on: [pull_request]
+
+jobs:
+  test_action:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    permissions: {}
+    steps:
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+    - uses: imjasonh/setup-crane@v0.3
+    - uses: ./setup-registry
+      with:
+        port: 8081
+    - run: |
+        curl -v https://localhost:8081/v2/
+        crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
