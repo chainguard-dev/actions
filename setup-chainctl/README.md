@@ -29,3 +29,5 @@ steps:
   with:
     identity: "deadbeef/badf00d"
 ```
+
+See [Authenticating to Chainguard Registry](https://edu.chainguard.dev/chainguard/chainguard-images/registry/authenticating/#authenticating-with-github-actions) for more information about creating an identity to pull images from cgr.dev from GitHub Actions, using `setup-chainctl`.
