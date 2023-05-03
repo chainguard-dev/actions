@@ -1,0 +1,26 @@
+name: setup-chainctl
+
+on:
+  pull_request:
+    branches: [ main ]
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the current action
+      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+    - name: setup-chainctl
+      uses: ./setup-chainctl
+
+    # Ensure chainctl was installed.
+    - run: chainctl version
+
+    # TODO: Set up an identity that can be assumed by this workflow, to test assumed identity login.
