@@ -42,7 +42,8 @@ runs:
       git check-attr --stdin ignore-lint | grep -Ev ': (set|true)$' | cut -d: -f1 |
       grep -Ev '^(vendor/|third_party/|LICENSES/|.git)' |
       grep -v '\.ai$' |
-      grep -v '\.svg$')
+      grep -v '\.svg$' |
+      grep -v '/testdata/')
 
       for x in $LINT_FILES; do
         # Based on https://stackoverflow.com/questions/34943632/linux-check-if-there-is-an-empty-line-at-the-end-of-a-file
