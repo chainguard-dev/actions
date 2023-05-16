@@ -37,8 +37,9 @@ runs:
       git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$' | cut -d: -f1 |
       git check-attr --stdin linguist-vendored | grep -Ev ': (set|true)$' | cut -d: -f1 |
       git check-attr --stdin ignore-lint | grep -Ev ': (set|true)$' | cut -d: -f1 |
-      grep -Ev '^(vendor/|third_party/|LICENSES/|.git|/testdata/)' |
-      xargs grep -nE " +$" | tee /dev/stderr |
+      grep -Ev '^(vendor/|third_party/|LICENSES/|.git)' |
+      grep -v '/testdata/' |
+      xargs grep -nE " +$" | cut -f1,2 -d':' | sed 's/$/:Space at end of line/' | tee /dev/stderr |
       reviewdog -efm="%f:%l:%m" \
             -name="trailing whitespace" \
             -reporter="github-pr-check" \
