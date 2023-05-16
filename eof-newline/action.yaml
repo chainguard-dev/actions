@@ -52,7 +52,7 @@ runs:
           # Characters beyond the final <newline> character will not be included in the line count.
           echo $x:$((1 + $(wc -l $x | tr -s ' ' | cut -d' ' -f 1))): Missing newline
         fi
-      done |
+      done | tee /dev/stderr |
       reviewdog -efm="%f:%l: %m" \
             -name="EOF Newline" \
             -reporter="github-pr-check" \
