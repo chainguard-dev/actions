@@ -6,6 +6,31 @@ inputs:
     description: 'GITHUB_TOKEN or a `repo` scoped Personal Access Token (PAT)'
     required: true
     default: ${{ github.token }}
+  signoff:
+    description: 'Add `Signed-off-by` line by the committer at the end of the commit log message.'
+    default: false
+  author:
+    description: >
+      The author name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the user who triggered the workflow run.
+    default: '${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>'
+  committer:
+    description: >
+      The committer name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the GitHub Actions bot user.
+    default: 'GitHub <noreply@github.com>'
+  labels-for-pr:
+    description: 'A comma or newline separated list of labels to be used in the pull request.'
+    default: automated pr, kind/cleanup, release-note-none
+  branch-for-pr:
+    description: 'The pull request branch name.'
+    default: 'update-digests'
+  title-for-pr:
+    description: 'The title of the pull request.'
+    default: 'Update images digests'
+  commit-message:
+    description: 'The message to use when committing changes.'
+    default: 'Update images digests'
 
 outputs:
   pull_request_number:
@@ -66,14 +91,17 @@ runs:
       id: pull_request
       with:
         token: ${{ inputs.token }}
-        commit-message: update index
-        title: 'Update images digests'
+        commit-message: ${{ inputs.commit-message }}
+        title: ${{ inputs.title-for-pr }}
         body: |
           Update images digests
 
           ```release-note
           NONE
           ```
-        labels: automated pr, kind/cleanup, release-note-none
-        branch: update-digests
+        labels: ${{ inputs.labels-for-pr }}
+        branch: ${{ inputs.branch-for-pr }}
+        signoff: ${{ inputs.signoff }}
+        committer: ${{ inputs.committer }}
+        author: ${{ inputs.author }}
         delete-branch: true
