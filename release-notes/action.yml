@@ -25,108 +25,108 @@ inputs:
     default: ${{ github.token }}
 
 runs:
-    using: "composite"
+  using: "composite"
 
-    steps:
-      - name: Set up Go
-        uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
-        with:
-          go-version: '1.20'
-          check-latest: true
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
+      with:
+        go-version: '1.20'
+        check-latest: true
 
-      - name: Install Dependencies
-        shell: bash
-        # https://github.com/kubernetes/release/tree/master/cmd/release-notes
-        run: go install k8s.io/release/cmd/release-notes@latest
+    - name: Install Dependencies
+      shell: bash
+      # https://github.com/kubernetes/release/tree/master/cmd/release-notes
+      run: go install k8s.io/release/cmd/release-notes@latest
 
-      - name: Check out code
-        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.branch_name }}
+    - name: Check out code
+      uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.branch_name }}
 
-      - name: Generate Notes
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ inputs.token }}
-        run: |
-          set -x
-          # The release-notes tool access ENV vars as options
-          # https://github.com/kubernetes/release/tree/master/cmd/release-notes#options
-          export ORG=$(echo '${{ github.repository }}' | awk -F '/' '{print $1}')
-          export REPO=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')
-          export BRANCH="${{ inputs.branch_name }}"
-          export START_REV=${{ inputs.start_rev }}
-          export END_REV=${{ inputs.end_rev }}
-          if [[ -z "$END_REV" ]]; then
-            END_REV="origin/$BRANCH"
+    - name: Generate Notes
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        set -x
+        # The release-notes tool access ENV vars as options
+        # https://github.com/kubernetes/release/tree/master/cmd/release-notes#options
+        export ORG=$(echo '${{ github.repository }}' | awk -F '/' '{print $1}')
+        export REPO=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')
+        export BRANCH="${{ inputs.branch_name }}"
+        export START_REV=${{ inputs.start_rev }}
+        export END_REV=${{ inputs.end_rev }}
+        if [[ -z "$END_REV" ]]; then
+          END_REV="origin/$BRANCH"
+        fi
+        # If start rev isn't set find the merge base of
+        # the target branch and the previous branch
+        if [[ -z "$START_REV" ]]; then
+          BRANCHES=$(mktemp)
+          # List of branches sorted by semver descending
+          git branch -r -l "origin/release-[0-9]*\.[0-9]*" | sed 's/ //g' | sort -Vr > "$BRANCHES"
+          if [[ "$BRANCH" == "main" ]]; then
+            LAST_BRANCH="$(head -n1 "$BRANCHES")"
+          else
+            # use grep magic to find the next branch
+            # '-A 1' - prints the line after the match which we can parse
+            LAST_BRANCH="$(grep -A 1 "$BRANCH" "$BRANCHES" | tail -n1)"
           fi
-          # If start rev isn't set find the merge base of
-          # the target branch and the previous branch
-          if [[ -z "$START_REV" ]]; then
-            BRANCHES=$(mktemp)
-            # List of branches sorted by semver descending
-            git branch -r -l "origin/release-[0-9]*\.[0-9]*" | sed 's/ //g' | sort -Vr > "$BRANCHES"
-            if [[ "$BRANCH" == "main" ]]; then
-              LAST_BRANCH="$(head -n1 "$BRANCHES")"
-            else
-              # use grep magic to find the next branch
-              # '-A 1' - prints the line after the match which we can parse
-              LAST_BRANCH="$(grep -A 1 "$BRANCH" "$BRANCHES" | tail -n1)"
-            fi
-            export START_SHA=$(git merge-base $LAST_BRANCH origin/$BRANCH)
-          fi
-          release-notes \
-           --required-author="" \
-           --output=CHANGELOG_NEW.md \
-           --repo-path="$PWD" \
-           --dependencies=false
+          export START_SHA=$(git merge-base $LAST_BRANCH origin/$BRANCH)
+        fi
+        release-notes \
+          --required-author="" \
+          --output=CHANGELOG_NEW.md \
+          --repo-path="$PWD" \
+          --dependencies=false
 
-      - name: Display Notes
-        shell: bash
-        run: |
-          cat CHANGELOG_NEW.md
+    - name: Display Notes
+      shell: bash
+      run: |
+        cat CHANGELOG_NEW.md
 
-      - name: Archive Release Notes
-        uses: actions/upload-artifact@v3
-        with:
-          name: CHANGELOG_${{ inputs.end_rev }}.md
-          path: CHANGELOG_NEW.md
+    - name: Archive Release Notes
+      uses: actions/upload-artifact@v3
+      with:
+        name: CHANGELOG_${{ inputs.end_rev }}.md
+        path: CHANGELOG_NEW.md
 
-      - name: Append notes to the exiting file
-        shell: bash
-        run: |
-          echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-          cat CHANGELOG_NEW.md | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-          echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-          echo "## ${{ inputs.end_rev }}" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-          rm CHANGELOG_NEW.md
+    - name: Append notes to the exiting file
+      shell: bash
+      run: |
+        echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+        cat CHANGELOG_NEW.md | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+        echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+        echo "## ${{ inputs.end_rev }}" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+        rm CHANGELOG_NEW.md
 
-      - name: Check workspace
-        id: create_pr
-        shell: bash
-        run: |
-          if [[ $(git diff --stat) != '' ]]; then
-            echo "create_pr=true" >> $GITHUB_OUTPUT
-          fi
+    - name: Check workspace
+      id: create_pr
+      shell: bash
+      run: |
+        if [[ $(git diff --stat) != '' ]]; then
+          echo "create_pr=true" >> $GITHUB_OUTPUT
+        fi
 
-      # Configure signed commits
-      - uses: chainguard-dev/actions/setup-gitsign@main
-        if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+    # Configure signed commits
+    - uses: chainguard-dev/actions/setup-gitsign@main
+      if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@923ad837f191474af6b1721408744feb989a4c27 # v4
-        if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
-        with:
-          token: ${{ inputs.token }}
-          commit-message: 'Update Changelog for ${{ inputs.end_rev }}'
-          title: 'Update Changelog for ${{ inputs.end_rev }}'
-          body: |
-            Update ${{ inputs.changelog_filename }} for ${{ inputs.end_rev }}
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v5.0.0
+      if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+      with:
+        token: ${{ inputs.token }}
+        commit-message: 'Update Changelog for ${{ inputs.end_rev }}'
+        title: 'Update Changelog for ${{ inputs.end_rev }}'
+        body: |
+          Update ${{ inputs.changelog_filename }} for ${{ inputs.end_rev }}
 
-            ```release-note
-            NONE
-            ```
-          labels: automated pr, release-note-none, kind/documentation
-          branch: update-changelog-${{ inputs.end_rev }}
-          delete-branch: true
+          ```release-note
+          NONE
+          ```
+        labels: automated pr, release-note-none, kind/documentation
+        branch: update-changelog-${{ inputs.end_rev }}
+        delete-branch: true
