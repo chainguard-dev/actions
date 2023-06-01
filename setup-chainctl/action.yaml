@@ -45,7 +45,7 @@ runs:
       shell: bash
       run: |
         cd $(mktemp -d)
-        wget -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
+        wget --quiet -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
         chmod +x chainctl
         sudo mv chainctl /usr/local/bin
 
