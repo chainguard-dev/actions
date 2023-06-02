@@ -5,7 +5,7 @@ name: 'Build package with melange'
 description: |
   This action builds a single package using Melange, given a config file.
   It deals with setting up the Melange build tool, repository, and signing
-  key.
+  key testing.
 
 inputs:
   config:
