@@ -46,14 +46,11 @@ runs:
       run: |
         cd $(mktemp -d)
         wget --quiet -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
-        chmod +x chainctl
 
-        # Create the local bin and install chainctl
-        export CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
-        mkdir -p "${CHAINCTL_INSTALL_PATH}"
+        # Ensure install directory exists and is on the PATH
+        CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
         echo "${CHAINCTL_INSTALL_PATH}" >> "${GITHUB_PATH}"
-
-        mv chainctl "${CHAINCTL_INSTALL_PATH}"
+        install -D --mode 0555 ./chainctl --target-directory "${CHAINCTL_INSTALL_PATH}"
 
     - name: Authenticate with Chainguard (assumed identity)
       shell: bash
