@@ -49,7 +49,7 @@ runs:
         chmod +x chainctl
 
         # Create the local bin and install chainctl
-        export CHAINCTL_INSTALL_PATH="${HOME}/.local/bin/"
+        export CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
         mkdir -p "${CHAINCTL_INSTALL_PATH}"
         echo "${CHAINCTL_INSTALL_PATH}" >> "${GITHUB_PATH}"
 
