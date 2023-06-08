@@ -46,9 +46,8 @@ runs:
       run: |
         cd $(mktemp -d)
         wget --quiet -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
-
-        # Ensure install directory exists and is on the PATH
         CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
+        # Ensure install directory is on the PATH for future steps
         echo "${CHAINCTL_INSTALL_PATH}" >> "${GITHUB_PATH}"
         install -D --mode 0555 ./chainctl --target-directory "${CHAINCTL_INSTALL_PATH}"
 
