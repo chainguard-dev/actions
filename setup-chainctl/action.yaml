@@ -47,6 +47,7 @@ runs:
         cd $(mktemp -d)
         wget --quiet -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
         chmod +x chainctl
+        mkdir -p "${HOME}/.local/bin/"
         mv chainctl "${HOME}/.local/bin/"
 
     - name: Authenticate with Chainguard (assumed identity)
