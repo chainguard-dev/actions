@@ -55,6 +55,12 @@ inputs:
     required: true
     default: cluster.local
 
+  registry-volume:
+    description: |
+      A directory path to be used for the registry volume
+    required: false
+    default: ""
+
 outputs:
   kind-start-time:
     description: |
@@ -256,6 +262,13 @@ runs:
             -e "REGISTRY_AUTH=htpasswd"
             -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"
             -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd"
+          )
+        fi
+
+        REGISTRY_VOLUME="${{ inputs.registry-volume}}"
+        if [[ "${REGISTRY_VOLUME}" != "" ]]; then
+          EXTRA_ARGS+=(
+            -v "${REGISTRY_VOLUME}:/var/lib/registry"
           )
         fi
 
