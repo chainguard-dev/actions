@@ -54,6 +54,8 @@ runs:
     - name: Authenticate with Chainguard (assumed identity)
       shell: bash
       if: ${{ inputs.identity != '' }}
+      env:
+        CHAINCTL_DEBUG: "true"
       run: |
         if chainctl auth login --identity "${{ inputs.identity }}"; then
           echo Logged in as ${{ inputs.identity }}!
@@ -71,6 +73,7 @@ runs:
       if: ${{ inputs.invite-code != '' }}
       env:
         CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
+        CHAINCTL_DEBUG: "true"
       run: |
         echo "::warning::The use of invite codes with Github actions is deprecated, use assumed identities instead."
 
@@ -93,6 +96,7 @@ runs:
       if: ${{ inputs.identity == '' && inputs.invite-code == '' }}
       env:
         CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
+        CHAINCTL_DEBUG: "true"
       run: |
         echo "::warning::The use of registered Github actions identities is deprecated, use assumed identities instead."
 
