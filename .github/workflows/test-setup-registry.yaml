@@ -3,15 +3,28 @@ name: test-setup-registry
 on: [pull_request]
 
 jobs:
-  test_action:
+  test-mem:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
     - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
-    - uses: imjasonh/setup-crane@v0.3
     - uses: ./setup-registry
       with:
         port: 8081
+    - run: |
+        curl -v http://localhost:8081/v2/
+        crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
+
+  test-disk:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+    - uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+    - uses: ./setup-registry
+      with:
+        port: 8081
+        disk: true
     - run: |
         curl -v http://localhost:8081/v2/
         crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
