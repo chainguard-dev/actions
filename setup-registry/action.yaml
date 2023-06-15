@@ -14,6 +14,11 @@ inputs:
     description: The version of crane to install.
     required: true
     default: latest-release
+  disk:
+    description: If true, use a disk-backed registry.
+    required: false
+    default: false
+
 
 runs:
   using: "composite"
@@ -26,4 +31,4 @@ runs:
     - name: Run registry
       shell: bash
       run: |
-        PORT=${{inputs.port}} crane registry serve &
+        PORT=${{inputs.port}} crane registry serve --blobs-to-disk=${{inputs.disk}} &
