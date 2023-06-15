@@ -15,10 +15,9 @@ inputs:
     required: true
     default: latest-release
   disk:
-    description: If true, use a disk-backed registry.
+    description: If true, use a disk-backed registry (requires crane from tip).
     required: false
     default: false
-
 
 runs:
   using: "composite"
