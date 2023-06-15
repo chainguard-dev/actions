@@ -34,7 +34,7 @@ runs:
       run: |
         PORT=${{inputs.port}} crane registry serve --blobs-to-disk=true &
     - name: Run registry
-      if: ${{inputs.disk}} != 'true'
+      if: ${{inputs.disk}} != 'true' || ${{inputs.crane-version}} != 'tip'
       shell: bash
       run: |
         PORT=${{inputs.port}} crane registry serve &
