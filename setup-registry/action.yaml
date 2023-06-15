@@ -10,6 +10,10 @@ inputs:
     description: The port to run the server on.
     required: true
     default: 1338
+  crane-version:
+    description: The version of crane to install.
+    required: true
+    default: latest-release
 
 runs:
   using: "composite"
@@ -17,6 +21,8 @@ runs:
   steps:
     - name: Install crane
       uses: imjasonh/setup-crane@v0.3
+      with:
+        version: ${{inputs.crane-version}}
     - name: Run registry
       shell: bash
       run: |
