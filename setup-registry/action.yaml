@@ -14,10 +14,6 @@ inputs:
     description: The version of crane to install.
     required: true
     default: latest-release
-  disk:
-    description: If true, use a disk-backed registry (requires crane from tip).
-    required: false
-    default: false
 
 runs:
   using: "composite"
@@ -29,12 +25,12 @@ runs:
         version: ${{inputs.crane-version}}
 
     - name: Run registry
-      if: ${{inputs.disk}} == 'true' && ${{inputs.crane-version}} == 'tip'
+      if: ${{inputs.crane-version}} == 'tip'
       shell: bash
       run: |
         PORT=${{inputs.port}} crane registry serve --blobs-to-disk=true &
     - name: Run registry
-      if: ${{inputs.disk}} != 'true' || ${{inputs.crane-version}} != 'tip'
+      if: ${{inputs.crane-version}} != 'tip'
       shell: bash
       run: |
         PORT=${{inputs.port}} crane registry serve &
