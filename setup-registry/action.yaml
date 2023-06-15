@@ -10,20 +10,33 @@ inputs:
     description: The port to run the server on.
     required: true
     default: 1338
-  crane-version:
-    description: The version of crane to install.
+  disk:
+    description: Whether to use disk for blob storage.
     required: true
-    default: latest-release
+    default: false
 
 runs:
   using: "composite"
 
   steps:
     - name: Install crane
+      if: ${{inputs.disk != 'true' }}
+      uses: imjasonh/setup-crane@v0.3
+
+    - name: Install crane
+      if: ${{inputs.disk == 'true' }}
       uses: imjasonh/setup-crane@v0.3
       with:
-        version: ${{inputs.crane-version}}
+        version: tip
+
     - name: Run registry
+      if: ${{inputs.disk != 'true' }}
       shell: bash
       run: |
         PORT=${{inputs.port}} crane registry serve &
+
+    - name: Run registry
+      if: ${{inputs.disk == 'true' }}
+      shell: bash
+      run: |
+        PORT=${{inputs.port}} crane registry serve --blobs-to-disk=true &
