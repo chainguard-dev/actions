@@ -32,6 +32,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
 
     steps:
     - uses: actions/checkout@v3
