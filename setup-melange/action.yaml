@@ -9,36 +9,10 @@ runs:
   using: 'composite'
 
   steps:
-    # FIXME(kaniini): Switch to qemu-user-static when apko 0.5/melange 0.2 is released.
-    - name: 'Update package repository indexes'
-      shell: bash
-      run: |
-        sudo apt update
     - name: 'Install qemu emulator binaries'
       shell: bash
       run: |
-        sudo apt install -y qemu-user
-    - name: 'Fetch apk-tools nightly'
-      shell: bash
-      run: |
-        sudo apt install -y unzip
-        wget -O apk-tools-nightly.zip 'https://gitlab.alpinelinux.org/alpine/apk-tools/-/jobs/artifacts/2.14-stable/download?job=build-static:+[x86_64]'
-        unzip apk-tools-nightly.zip 'src/apk.static-x86_64'
-        sudo mv 'src/apk.static-x86_64' /sbin/apk
-        rm -rf src apk-tools-nightly.zip
-    - name: 'Set up apk-tools in overlay mode'
-      shell: bash
-      run: |
-        sudo apk add --initdb --root=/
-        (cat <<_EOF_
-        https://dl-cdn.alpinelinux.org/alpine/edge/main
-        _EOF_
-        ) | sudo tee /etc/apk/repositories
-    - name: 'Fetch and install alpine keyring'
-      shell: bash
-      run: |
-        sudo apk update --allow-untrusted
-        sudo apk add --allow-untrusted alpine-keys
+        sudo apt update && sudo apt install -y qemu-user-static
     - uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
       with:
         go-version: '1.20'
