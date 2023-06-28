@@ -1,0 +1,27 @@
+name: test-setup-melange
+
+on:
+  pull_request:
+
+jobs:
+  test-setup-melange:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+    - uses: ./setup-melange
+    - run: |
+        melange build setup-melange/example/melange.yaml --arch=x86_64
+        ls -R packages/
+
+  # This should do the same thing.
+  test-melange-build:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: ./melange-build
+        with:
+          config: setup-melange/example/melange.yaml
+          archs: x86_64
+          sign-with-temporary-key: true
