@@ -15,6 +15,9 @@ jobs:
       with:
         files: |
           ./setup-melange/**
+          ./melange-build/**
+          ./melange-build-pkg/**
+          ./melange-keygen/**
           .github/workflows/test-setup-melange.yaml
 
     - uses: ./setup-melange
