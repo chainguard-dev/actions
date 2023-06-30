@@ -7,11 +7,11 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
 ```yaml
 - uses: chainguard-dev/actions/setup-kind@main
   with:
-    # K8s version is the minor version of Kubernetes to install.
-    # For example, 1.23.x.
+    # K8s version is the minor version of Kubernetes to install (with v).
+    # For example, v1.27.x.
     # Required.
-    k8s-version: 1.23.x
-    # KinD Version is the version of KinD to use to orchestrate things.
+    k8s-version: v1.27.x
+    # KinD Version is the version of KinD to use to orchestrate things (without v).
     # For example, 0.12.0.
     # Required.
     kind-version: 0.19.0
