@@ -5,7 +5,8 @@ name: Action Lint
 
 on:
   pull_request:
-    branches: [ 'main', 'release-*' ]
+    branches:
+      - 'main'
 
 jobs:
 
