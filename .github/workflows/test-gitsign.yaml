@@ -1,25 +1,43 @@
 name: test-gitsign
 
-on: [pull_request]
+on:
+  pull_request:
 
 jobs:
   test_gitsign_action:
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
 
     runs-on: ${{ matrix.os }}
+
     permissions: {}
 
     name: Install Gitsign and test presence in path
     steps:
     - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+    - id: changed-gitsign
+      uses: tj-actions/changed-files@54849deb963ca9f24185fb5de2965e002d066e6b # v37.0.5
+      with:
+        files: |
+          ./setup-gitsign/**
+          .github/workflows/test-gitsign.yaml
+
     - name: Install Gitsign
+      if: steps.changed-gitsign.outputs.any_changed == 'true'
       uses: ./setup-gitsign
+
     - name: Check install!
+      if: steps.changed-gitsign.outputs.any_changed == 'true'
       run: gitsign --version
+
     - name: Check root directory
+      if: steps.changed-gitsign.outputs.any_changed == 'true'
       run: |
         if [[ $(git diff --stat) != '' ]]; then
           echo 'should be clean'

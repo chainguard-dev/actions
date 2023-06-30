@@ -8,10 +8,21 @@ jobs:
     permissions: {}
     steps:
     - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
-    - uses: ./setup-registry
+
+    - id: changed-registry
+      uses: tj-actions/changed-files@54849deb963ca9f24185fb5de2965e002d066e6b # v37.0.5
+      with:
+        files: |
+          ./setup-registry/**
+          .github/workflows/test-setup-registry.yaml
+
+    - if: steps.changed-registry.outputs.any_changed == 'true'
+      uses: ./setup-registry
       with:
         port: 8081
-    - run: |
+
+    - if: steps.changed-registry.outputs.any_changed == 'true'
+      run: |
         curl -v http://localhost:8081/v2/
         crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
 
@@ -20,11 +31,24 @@ jobs:
     permissions: {}
     steps:
     - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+    - id: changed-registry
+      uses: tj-actions/changed-files@54849deb963ca9f24185fb5de2965e002d066e6b # v37.0.5
+      with:
+        files: |
+          ./setup-registry/**
+          .github/workflows/test-setup-registry.yaml
+
     - uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
-    - uses: ./setup-registry
+      if: steps.changed-registry.outputs.any_changed == 'true'
+
+    - if: steps.changed-registry.outputs.any_changed == 'true'
+      uses: ./setup-registry
       with:
         port: 8081
         disk: true
-    - run: |
+
+    - if: steps.changed-registry.outputs.any_changed == 'true'
+      run: |
         curl -v http://localhost:8081/v2/
         crane copy cgr.dev/chainguard/static:latest-glibc localhost:8081/static:test
