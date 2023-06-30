@@ -28,5 +28,6 @@ runs:
     - name: 'Install public key in system APK keyring'
       shell: bash
       run: |
+        sudo mkdir -p /etc/apk/keys/
         sudo cp ${{ inputs.signing-key-path }}.pub /etc/apk/keys/
       if: ${{ inputs.install-public-key }}

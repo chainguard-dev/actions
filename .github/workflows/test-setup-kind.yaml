@@ -2,7 +2,8 @@ name: setup-kind
 
 on:
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 defaults:
   run:
@@ -21,7 +22,6 @@ jobs:
       fail-fast: false # Keep running if one leg fails.
       matrix:
         k8s-version:
-        - v1.23.x
         - v1.24.x
         - v1.25.x
         - v1.26.x
@@ -37,13 +37,23 @@ jobs:
     - name: Checkout the current action
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
 
+    - id: changed-kind
+      uses: tj-actions/changed-files@54849deb963ca9f24185fb5de2965e002d066e6b # v37.0.5
+      with:
+        files: |
+          ./setup-kind/**
+          ./setup-knative/**
+          .github/workflows/test-setup-kind.yaml
+
     - name: setup-kind
+      if: steps.changed-kind.outputs.any_changed == 'true'
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
         cluster-suffix: ${{ matrix.cluster-suffix }}
 
     - name: check domain
+      if: steps.changed-kind.outputs.any_changed == 'true'
       run: |
         expected_value="${{ matrix.cluster-suffix }}"
         dnsDomain=$(docker exec kind-control-plane cat /kind/kubeadm.conf | { grep dnsDomain || true; } | awk '{ print $2 }')
@@ -65,9 +75,8 @@ jobs:
         fi
 
     - name: Test spinning up Knative also
+      if: steps.changed-kind.outputs.any_changed == 'true'
       id: knative
-      # Knative latest supports only v1.24+
-      if: matrix.k8s-version != 'v1.23.x'
       uses: ./setup-knative
       with:
         version: latest

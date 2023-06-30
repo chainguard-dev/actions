@@ -11,3 +11,18 @@ updates:
     directory: "/boilerplate"
     schedule:
       interval: "daily"
+  # digesta-bot
+  - package-ecosystem: "github-actions"
+    directory: "/digesta-bot"
+    schedule:
+      interval: "daily"
+  # donotsubmit
+  - package-ecosystem: "github-actions"
+    directory: "/donotsubmit"
+    schedule:
+      interval: "daily"
+  # kind-diag
+  - package-ecosystem: "github-actions"
+    directory: "/kind-diag"
+    schedule:
+      interval: "daily"
