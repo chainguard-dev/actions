@@ -8,7 +8,6 @@ runs:
   steps:
     - shell: bash
       run: |
-        #!/bin/bash
         shopt -s expand_aliases
         if [ -z "$NO_COLOR" ]; then
           alias log_info="echo -e \"\033[1;32mINFO\033[0m:\""
@@ -52,67 +51,41 @@ runs:
 
         pushd $HOME/.gitsign > /dev/null
 
-        case ${{ runner.os }} in
-          Linux)
-            case ${{ runner.arch }} in
-              X64)
-                gitsign_filename=gitsign_${gitsign_version}_linux_amd64
-                gitsign_sha=${gitsign_linux_amd64_sha}
-                ;;
-
-              ARM64)
-                gitsign_filename=gitsign_${gitsign_version}_linux_arm64
-                gitsign_sha=${gitsign_linux_arm64_sha}
-                ;;
-
-              *)
-                log_error "unsupported architecture $arch"
-                exit 1
-                ;;
-            esac
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64)
+            gitsign_filename=gitsign_${gitsign_version}_linux_amd64
+            gitsign_sha=${gitsign_linux_amd64_sha}
             ;;
 
-          macOS)
-            case ${{ runner.arch }} in
-              X64)
-                gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
-                gitsign_sha=${gitsign_darwin_amd64_sha}
-                ;;
-
-              ARM64)
-                gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
-                gitsign_sha=${gitsign_darwin_arm64_sha}
-                ;;
-
-              *)
-                log_error "unsupported architecture $arch"
-                exit 1
-                ;;
-            esac
+          Linux-ARM64)
+            gitsign_filename=gitsign_${gitsign_version}_linux_arm64
+            gitsign_sha=${gitsign_linux_arm64_sha}
             ;;
 
-          Windows)
-            case ${{ runner.arch }} in
-              X64)
-                gitsign_filename=gitsign_${gitsign_version}_windows_amd64.exe
-                gitsign_sha=${gitsign_windows_amd64_sha}
-                gitsign_executable_name=gitsign.exe
-                ;;
-
-                ARM64)
-                gitsign_filename=gitsign_${gitsign_version}_windows_arm64.exe
-                gitsign_sha=${gitsign_darwin_arm64_sha}
-                gitsign_executable_name=gitsign.exe
-                ;;
-
-              *)
-                log_error "unsupported architecture $arch"
-                exit 1
-                ;;
-            esac
+          macOS-X64)
+            gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
+            gitsign_sha=${gitsign_darwin_amd64_sha}
             ;;
+
+          macOS-ARM64)
+            gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
+            gitsign_sha=${gitsign_darwin_arm64_sha}
+            ;;
+
+          Windows-X64)
+            gitsign_filename=gitsign_${gitsign_version}_windows_amd64.exe
+            gitsign_sha=${gitsign_windows_amd64_sha}
+            gitsign_executable_name=gitsign.exe
+            ;;
+
+          Windows-ARM64)
+            gitsign_filename=gitsign_${gitsign_version}_windows_arm64.exe
+            gitsign_sha=${gitsign_darwin_arm64_sha}
+            gitsign_executable_name=gitsign.exe
+            ;;
+
           *)
-            log_error "unsupported architecture $arch"
+            log_error "unsupported architecture ${{ runner.arch }}"
             exit 1
             ;;
         esac
@@ -140,6 +113,7 @@ runs:
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
       run: echo "$HOME/.gitsign" >> $GITHUB_PATH
       shell: bash
+
     - if: ${{ runner.os == 'Windows' }}
       run: echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       shell: pwsh
