@@ -1,0 +1,129 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup k3d'
+description: |
+  This action sets up a k3d cluster based on the supplied
+  configuration knobs.
+
+inputs:
+  k3s-image:
+    description: |
+      The image to use for k3s, which can be used to dictate version.
+    required: false
+    default: cgr.dev/chainguard/k3s:latest
+
+  k3d-version:
+    description: |
+      The exact version of k3d to use in the form: x.y.z
+    required: false
+    default: 5.5.1
+
+  worker-count:
+    description: |
+      The number of worker nodes in the cluster
+    required: true
+    default: "0"
+
+  registry-host:
+    description: |
+      The registry hostname
+    required: false
+    default: registry.local
+
+  registry-port:
+    description: |
+      The registry port
+    required: false
+    default: "5000"
+
+  registry-mirror:
+    description: |
+      The hostname of a registry mirror to configure k3d to use (to avoid DockerHub rate limits).
+    required: false
+    default: mirror.gcr.io
+
+outputs:
+  k3d-start-time:
+    description: |
+      The timestamp when the k3d cluster started.
+    value: ${{ steps.start-time.outputs.k3d-start-time }}
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install k3d
+      shell: bash
+      run: |
+        # Disable swap otherwise memory enforcement does not work
+        # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600009955324200
+        sudo swapoff -a
+        sudo rm -f /swapfile
+
+        curl -Lo ./k3d https://github.com/k3d-io/k3d/releases/download/v${{ inputs.k3d-version }}/k3d-$(uname)-amd64
+        chmod +x ./k3d
+        sudo mv k3d /usr/local/bin
+
+    - name: Create k3d cluster
+      shell: bash
+      run: |
+        cat > k3d.yaml <<EOF
+        apiVersion: k3d.io/v1alpha5
+        kind: Simple
+        agents: ${{ inputs.worker-count }}
+        image: "${{ inputs.k3s-image }}"
+        registries:
+          create:
+            name: ${{ inputs.registry-host }}
+            host: "0.0.0.0"
+            hostPort: "${{ inputs.registry-port }}"
+          config: |
+            mirrors:
+              "${{ inputs.registry-mirror }}":
+                endpoint:
+                - "https://${{ inputs.registry-mirror }}"
+        options:
+          k3s:
+            extraArgs:
+              # Let consumers use their own ingress and leave the builtin LB unclaimed
+              - arg: --disable=traefik
+                nodeFilters:
+                  - server:*
+              - arg: --kube-apiserver-arg=anonymous-auth=true
+                nodeFilters:
+                  - server:*
+              # This is needed in order to support projected volumes with service account tokens.
+              # See: 
+              #   https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
+              #   https://stackoverflow.com/questions/74603633/k3s-allow-unauthenticated-access-to-oidc-endpoints
+              - arg: --kube-apiserver-arg=anonymous-auth=true
+                nodeFilters:
+                  - server:*
+        EOF
+
+        echo "Using k3d config file: "
+        cat k3d.yaml
+
+        k3d cluster create --config k3d.yaml --timeout 5m
+
+        # K3d sets this up for us in the node, but we're responsible for the host
+        sudo echo "127.0.0.1 ${{ inputs.registry-host }}" | sudo tee -a /etc/hosts
+
+    - name: Expose OIDC Discovery
+      shell: bash
+      run: |
+        # From: https://banzaicloud.com/blog/kubernetes-oidc/
+        # To be able to fetch the public keys and validate the JWT tokens against
+        # the Kubernetes cluster's issuer we have to allow external unauthenticated
+        # requests. To do this, we bind this special role with a ClusterRoleBinding
+        # to unauthenticated users (make sure that this is safe in your environment,
+        # but only public keys are visible on this URL)
+        kubectl create clusterrolebinding oidc-reviewer \
+          --clusterrole=system:service-account-issuer-discovery \
+          --group=system:unauthenticated
+
+    - name: Set start time output
+      id: start-time
+      run: echo "k3d-start-time=$(echo $(($(date +%s%N)/1000000)))" >> $GITHUB_OUTPUT
+      shell: bash
