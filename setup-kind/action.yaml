@@ -166,7 +166,7 @@ runs:
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
         kubeadmConfigPatches:
           - |
-            apiVersion: kubeadm.k8s.io/v1beta3
+            apiVersion: kubeadm.k8s.io/v1beta${{ inputs.k8s-version <= '1.24.x' && '2' || '3' }}
             kind: ClusterConfiguration
             metadata:
               name: config
