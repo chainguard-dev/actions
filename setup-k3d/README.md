@@ -1,4 +1,4 @@
-# Setup KinD
+# Setup K3d
 
 This action spins up a K3D cluster with a handful of useful knobs exposed.
 
