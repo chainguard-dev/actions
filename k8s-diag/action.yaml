@@ -1,0 +1,106 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Collect Kubernetes diagnostics'
+description: |
+  This action describes a handful of core resources, such as nodes and pods. It
+  also has input enumerations (cluster-type) for fetching logs from common
+  "local" kubernetes providers (KinD and K3D). It then uploads the logs to the
+  run as an artifact
+
+inputs:
+  cluster-resources:
+    description: |
+      A comma delimited list of cluster-scoped resources
+      to describe and dump.
+    required: true
+    default: nodes,namespaces,crds
+
+  namespace-resources:
+    description: |
+      A comma delimited list of namespace-scoped resources
+      to describe and dump.
+    required: true
+    default: pods
+
+  artifact-name:
+    description: |
+      The name of the artifact to upload.
+    required: true
+    default: logs
+
+  start-time:
+    description: |
+      The start time to query the Grafana Dashboard, in timestamp (default: now).
+    required: false
+    default: "now"
+
+  cluster-type:
+    description: |
+      The type of cluster to collect diagnostics for (kind|k3d)
+    required: false
+    default: "kind"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Collect cluster diagnostics
+      shell: bash
+      run: |
+        for resource in $(echo "${{ inputs.cluster-resources }}" | sed 's/,/ /g'); do
+          for x in $(kubectl get $resource -oname || true); do
+            echo "::group:: describe $resource $x"
+            kubectl describe $x || true
+            echo '::endgroup::'
+          done
+        done
+
+    - name: Collect namespace diagnostics
+      shell: bash
+      run: |
+        for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
+          for resource in $(echo "${{ inputs.namespace-resources }}" | sed 's/,/ /g'); do
+            echo --- $ns $resource ---
+            kubectl get $resource -n${ns}
+            for x in $(kubectl get $resource -n${ns} -oname || true); do
+              echo "::group:: describe $resource $x"
+              # Don't fail if the resource disappears midway.
+              kubectl describe -n${ns} $x || true
+              echo '::endgroup::'
+            done
+          done
+        done
+
+    - name: Collect kind specific logs
+      if: ${{ inputs.cluster-type == 'kind' }}
+      shell: bash
+      run: |
+        mkdir -p /tmp/${{ inputs.artifact-name }}
+        kind export logs /tmp/${{ inputs.artifact-name }}
+
+    # This mimics what kind export logs is doing, which is basically a dump of each nodes /var/log/ + kind metadata
+    # ref: https://github.com/kubernetes-sigs/kind/blob/main/pkg/cluster/internal/providers/common/logs.go#L14
+    - name: Collect k3d specifc logs
+      if: ${{ inputs.cluster-type == 'k3d' }}
+      shell: bash
+      run: |
+        out="/tmp/${{ inputs.artifact-name }}"
+        mkdir -p "$out/k3d"
+
+        docker ps --format '{{.Names}} {{.ID}}' | grep -i "^k3d-" | while read -r name id; do
+          docker cp $id:/var/log/ $out/k3d/$name
+        done
+
+        k3d version -ojson > $out/k3d/k3d-version.json
+
+    - name: Package logs
+      shell: bash
+      run: |
+        tar -cvf /tmp/temp.tar -C /tmp ${{ inputs.artifact-name }}
+        tar -zvcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp temp.tar
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3
+      with:
+        name: ${{ inputs.artifact-name }}.tar.gz
+        path: /tmp/${{ inputs.artifact-name }}.tar.gz
