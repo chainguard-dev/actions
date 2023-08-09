@@ -80,3 +80,9 @@ jobs:
       uses: ./setup-knative
       with:
         version: latest
+
+    - name: Collect diagnostics
+      if: ${{ failure() }}
+      uses: chainguard-dev/actions/kind-diag@main
+      with:
+        artifact-name: logs.${{ matrix.k8s-version }}
