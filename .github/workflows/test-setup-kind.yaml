@@ -74,9 +74,22 @@ jobs:
           fi
         fi
 
-    - name: Test spinning up Knative also
-      if: steps.changed-kind.outputs.any_changed == 'true'
+    - name: Test spinning up Knative also using v1.10.0
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  == 'v1.24.x' }}
       id: knative
       uses: ./setup-knative
       with:
+        version: 1.10.0
+
+    - name: Test spinning up Knative also using latest
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  != 'v1.24.x' }}
+      id: knative-latest
+      uses: ./setup-knative
+      with:
         version: latest
+
+    - name: Collect diagnostics
+      if: ${{ failure() }}
+      uses: chainguard-dev/actions/kind-diag@main
+      with:
+        artifact-name: logs.${{ matrix.k8s-version }}
