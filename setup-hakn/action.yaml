@@ -9,15 +9,15 @@ description: |
 inputs:
   version:
     description: |
-      The version of Hakn to install, e.g. 1.8.0
+      The version of Hakn to install, e.g. 1.11.0
     required: false
-    default: 1.9.6
+    default: 1.11.0
 
   istio-version:
     description: |
-      The version of Istio to install, e.g. 1.16.4
+      The version of Istio to install, e.g. 1.17.5
     required: false
-    default: 1.16.4
+    default: 1.17.5
 
   enable-auto-injection:
     description: |

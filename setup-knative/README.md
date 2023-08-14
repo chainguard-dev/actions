@@ -9,12 +9,12 @@ context.
 - uses: chainguard-dev/actions/setup-knative@main
   with:
     # Version is the version of Knative to install.
-    # For example, 1.9.3.
+    # For example, 1.11.0.
     # Required.
-    version: 1.9.3
+    version: 1.11.0
     # Version is the version of Istio to install.
-    # For example, 1.16.4.
-    version: 1.16.4
+    # For example, 1.17.5.
+    version: 1.17.5
     # Serving Features is the encoded JSON containing the features to enable
     # in this installation of Knative Serving.
     # For example, {"kubernetes.podspec-fieldref":"enabled"}.
@@ -38,7 +38,7 @@ context.
 steps:
 - uses: chainguard-dev/actions/setup-knative@main
   with:
-    version: 1.9.3
+    version: 1.11.0
     serving-features: >
       {
         "kubernetes.podspec-fieldref": "enabled",

@@ -72,7 +72,7 @@ runs:
                 fi
               done
           fi
-        done < <(find "$(pwd)" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile*" \) -print0)
+        done < <(find "$(pwd)" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile*" -o -name "*.sh" \) -print0)
 
     - name: Check workspace
       id: create_pr
@@ -86,7 +86,7 @@ runs:
     - uses: chainguard-dev/actions/setup-gitsign@main
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v5.0.0
+      uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38 # v5.0.2
       if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
       id: pull_request
       with:

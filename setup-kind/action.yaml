@@ -7,17 +7,23 @@ description: |
   configuration knobs.
 
 inputs:
+  service-account-issuer:
+    description: |
+      The service account issuer defines the identifier of the service account token issuer: https://kubernetes.default.svc 
+    required: false
+    default: "https://kubernetes.default.svc"
+
   k8s-version:
     description: |
-      The version of Kubernetes to use in the form: 1.23.x
+      The version of Kubernetes to use in the form: 1.24.x
     required: true
-    default: 1.23.x
+    default: 1.24.x
 
   kind-version:
     description: |
-      The exact version of KinD to use in the form: 0.19.0
+      The exact version of KinD to use in the form: 0.20.0
     required: true
-    default: 0.19.0
+    default: 0.20.0
 
   kind-worker-count:
     description: |
@@ -55,6 +61,12 @@ inputs:
     required: true
     default: cluster.local
 
+  registry-volume:
+    description: |
+      A directory path to be used for the registry volume
+    required: false
+    default: ""
+
 outputs:
   kind-start-time:
     description: |
@@ -86,34 +98,35 @@ runs:
     - name: Determine KinD Image
       shell: bash
       run: |
-        case ${{ inputs.k8s-version }} in
+        K8SVERSION=${{ inputs.k8s-version }}
+        case ${K8SVERSION//v} in
 
-          v1.21.x)
-            echo "KIND_IMAGE=kindest/node:v1.21.14@sha256:220cfafdf6e3915fbce50e13d1655425558cb98872c53f802605aa2fb2d569cf" >> $GITHUB_ENV
+          1.21.x)
+            echo "KIND_IMAGE=kindest/node:v1.21.14@sha256:8a4e9bb3f415d2bb81629ce33ef9c76ba514c14d707f9797a01e3216376ba093" >> $GITHUB_ENV
             ;;
 
-          v1.22.x)
-            echo "KIND_IMAGE=kindest/node:v1.22.17@sha256:9af784f45a584f6b28bce2af84c494d947a05bd709151466489008f80a9ce9d5" >> $GITHUB_ENV
+          1.22.x)
+            echo "KIND_IMAGE=kindest/node:v1.22.17@sha256:f5b2e5698c6c9d6d0adc419c0deae21a425c07d81bbf3b6a6834042f25d4fba2" >> $GITHUB_ENV
             ;;
 
-          v1.23.x)
-            echo "KIND_IMAGE=kindest/node:v1.23.17@sha256:f77f8cf0b30430ca4128cc7cfafece0c274a118cd0cdb251049664ace0dee4ff" >> $GITHUB_ENV
+          1.23.x)
+            echo "KIND_IMAGE=kindest/node:v1.23.17@sha256:59c989ff8a517a93127d4a536e7014d28e235fb3529d9fba91b3951d461edfdb" >> $GITHUB_ENV
             ;;
 
-          v1.24.x)
-            echo "KIND_IMAGE=kindest/node:v1.24.13@sha256:cea86276e698af043af20143f4bf0509e730ec34ed3b7fa790cc0bea091bc5dd" >> $GITHUB_ENV
+          1.24.x)
+            echo "KIND_IMAGE=kindest/node:v1.24.15@sha256:7db4f8bea3e14b82d12e044e25e34bd53754b7f2b0e9d56df21774e6f66a70ab" >> $GITHUB_ENV
             ;;
 
-          v1.25.x)
-            echo "KIND_IMAGE=kindest/node:v1.25.9@sha256:c08d6c52820aa42e533b70bce0c2901183326d86dcdcbedecc9343681db45161" >> $GITHUB_ENV
+          1.25.x)
+            echo "KIND_IMAGE=kindest/node:v1.25.11@sha256:227fa11ce74ea76a0474eeefb84cb75d8dad1b08638371ecf0e86259b35be0c8" >> $GITHUB_ENV
             ;;
 
-          v1.26.x)
-            echo "KIND_IMAGE=kindest/node:v1.26.4@sha256:f4c0d87be03d6bea69f5e5dc0adb678bb498a190ee5c38422bf751541cebe92e" >> $GITHUB_ENV
+          1.26.x)
+            echo "KIND_IMAGE=kindest/node:v1.26.6@sha256:6e2d8b28a5b601defe327b98bd1c2d1930b49e5d8c512e1895099e4504007adb" >> $GITHUB_ENV
             ;;
 
-          v1.27.x)
-            echo "KIND_IMAGE=kindest/node:v1.27.1@sha256:b7d12ed662b873bd8510879c1846e87c7e676a79fefc93e17b2a52989d3ff42b" >> $GITHUB_ENV
+          1.27.x)
+            echo "KIND_IMAGE=kindest/node:v1.27.3@sha256:3966ac761ae0136263ffdb6cfd4db23ef8a83cba8a463690e98317add2c9ba72" >> $GITHUB_ENV
             ;;
 
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
@@ -164,7 +177,7 @@ runs:
               name: config
             apiServer:
               extraArgs:
-                "service-account-issuer": "https://kubernetes.default.svc"
+                "service-account-issuer": "${{ inputs.service-account-issuer }}"
                 "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
                 "service-account-jwks-uri": "https://kubernetes.default.svc/openid/v1/jwks"
                 "service-account-key-file": "/etc/kubernetes/pki/sa.pub"
@@ -256,6 +269,13 @@ runs:
             -e "REGISTRY_AUTH=htpasswd"
             -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"
             -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd"
+          )
+        fi
+
+        REGISTRY_VOLUME="${{ inputs.registry-volume}}"
+        if [[ "${REGISTRY_VOLUME}" != "" ]]; then
+          EXTRA_ARGS+=(
+            -v "${REGISTRY_VOLUME}:/var/lib/registry"
           )
         fi
 

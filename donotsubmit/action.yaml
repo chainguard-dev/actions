@@ -13,7 +13,7 @@ inputs: {}
 runs:
   using: "composite"
   steps:
-  - uses: reviewdog/action-setup@8f2ec89e6b467ca9175527d2a1641bbd0c05783b # v1.0.3
+  - uses: reviewdog/action-setup@80a06617492b461a66508e2dedf16233f0506804 # v1.0.6
     with:
       reviewdog_version: latest
 

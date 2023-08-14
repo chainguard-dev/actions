@@ -1,11 +1,12 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: 'Collect KinD diagnostics'
+name: 'Collect Kubernetes diagnostics'
 description: |
-  This action describes a handful of core resources, such as
-  nodes and pods.  It then uploads the logs from the KinD
-  cluster to the action run.
+  This action describes a handful of core resources, such as nodes and pods. It
+  also has input enumerations (cluster-type) for fetching logs from common
+  "local" kubernetes providers (KinD and K3D). It then uploads the logs to the
+  run as an artifact
 
 inputs:
   cluster-resources:
@@ -34,35 +35,11 @@ inputs:
     required: false
     default: "now"
 
-  grafana-dashboards:
+  cluster-type:
     description: |
-      List of Grafana dashboards to be collected with namespace/dashboard name.
+      The type of cluster to collect diagnostics for (kind|k3d)
     required: false
-    default: ""
-
-  grafana-namespace:
-    description: |
-      Name of the Grafana namespace to be used for port forward.
-    required: false
-    default: "monitoring-system"
-
-  grafana-svc:
-    description: |
-      Name of the Grafana service to be used for port forward.
-    required: false
-    default: "svc/prometheus-grafana"
-
-  grafana-username:
-    description: |
-      Name of the Grafana service to be used for port forward.
-    required: false
-    default: "admin"
-
-  grafana-password:
-    description: |
-      Name of the Grafana service to be used for port forward.
-    required: false
-    default: "prom-operator"
+    default: "kind"
 
 runs:
   using: "composite"
@@ -94,39 +71,32 @@ runs:
           done
         done
 
-    - name: Collect logs
+    - name: Collect kind specific logs
+      if: ${{ inputs.cluster-type == 'kind' }}
       shell: bash
       run: |
         mkdir -p /tmp/${{ inputs.artifact-name }}
         kind export logs /tmp/${{ inputs.artifact-name }}
 
-    - name: Collect grafana dashboards
+    # This mimics what kind export logs is doing, which is basically a dump of each nodes /var/log/ + kind metadata
+    # ref: https://github.com/kubernetes-sigs/kind/blob/main/pkg/cluster/internal/providers/common/logs.go#L14
+    - name: Collect k3d specifc logs
+      if: ${{ inputs.cluster-type == 'k3d' }}
       shell: bash
-      if: ${{ inputs.grafana-dashboards != '' }}
       run: |
-        kubectl port-forward -n ${{ inputs.grafana-namespace }} ${{ inputs.grafana-svc }} 3000:80 &
-        sleep 5
-        status=0
-        curl --max-time 5 --retry-max-time 20 --retry 20 --retry-connrefused http://localhost:3000 || status=1
-        if [ $status -ne 0 ]; then
-          echo "failed to connect to grafana, will not collect any logs"
-          exit 0
-        fi
+        out="/tmp/${{ inputs.artifact-name }}"
+        mkdir -p "$out/k3d"
 
-        mkdir -p /tmp/graphs
-        IFS=',' read -r -a grafs <<< ${{ inputs.grafana-dashboards }}
-        for graf in "${grafs[@]}"
-        do
-          curl "http://${{ inputs.grafana-username }}:${{ inputs.grafana-password }}@localhost:3000/render/d/"$graf"?width=2000&height=2000&from=${{ inputs.start-time }}&to=now" > /tmp/graphs/"${graf#*/}".png
+        docker ps --format '{{.Names}} {{.ID}}' | grep -i "^k3d-" | while read -r name id; do
+          docker cp $id:/var/log/ $out/k3d/$name
         done
+
+        k3d version -ojson > $out/k3d/k3d-version.json
 
     - name: Package logs
       shell: bash
       run: |
         tar -cvf /tmp/temp.tar -C /tmp ${{ inputs.artifact-name }}
-        if [ -d "/tmp/graphs" ]; then
-          tar -rvkf /tmp/temp.tar -C /tmp graphs
-        fi
         tar -zvcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp temp.tar
 
     - name: Upload artifacts
