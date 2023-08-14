@@ -45,7 +45,7 @@ runs:
       shell: bash
       run: |
         cd $(mktemp -d)
-        wget --quiet -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
+        wget --quiet -U "GitHub setup-chainctl" -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
         CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
         # Ensure install directory is on the PATH for future steps
         echo "${CHAINCTL_INSTALL_PATH}" >> "${GITHUB_PATH}"
