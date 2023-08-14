@@ -7,6 +7,12 @@ description: |
   configuration knobs.
 
 inputs:
+  service-account-issuer:
+    description: |
+      The service account issuer defines the identifier of the service account token issuer: https://kubernetes.default.svc 
+    required: false
+    default: "https://kubernetes.default.svc"
+
   k8s-version:
     description: |
       The version of Kubernetes to use in the form: 1.24.x
@@ -171,7 +177,7 @@ runs:
               name: config
             apiServer:
               extraArgs:
-                "service-account-issuer": "https://kubernetes.default.svc"
+                "service-account-issuer": "${{ inputs.service-account-issuer }}"
                 "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
                 "service-account-jwks-uri": "https://kubernetes.default.svc/openid/v1/jwks"
                 "service-account-key-file": "/etc/kubernetes/pki/sa.pub"
