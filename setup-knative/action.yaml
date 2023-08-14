@@ -9,17 +9,17 @@ description: |
 inputs:
   version:
     description: |
-      The version of Knative to install, e.g. 1.8.0. Sometimes (like v1.7.x) of
+      The version of Knative to install, e.g. 1.11.0. Sometimes (like v1.7.x) of
       Knative, the components are out of sync, so to work around that you can
       specify "latest" and it will fetch the latest ones for all the components.
     required: true
-    default: 1.9.3
+    default: 1.11.0
 
   istio-version:
     description: |
-      The version of Istion to install, e.g. 1.16.4
+      The version of Istion to install, e.g. 1.17.5
     required: false
-    default: 1.16.4
+    default: 1.17.5
 
   kingress:
     description: |

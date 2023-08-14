@@ -8,11 +8,11 @@ This action installs chainguard-dev/hakn Knative into the current kubectl contex
 - uses: chainguard-dev/actions/setup-hakn@main
   with:
     # Version is the version of hakn to install.
-    # (defaults to 1.9.6)
-    version: 1.9.6
+    # (defaults to 1.11.0)
+    version: 1.11.0
     # istio-version is the version of Istio to install.
-    # (defaults to 1.16.4)
-    istio-version: 1.16.4
+    # (defaults to 1.17.5)
+    istio-version: 1.17.5
     # Serving Features is the encoded JSON containing the features to enable
     # in this installation of Knative Serving.
     # For example, {"kubernetes.podspec-fieldref":"enabled"}.
@@ -36,8 +36,8 @@ This action installs chainguard-dev/hakn Knative into the current kubectl contex
 steps:
 - uses: chainguard-dev/actions/setup-hakn@main
   with:
-    version: 1.9.6
-    istio-version: 1.16.4
+    version: 1.11.0
+    istio-version: 1.17.5
     serving-features: >
       {
         "kubernetes.podspec-fieldref": "enabled",
