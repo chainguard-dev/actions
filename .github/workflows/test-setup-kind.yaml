@@ -22,7 +22,7 @@ jobs:
       fail-fast: false # Keep running if one leg fails.
       matrix:
         k8s-version:
-        - v1.24.x
+        - 1.24.x
         - 1.25.x
         - 1.26.x
         - 1.27.x
@@ -75,14 +75,14 @@ jobs:
         fi
 
     - name: Test spinning up Knative also using v1.10.0
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  == 'v1.24.x' }}
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  == '1.24.x' }}
       id: knative
       uses: ./setup-knative
       with:
         version: 1.10.0
 
     - name: Test spinning up Knative also using latest
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  != 'v1.24.x' }}
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  != '1.24.x' }}
       id: knative-latest
       uses: ./setup-knative
       with:
