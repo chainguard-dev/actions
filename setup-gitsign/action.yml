@@ -80,7 +80,7 @@ runs:
                 ;;
 
               ARM64)
-                gitsign_filename=gitsign_${gitsign_version}_darwin_amd64
+                gitsign_filename=gitsign_${gitsign_version}_darwin_arm64
                 gitsign_sha=${gitsign_darwin_arm64_sha}
                 ;;
 
