@@ -90,11 +90,15 @@ runs:
               - arg: --disable=traefik
                 nodeFilters:
                   - server:*
+              # Let consumers use their own metrics-server and leave the builtin unclaimed
+              - arg: --disable=metrics-server
+                nodeFilters:
+                  - server:*
               - arg: --kube-apiserver-arg=anonymous-auth=true
                 nodeFilters:
                   - server:*
               # This is needed in order to support projected volumes with service account tokens.
-              # See: 
+              # See:
               #   https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
               #   https://stackoverflow.com/questions/74603633/k3s-allow-unauthenticated-access-to-oidc-endpoints
               - arg: --kube-apiserver-arg=anonymous-auth=true
