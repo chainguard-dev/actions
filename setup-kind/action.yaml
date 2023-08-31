@@ -152,12 +152,14 @@ runs:
             hostPath: /tmp/etcd
         EOF
 
-        for node in {1..${{ inputs.kind-worker-count }}}; do
-        cat >> kind.yaml <<EOF
-        - role: worker
-          image: "${KIND_IMAGE}"
-        EOF
-        done
+        if [ ${{ inputs.kind-worker-count }} -ne 0 ]; then
+          for node in {1..${{ inputs.kind-worker-count }}}; do
+          cat >> kind.yaml <<EOF
+          - role: worker
+            image: "${KIND_IMAGE}"
+          EOF
+          done
+        fi
 
         cat >> kind.yaml <<EOF
         # Configure registry for KinD.
