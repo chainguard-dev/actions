@@ -71,6 +71,7 @@ runs:
                 fi
                 echo "Processing ${images2[i]} in file $file"
 
+                updated_digest=
                 crane digest "${images2[i]}" > digest.log 2> logerror.txt
                 if [ $? -eq 0 ]; then
                     updated_digest=$(cat digest.log)
@@ -92,12 +93,13 @@ runs:
         done < <(find "$(pwd)" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile*" -o -name "*.sh" \) -print0)
 
     - name: Check workspace
-      id: create_pr
+      id: create_pr_update
       shell: bash
       run: |
-        echo "create_pr=false" >> $GITHUB_OUTPUT
+        git diff --stat
+        echo "create_pr_update=false" >> $GITHUB_OUTPUT
         if [[ $(git diff --stat) != '' ]] && [[ ${{ inputs.create-pr }} == 'true' ]]; then
-          echo "create_pr=true" >> $GITHUB_OUTPUT
+          echo "create_pr_update=true" >> $GITHUB_OUTPUT
         fi
 
     # Configure signed commits
@@ -105,7 +107,7 @@ runs:
 
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38 # v5.0.2
-      if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+      if: ${{ steps.create_pr_update.outputs.create_pr_update == 'true' }}
       id: pull_request
       with:
         token: ${{ inputs.token }}
