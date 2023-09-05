@@ -71,6 +71,7 @@ runs:
                 fi
                 echo "Processing ${images2[i]} in file $file"
 
+                updated_digest=
                 crane digest "${images2[i]}" > digest.log 2> logerror.txt
                 if [ $? -eq 0 ]; then
                     updated_digest=$(cat digest.log)
