@@ -38,7 +38,7 @@ jobs:
       uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
     - id: changed-kind
-      uses: tj-actions/changed-files@0fc9663aa70243d87319dbd32fd926344d18d38f # v38.2.0
+      uses: tj-actions/changed-files@6ee9cdc5816333acda68e01cf12eedc619e28316 # v39.0.2
       with:
         files: |
           ./setup-kind/**
