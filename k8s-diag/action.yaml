@@ -71,6 +71,26 @@ runs:
           done
         done
 
+    - name: Collect pod diagnostics
+      shell: bash
+      run: |
+        for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
+          for pod in $(kubectl get pods -n $ns -o name); do
+            echo "::group:: $ns logs $pod"
+            kubectl logs -n${ns} $pod || true
+            echo '::endgroup::'
+          done
+        done
+
+    - name: Collect events diagnostics
+      shell: bash
+      run: |
+        for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
+          echo "::group:: $ns events"
+          kubectl get events --field-selector type!=Normal --sort-by=.metadata.creationTimestamp -o wide -n${ns} || true
+          echo '::endgroup::'
+        done
+
     - name: Collect kind specific logs
       if: ${{ inputs.cluster-type == 'kind' }}
       shell: bash
