@@ -21,7 +21,7 @@ Knative.
 steps:
   - uses: actions/setup-go@v3
     with:
-      go-version: '1.19'
+      go-version: '1.21'
       check-latest: true
 
   - uses: actions/checkout@v3
