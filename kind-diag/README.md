@@ -27,7 +27,7 @@ cluster to the action run.
 steps:
   - uses: actions/setup-go@v3
     with:
-      go-version: 1.19
+      go-version: '1.21'
 
   - uses: actions/checkout@v3
 

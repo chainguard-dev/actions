@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
         with:
-          go-version: 1.18
+          go-version: '1.21'
           check-latest: true
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
       - run: |
