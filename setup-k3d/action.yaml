@@ -114,6 +114,24 @@ runs:
         # K3d sets this up for us in the node, but we're responsible for the host
         sudo echo "127.0.0.1 ${{ inputs.registry-host }}" | sudo tee -a /etc/hosts
 
+        # Make the CNI bin directory predictable.
+        #
+        # k3s' CNI binaries live in /var/lib/rancher/k3s/data/${uuid}/bin, which
+        # is hard for CNI installers (like istio-install-cni) to work with, as
+        # they don't know how to mount the hostpath to this directory to copy
+        # their CNI binary in.
+        #
+        # We add these fixed symlink to make this easy to configure and test
+        # CNI installer images. Alternatively we could install other CNI plugins
+        # like Calico, but that's just more work.
+        for node in $(kubectl get nodes -ojsonpath='{.items[*].metadata.name}'); do
+          cniBin=$(docker exec -u 0 $node find / -path '*/cni' -type f -executable)
+          cniBinDir=$(dirname $cniBin)
+          docker exec -u 0 $node mkdir -p /opt/cni
+          docker exec -u 0 $node ln -sf $cniBinDir /opt/cni/bin
+        done
+
+
     - name: Expose OIDC Discovery
       shell: bash
       run: |
