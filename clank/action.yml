@@ -6,9 +6,15 @@ inputs:
     description: The path where the GitHub Actions are
     required: true
     default: './.github/workflows'
+  token:
+    description: 'GITHUB_TOKEN with `contents` permissions (read) or a `repo` scoped Personal Access Token (PAT)'
+    required: true
+    default: ${{ github.token }}
 
 runs:
   using: 'docker'
   image: 'docker://ghcr.io/chainguard-dev/clank:v0.1.1@sha256:1f2d4b84fd4d821e098c3f3481c1201b56068a92ebebddb9c763ad2825fb5a97'
   args:
     - ${{ inputs.workflow-path }}
+  env:
+    GITHUB_TOKEN: ${{ inputs.token }}
