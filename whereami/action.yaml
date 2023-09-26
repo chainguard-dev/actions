@@ -1,0 +1,15 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Where Am I'
+description: |
+  This action logs some Azure metadata about the runner environment.
+
+runs:
+  using: "composite"
+  steps:
+    - uses: wolfi-dev/wolfi-act@main
+      with:
+        packages: curl,jq
+        command: |
+          curl -s -H "Metadata:true" --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | jq
