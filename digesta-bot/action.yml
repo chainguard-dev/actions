@@ -90,7 +90,7 @@ runs:
                 fi
               done
           fi
-        done < <(find "$(pwd)" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile*" -o -name "*.sh" \) -print0)
+        done < <(find "$(pwd)" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile*" -o -name "Makefile*" -o -name "*.sh" \) -print0)
 
     - name: Check workspace
       id: create_pr_update
