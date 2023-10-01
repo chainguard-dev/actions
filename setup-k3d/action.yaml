@@ -94,14 +94,16 @@ runs:
               - arg: --disable=metrics-server
                 nodeFilters:
                   - server:*
-              - arg: --kube-apiserver-arg=anonymous-auth=true
-                nodeFilters:
-                  - server:*
               # This is needed in order to support projected volumes with service account tokens.
               # See:
               #   https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
               #   https://stackoverflow.com/questions/74603633/k3s-allow-unauthenticated-access-to-oidc-endpoints
               - arg: --kube-apiserver-arg=anonymous-auth=true
+                nodeFilters:
+                  - server:*
+              # This sets the issuer to what sigstore scaffolding expects.
+              # See also: https://github.com/k3d-io/k3d/issues/1187
+              - arg: --kube-apiserver-arg=service-account-issuer=https://kubernetes.default.svc
                 nodeFilters:
                   - server:*
         EOF
