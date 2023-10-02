@@ -159,9 +159,9 @@ runs:
         if [ ${{ inputs.kind-worker-count }} -ne 0 ]; then
           for node in {1..${{ inputs.kind-worker-count }}}; do
           cat >> kind.yaml <<EOF
-          - role: worker
-            image: "${KIND_IMAGE}"
-          EOF
+        - role: worker
+          image: "${KIND_IMAGE}"
+        EOF
           done
         fi
 
