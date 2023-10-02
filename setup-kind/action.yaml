@@ -156,6 +156,7 @@ runs:
             hostPath: /tmp/etcd
         EOF
 
+        # Touch
         if [ ${{ inputs.kind-worker-count }} -ne 0 ]; then
           for node in {1..${{ inputs.kind-worker-count }}}; do
           cat >> kind.yaml <<EOF
