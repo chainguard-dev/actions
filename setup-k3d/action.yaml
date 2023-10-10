@@ -43,6 +43,12 @@ inputs:
     required: false
     default: mirror.gcr.io
 
+  max-pods:
+    description: |
+      The maximum number of pods the kubelet will tolerate per node.
+    required: false
+    default: 110
+
 outputs:
   k3d-start-time:
     description: |
@@ -106,6 +112,10 @@ runs:
               - arg: --kube-apiserver-arg=service-account-issuer=https://kubernetes.default.svc
                 nodeFilters:
                   - server:*
+              - arg: --kubelet-arg=max-pods=${{ inputs.max-pods }}
+                nodeFilters:
+                  - server:*
+                  - agent:*
         EOF
 
         echo "Using k3d config file: "
