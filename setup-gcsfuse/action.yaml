@@ -1,0 +1,54 @@
+# Copyright 2023 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup gcsfuse'
+description: 'Install gcsfuse'
+branding:
+  icon: box
+  color: green
+inputs:
+  version:
+    description: 'Version of gcsfuse to install (tip, latest-release, v0.5.1, etc.)'
+    required: true
+    default: 'latest-release'
+runs:
+  using: "composite"
+  steps:
+  - shell: bash
+    run: |
+      set -ex
+
+      # Install gcsfuse:
+      # - if version is "tip", install from tip of main.
+      # - if version is "latest-release", look up latest release.
+      # - otherwise, install the specified version.
+      case ${{ inputs.version }} in
+      tip)
+        echo "Installing gcsfuse using go get"
+        go install github.com/googlecloudplatform/gcsfuse@main
+        ;;
+      latest-release)
+        tag=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/GoogleCloudPlatform/gcsfuse/releases/latest | jq -r '.tag_name')
+        ;;
+      *)
+        tag="${{ inputs.version }}"
+      esac
+
+      os=${{ runner.os }}
+
+      arch=$(uname -m)
+      if [[ "$arch" =~ (aarch64|arm64) ]] ; then
+        arch=arm64
+      elif [[ "$arch" =~ (x86_64) ]] ; then
+        arch=amd64
+      fi
+
+      if [[ ! -z ${tag} ]]; then
+        echo "Installing gcsfuse using curl @ ${tag}"
+        v=$(echo $tag | sed 's/^v//')
+        deb="gcsfuse_${v}_${arch}.deb"
+        curl -fLO https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/${tag}/${deb}
+        sudo apt install -y ./$deb && rm -rf ./$deb
+      fi
+
+      gcsfuse -v
