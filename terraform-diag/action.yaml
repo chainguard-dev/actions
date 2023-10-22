@@ -1,0 +1,28 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Extract Terraform Diagnostics'
+description: |
+  This action extracts terraform diagnostics from the
+  structured JSON output of a terraform apply.
+
+inputs:
+  json-file:
+    description: |
+      The path to the JSON output of a terraform apply
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # TODO: Surface each error as a collapsible section or consider using ::error:: and ::warning::
+    - name: Extract Warnings
+      shell: bash
+      run: |
+        jq -r 'select(.["@level"]=="warn") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
+
+    - name: Extract Errors
+      shell: bash
+      run: |
+        jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
+
