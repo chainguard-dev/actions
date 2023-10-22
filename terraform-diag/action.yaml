@@ -12,10 +12,15 @@ inputs:
       The path to the JSON output of a terraform apply
     required: true
 
+outputs:
+  errors:
+    description: |
+      A markdown summary of the errors contained within the terraform output.
+    value: ${{ steps.extract-errors.outputs.errors }}
+
 runs:
   using: "composite"
   steps:
-    # TODO: Surface each error as a collapsible section or consider using ::error:: and ::warning::
     - name: Extract Warnings
       shell: bash
       run: |
@@ -23,7 +28,18 @@ runs:
         # We don't surface warnings via ::warning:: because the way we handle signing presubmit would make this to noisy.
 
     - name: Extract Errors
+      id: extract-errors
       shell: bash
       run: |
         jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
         jq -r 'select(.["@level"]=="error") | ("::error file=" + .diagnostic.range.filename + ",line=" + (.diagnostic.range.start.line | tostring) + ",endLine=" + (.diagnostic.range.end.line | tostring) + ",title=" + .diagnostic.summary + "::" + .diagnostic.address)' '${{ inputs.json-file }}' || true
+
+        export MARKDOWN="$(jq -r 'select(.["@level"]=="error") | "`" + .diagnostic.address + "`: " + .diagnostic.summary + "\n"' '${{ inputs.json-file }}')"
+
+        echo "${MARKDOWN}"
+
+        cat >> "${GITHUB_OUTPUT}" <<EOOUTPUT
+        errors<<EOERRORS
+        ${MARKDOWN}
+        EOERRORS
+        EOOUTPUT
