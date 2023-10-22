@@ -20,9 +20,10 @@ runs:
       shell: bash
       run: |
         jq -r 'select(.["@level"]=="warn") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
+        # We don't surface warnings via ::warning:: because the way we handle signing presubmit would make this to noisy.
 
     - name: Extract Errors
       shell: bash
       run: |
         jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
-
+        jq -r 'select(.["@level"]=="error") | ("::error file=" + .diagnostic.range.filename + ",line=" + (.diagnostic.range.start.line | tostring) + ",endLine=" + (.diagnostic.range.end.line | tostring) + ",title=" + .diagnostic.summary + "::" + .diagnostic.address)' '${{ inputs.json-file }}' || true
