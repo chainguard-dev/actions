@@ -171,14 +171,6 @@ runs:
           done
         fi
 
-        if [ ${{ inputs.feature-gates }} != "" ]; then
-          echo "feature-gates:" >> kind.yaml
-          IFS=',' read -ra feature_gates <<< "${{ inputs.feature-gates }}"
-          for feature_gate in "${feature_gates[@]}"; do
-            echo "  $feature_gate: true" >> kind.yaml
-          done
-        fi
-
         cat >> kind.yaml <<EOF
         # Configure registry for KinD.
         containerdConfigPatches:
@@ -208,6 +200,14 @@ runs:
             networking:
               dnsDomain: "${{ inputs.cluster-suffix }}"
         EOF
+        fi
+
+        if [ ${{ inputs.feature-gates }} != "" ]; then
+          echo "featureGates:" >> kind.yaml
+          IFS=',' read -ra feature_gates <<< "${{ inputs.feature-gates }}"
+          for feature_gate in "${feature_gates[@]}"; do
+            echo "  $feature_gate: true" >> kind.yaml
+          done
         fi
 
         echo '::group:: KinD config'
