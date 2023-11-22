@@ -66,6 +66,11 @@ inputs:
       Switch to this directory prior to running build
     default: ''
 
+  cache-dir:
+    description: |
+      Directory used for cached inputs
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -92,3 +97,4 @@ runs:
         empty-workspace: ${{ inputs.empty-workspace }}
         namespace: ${{ inputs.namespace }}
         workdir: ${{ inputs.workdir }}
+        cache-dir: ${{ inputs.cache-dir }}
