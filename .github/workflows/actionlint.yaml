@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - id: get_yamls
         run: |
-          echo "files=$(find ./ -type f -name '*.yaml' -not -path './.chainguard/source.yaml')" >> "${GITHUB_OUTPUT}"
+          echo "files=$(find ./ -type f -name '*.y*ml' -not -path './.chainguard/source.yaml')" >> "${GITHUB_OUTPUT}"
       - uses: reviewdog/action-actionlint@v1
         with:
           actionlint_flags: ${{ steps.get_yamls.outputs.files }}
