@@ -48,7 +48,7 @@ runs:
         # Untracked (new) files
         if [[ $(git ls-files --others --exclude-standard) ]]; then
             for x in $(git ls-files --others --exclude-standard); do
-              echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$(cat $x | urlencode)"
+              echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$x"
             done
             echo "${{ github.repository }} has untracked files. Please run ${{ inputs.fixup-command }}."
             exit 1
