@@ -71,6 +71,11 @@ inputs:
       Directory used for cached inputs
     default: ''
 
+  pipeline-dir:
+    description: |
+      Directory used for pipelines
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -98,3 +103,4 @@ runs:
         namespace: ${{ inputs.namespace }}
         workdir: ${{ inputs.workdir }}
         cache-dir: ${{ inputs.cache-dir }}
+        pipeline-dir: ${{ inputs.pipeline-dir }}
