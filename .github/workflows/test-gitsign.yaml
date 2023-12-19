@@ -22,7 +22,7 @@ jobs:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-gitsign
-      uses: tj-actions/changed-files@25ef3926d147cd02fc7e931c1ef50772bbb0d25d # v40.1.1
+      uses: tj-actions/changed-files@56284d80811fb5963a972b438f2870f175e5b7c8 # v40.2.3
       with:
         files: |
           ./setup-gitsign/**
