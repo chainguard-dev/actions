@@ -71,9 +71,26 @@ runs:
         esac
 
         if [[ ! -z ${tag} ]]; then
+          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          x86|x64) ARCH=amd64;;
+          arm64)   ARCH=arm64;;
+          *)
+            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
+            exit -1
+            ;;
+          esac
+          case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
+          "linux") OS=linux;;
+          "macos") OS=osx;;
+          *)
+            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
+            exit -1
+            ;;
+          esac
+
           without_v=${tag#"v"}
           echo "Installing melange @ ${tag}"
-          curl -fsL https://github.com/chainguard-dev/melange/releases/download/${tag}/melange_${without_v}_linux_amd64.tar.gz | sudo tar xzf - --strip-components=1 -C /usr/local/bin
+          curl -fsL https://github.com/chainguard-dev/melange/releases/download/${tag}/melange_${without_v}_${OS}_${ARCH}.tar.gz | sudo tar xzf - --strip-components=1 -C /usr/local/bin
         fi
 
         melange version
