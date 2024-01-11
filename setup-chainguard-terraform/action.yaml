@@ -55,3 +55,22 @@ runs:
         audience: ${{ steps.default-audience.outputs.audience }}
         invite-code: ${{ inputs.invite-code }}
         identity: ${{ inputs.identity }}
+
+    - shell: bash
+      run: |
+        cat > ~/.terraformrc <<EOF
+        provider_installation {
+          network_mirror {
+            url = "https://dl.${{ inputs.environment }}/terraform-provider/"
+            include = [
+              "registry.terraform.io/chainguard/chainguard",
+            ]
+          }
+
+          direct {
+            exclude = [
+              "registry.terraform.io/chainguard/chainguard",
+            ]
+          }
+        }
+        EOF
