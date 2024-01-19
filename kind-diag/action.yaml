@@ -130,7 +130,7 @@ runs:
         tar -zvcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp temp.tar
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392 # v3
+      uses: actions/upload-artifact@694cdabd8bdb0f10b2cea11669e1bf5453eed0a6 # v3
       with:
         name: ${{ inputs.artifact-name }}.tar.gz
         path: /tmp/${{ inputs.artifact-name }}.tar.gz
