@@ -1,0 +1,44 @@
+# Copyright 2024 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Octo STS'
+description: |
+  This action exchanges the workflow's identity token for a Github App token
+  from the Octo STS service, in accordance with the trust policy of the target
+  organization or repository.
+
+inputs:
+  scope:
+    description: |
+      The org/repo of the repository to which to request access.
+    required: true
+
+  identity:
+    description: |
+      The name of the trust policy to load from the target repository. The trust policy
+      is loaded from https://github.com/{scope} from the file
+      .github/chainguard/{identity}.sts.yaml
+    required: true
+
+outputs:
+  token:
+    description: |
+      The federated token to use for authentication.
+    value: ${{ steps.octo-sts.outputs.token }}
+
+runs:
+  using: "composite"
+
+  steps:
+    - shell: bash
+      id: octo-sts
+      run: |
+        THIS_TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=octo-sts.dev" | jq -r .value)
+        THAT_TOKEN=$(curl -H "Authorization: Bearer ${THIS_TOKEN}" "https://octo-sts.dev/sts/exchange?scope=${{ inputs.scope }}&identity=${{ inputs.identity }}" | jq -r .token)
+        if [[ "${THAT_TOKEN}" == "null" ]] ; then
+          echo "Failed to obtain token from Octo STS" >&2
+          echo ::error::$(curl -H "Authorization: Bearer ${THIS_TOKEN}" "https://octo-sts.dev/sts/exchange?scope=${{ inputs.scope }}&identity=${{ inputs.identity }}" | jq -r .message)
+          exit 1
+        fi
+        echo "::add-mask::${THAT_TOKEN}"
+        echo "token=${THAT_TOKEN}" >> "$GITHUB_OUTPUT"
