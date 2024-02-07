@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright 2023 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Shamelessly stolen from https://github.com/imjasonh/setup-ko
+
+name: 'Setup yamlfmt'
+description: 'Install yamlfmt'
+
+inputs:
+  version:
+    description: |
+      Version to install (tip, latest, or a tag eg "v0.6.0")
+    required: false
+    default: "latest"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      name: Install yamlfmt binary
+      run: |
+        set -ex
+        # - if version is "tip", install from tip of main.
+        # - if version is "latest", look up latest release.
+        # - otherwise, install the specified version.
+        case ${{ inputs.version }} in
+        tip)
+          echo "Installing yamlfmt using go install"
+          go install github.com/google/yamlfmt@main
+          ;;
+        latest)
+          tag=$(curl -L -s -u "username:${{ github.token }}" https://api.github.com/repos/google/yamlfmt/releases/latest | jq -r '.tag_name')
+          ;;
+        *)
+          tag="${{ inputs.version }}"
+        esac
+        os=${{ runner.os }}
+        if [[ $os == "macOS" ]]; then
+          os="Darwin"
+        fi
+        if [[ ! -z ${tag} ]]; then
+          echo "Installing yamlfmt @ ${tag} for ${os}"
+          curl -fsL https://github.com/google/yamlfmt/releases/download/${tag}/yamlfmt_${tag:1}_${os}_x86_64.tar.gz | sudo tar xzf - -C /usr/local/bin yamlfmt
+        fi
