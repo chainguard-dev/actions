@@ -92,7 +92,7 @@ jobs:
       if: ${{ steps.changed-kind.outputs.any_changed == 'true' }}
       uses: ./setup-knative
       with:
-        version: $${{ matrix.knative-version }}
+        version: $${{ matrix.knative-version || 'latest' }}
 
     - name: Collect diagnostics
       if: ${{ failure() }}
