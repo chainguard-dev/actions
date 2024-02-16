@@ -26,12 +26,24 @@ jobs:
         - 1.25.x
         - 1.26.x
         - 1.27.x
+        - 1.28.x
+        - 1.29.x
 
         # See https://github.com/chainguard-dev/actions/pull/175
         # We're testing whether setting a custom cluster domain works
         cluster-suffix:
         - cluster.local # default value
         - potato.local
+
+        include: 
+        - k8s-version: 1.24.x
+          knative-version: 1.10.0
+        - k8s-version: 1.25.x
+          knative-version: 1.11.0          
+        - k8s-version: 1.26.x
+          knative-version: 1.12.0
+        - k8s-version: 1.27.x
+          knative-version: 1.13.0
 
     steps:
     - name: Checkout the current action
@@ -76,19 +88,11 @@ jobs:
           fi
         fi
 
-    - name: Test spinning up Knative also using v1.10.0
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  == '1.24.x' }}
-      id: knative
+    - name: Test spinning up Knative
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' }}
       uses: ./setup-knative
       with:
-        version: 1.10.0
-
-    - name: Test spinning up Knative also using latest
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  != '1.24.x' }}
-      id: knative-latest
-      uses: ./setup-knative
-      with:
-        version: latest
+        version: ${{ matrix.knative-version || 'latest' }}
 
     - name: Collect diagnostics
       if: ${{ failure() }}
