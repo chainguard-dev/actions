@@ -10,7 +10,7 @@ jobs:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-registry
-      uses: tj-actions/changed-files@3f54ebb830831fc121d3263c1857cfbdc310cdb9 # v42.0.4
+      uses: tj-actions/changed-files@d516645658aa4705b46600cdbf9e6d54f56b973f # v42.0.6
       with:
         files: |
           ./setup-registry/**
@@ -33,7 +33,7 @@ jobs:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-registry
-      uses: tj-actions/changed-files@3f54ebb830831fc121d3263c1857cfbdc310cdb9 # v42.0.4
+      uses: tj-actions/changed-files@d516645658aa4705b46600cdbf9e6d54f56b973f # v42.0.6
       with:
         files: |
           ./setup-registry/**
