@@ -19,7 +19,7 @@ jobs:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-melange
-      uses: tj-actions/changed-files@7fc073d92265804a8d4e4982b637dee053daf6c5 # v42.0.7
+      uses: tj-actions/changed-files@77af4bed286740ef1a6387dc4e4e4dec39f96054 # v43.0.0
       with:
         files: |
           ./setup-melange/**
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - id: changed-melange
-        uses: tj-actions/changed-files@7fc073d92265804a8d4e4982b637dee053daf6c5 # v42.0.7
+        uses: tj-actions/changed-files@77af4bed286740ef1a6387dc4e4e4dec39f96054 # v43.0.0
         with:
           files: |
             ./setup-melange/**
