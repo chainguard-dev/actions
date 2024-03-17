@@ -7,10 +7,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
+    - uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
+      with:
+        egress-policy: audit
+
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-registry
-      uses: tj-actions/changed-files@25ef3926d147cd02fc7e931c1ef50772bbb0d25d # v40.1.1
+      uses: tj-actions/changed-files@7fc073d92265804a8d4e4982b637dee053daf6c5 # v42.0.7
       with:
         files: |
           ./setup-registry/**
@@ -30,16 +34,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
+    - uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
+      with:
+        egress-policy: audit
+
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - id: changed-registry
-      uses: tj-actions/changed-files@25ef3926d147cd02fc7e931c1ef50772bbb0d25d # v40.1.1
+      uses: tj-actions/changed-files@7fc073d92265804a8d4e4982b637dee053daf6c5 # v42.0.7
       with:
         files: |
           ./setup-registry/**
           .github/workflows/test-setup-registry.yaml
 
-    - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+    - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
       if: steps.changed-registry.outputs.any_changed == 'true'
 
     - if: steps.changed-registry.outputs.any_changed == 'true'

@@ -1,7 +1,7 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: 'Verify No Diffs'
+name: "Verify No Diffs"
 description: |
   This action verifies that the output of a preceding tool had no effect
   on the working tree.
@@ -18,40 +18,60 @@ inputs:
       to adhere to this repo's code standards.
     required: true
 
-
 runs:
   using: "composite"
   steps:
-  - name: Verify No Diffs
-    shell: bash
-    run: |
-      set -e
-      pushd "${GITHUB_WORKSPACE}/${{ inputs.path }}" || exit 1
+    - name: Verify No Diffs
+      shell: bash
+      run: |
+        set -e
+        pushd "${GITHUB_WORKSPACE}/${{ inputs.path }}" || exit 1
 
-      # From: https://backreference.org/2009/12/23/how-to-match-newlines-in-sed/
-      # This is to leverage this workaround:
-      # https://github.com/actions/toolkit/issues/193#issuecomment-605394935
-      function urlencode() {
-        sed ':begin;$!N;s/\n/%0A/;tbegin'
-      }
+        # From: https://backreference.org/2009/12/23/how-to-match-newlines-in-sed/
+        # This is to leverage this workaround:
+        # https://github.com/actions/toolkit/issues/193#issuecomment-605394935
+        function urlencode() {
+          sed ':begin;$!N;s/\n/%0A/;tbegin'
+        }
 
-      echo '::group:: diagnostic output'
-      # For some reason sometimes running this
-      # first changes the result.
-      git status
+        echo '::group:: diagnostic output'
+        # For some reason sometimes running this
+        # first changes the result.
+        git status
 
-      # Show the raw diff, since the stuff below
-      # isn't always useful in its raw log form
-      # coming out of actions.
-      git diff
-      echo '::endgroup::'
+        # Show the raw diff, since the stuff below
+        # isn't always useful in its raw log form
+        # coming out of actions.
+        git diff
+        echo '::endgroup::'
 
-      if [[ $(git diff-index --name-only HEAD --) ]]; then
-          for x in $(git diff-index --name-only HEAD --); do
-            echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$(git diff $x | urlencode)"
-          done
-          echo "${{ github.repository }} is incorrectly formatted. Please run ${{ inputs.fixup-command }}."
-          exit 1
-      fi
-      echo "${{ github.repository }} is formatted correctly."
-      popd
+        # Untracked (new) files
+        if [[ $(git ls-files --others --exclude-standard) ]]; then
+            for x in $(git ls-files --others --exclude-standard); do
+              echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$x"
+            done
+            echo "${{ github.repository }} has untracked files. Please run ${{ inputs.fixup-command }}."
+            exit 1
+        fi
+
+        # Modified files
+        if [[ $(git diff-index --name-only HEAD --) ]]; then
+            for x in $(git diff-index --name-only HEAD --); do
+              echo "::error file=$x::Please run ${{ inputs.fixup-command }}.%0A$(git diff $x | urlencode)"
+            done
+            echo "${{ github.repository }} is incorrectly formatted. Please run ${{ inputs.fixup-command }}."
+            exit 1
+        fi
+        echo "${{ github.repository }} is formatted correctly."
+        popd
+    - name: Generate patch
+      if: failure()
+      shell: bash
+      run: |
+        git diff HEAD > diff.patch
+    - name: Upload patch
+      if: failure()
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+      with:
+        name: diff
+        path: diff.patch

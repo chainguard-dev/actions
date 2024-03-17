@@ -26,6 +26,8 @@ jobs:
         - 1.25.x
         - 1.26.x
         - 1.27.x
+        - 1.28.x
+        - 1.29.x
 
         # See https://github.com/chainguard-dev/actions/pull/175
         # We're testing whether setting a custom cluster domain works
@@ -33,14 +35,27 @@ jobs:
         - cluster.local # default value
         - potato.local
 
+        include: 
+        - k8s-version: 1.24.x
+          knative-version: 1.10.0
+        - k8s-version: 1.25.x
+          knative-version: 1.11.0          
+        - k8s-version: 1.26.x
+          knative-version: 1.12.0
+        - k8s-version: 1.27.x
+          knative-version: 1.13.0
+
     steps:
+    - uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
+      with:
+        egress-policy: audit
     - name: Checkout the current action
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - uses: ./whereami # Log where I am.
 
     - id: changed-kind
-      uses: tj-actions/changed-files@25ef3926d147cd02fc7e931c1ef50772bbb0d25d # v40.1.1
+      uses: tj-actions/changed-files@7fc073d92265804a8d4e4982b637dee053daf6c5 # v42.0.7
       with:
         files: |
           ./setup-kind/**
@@ -76,19 +91,11 @@ jobs:
           fi
         fi
 
-    - name: Test spinning up Knative also using v1.10.0
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  == '1.24.x' }}
-      id: knative
+    - name: Test spinning up Knative
+      if: ${{ steps.changed-kind.outputs.any_changed == 'true' }}
       uses: ./setup-knative
       with:
-        version: 1.10.0
-
-    - name: Test spinning up Knative also using latest
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' && matrix.k8s-version  != '1.24.x' }}
-      id: knative-latest
-      uses: ./setup-knative
-      with:
-        version: latest
+        version: ${{ matrix.knative-version || 'latest' }}
 
     - name: Collect diagnostics
       if: ${{ failure() }}

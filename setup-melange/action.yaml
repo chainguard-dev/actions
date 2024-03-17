@@ -5,6 +5,12 @@ name: 'Setup melange'
 description: |
   Sets up melange, so it can run in an Ubuntu environment.
 
+inputs:
+  version:
+    description: 'Version of melange to install (tip, latest-release, v0.5.5, etc.)'
+    required: true
+    default: 'latest-release'
+
 runs:
   using: 'composite'
 
@@ -20,7 +26,7 @@ runs:
     - name: 'Install dependencies'
       shell: bash
       run: |
-        sudo apt install -y build-essential git
+        sudo apt install -y build-essential git jq
     # TODO: the bubblewrap package available from "apt install"
     # is outdated and missing newer features such as --clearenv flag,
     # so instead we download the wolfi .apk and use the binary in there
@@ -36,14 +42,55 @@ runs:
         sudo ninja install
         popd
         rm -rf bubblewrap
+
     - name: 'Install melange'
+      if:
       shell: bash
       run: |
-        TMP_CLONE_DIR="$(mktemp -d)"
-        git clone https://github.com/chainguard-dev/melange "${TMP_CLONE_DIR}"
-        pushd "${TMP_CLONE_DIR}"
-        make melange
-        sudo env "PATH=$PATH" make install
+        set -ex
+
+        # Install melange:
+        # - if version is "tip", install from tip of main.
+        # - if version is "latest-release", look up latest release.
+        # - otherwise, install the specified version.
+        case ${{ inputs.version }} in
+        tip)
+          TMP_CLONE_DIR="$(mktemp -d)"
+          git clone https://github.com/chainguard-dev/melange "${TMP_CLONE_DIR}"
+          pushd "${TMP_CLONE_DIR}"
+          make melange
+          sudo env "PATH=$PATH" make install
+          popd
+          rm -rf "${TMP_CLONE_DIR}"
+          ;;
+        latest-release)
+          tag=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/chainguard-dev/melange/releases/latest | jq -r '.tag_name')
+          ;;
+        *)
+          tag="${{ inputs.version }}"
+        esac
+
+        if [[ ! -z ${tag} ]]; then
+          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          x86|x64) ARCH=amd64;;
+          arm64)   ARCH=arm64;;
+          *)
+            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
+            exit -1
+            ;;
+          esac
+          case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
+          "linux") OS=linux;;
+          "macos") OS=osx;;
+          *)
+            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
+            exit -1
+            ;;
+          esac
+
+          without_v=${tag#"v"}
+          echo "Installing melange @ ${tag}"
+          curl -fsL https://github.com/chainguard-dev/melange/releases/download/${tag}/melange_${without_v}_${OS}_${ARCH}.tar.gz | sudo tar xzf - --strip-components=1 -C /usr/local/bin
+        fi
+
         melange version
-        popd
-        rm -rf "${TMP_CLONE_DIR}"

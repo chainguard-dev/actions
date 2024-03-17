@@ -34,11 +34,11 @@ runs:
   steps:
   - uses: actions/setup-node@v3
     with:
-      # actions/github-script requires Node v16
-      node-version: 16
-  - run: npm install @octokit/app@13.1.8 # Version 14 deprecates node v16, which is used below.
+      # actions/github-script requires Node v20
+      node-version: 20
+  - run: npm install -g @octokit/app@14.0.2
     shell: bash
-  - uses: actions/github-script@v6
+  - uses: actions/github-script@v7
     id: get-token
     name: Get GitHub App token
     env:
