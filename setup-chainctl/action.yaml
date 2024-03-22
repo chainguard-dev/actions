@@ -39,77 +39,19 @@ inputs:
 
 runs:
   using: "composite"
-
   steps:
-    - name: Install chainctl
-      shell: bash
+    - shell: bash
       run: |
-        cd $(mktemp -d)
-        wget --quiet -U "GitHub setup-chainctl" -O chainctl "https://dl.${{ inputs.environment }}/chainctl/latest/chainctl_linux_$(uname -m)"
-        CHAINCTL_INSTALL_PATH="${HOME}/.local/bin"
-        # Ensure install directory is on the PATH for future steps
-        echo "${CHAINCTL_INSTALL_PATH}" >> "${GITHUB_PATH}"
-        install -D --mode 0555 ./chainctl --target-directory "${CHAINCTL_INSTALL_PATH}"
+        echo "*****************************************************************"
+        echo "**    This is deprecated and will be removed around Aug/2024   **"
+        echo "** please use https://github.com/chainguard-dev/setup-chainctl **"
+        echo "*****************************************************************"
+        echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
 
-    - name: Authenticate with Chainguard (assumed identity)
-      shell: bash
-      if: ${{ inputs.identity != '' }}
-      env:
-        CHAINCTL_DEBUG: "true"
-      run: |
-        if chainctl auth login --identity "${{ inputs.identity }}"; then
-          echo Logged in as ${{ inputs.identity }}!
-        else
-          echo Unable to assume the identity ${{ inputs.identity }}.
-          exit 1
-        fi
-        if ! chainctl auth configure-docker --identity "${{ inputs.identity }}"; then
-          echo Unable to register credential helper as ${{ inputs.identity }}.
-          exit 1
-        fi
-
-    - name: Authenticate with Chainguard (DEPRECATED invite-code)
-      shell: bash
-      if: ${{ inputs.invite-code != '' }}
-      env:
-        CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
-        CHAINCTL_DEBUG: "true"
-      run: |
-        echo "::warning::The use of invite codes with Github actions is deprecated, use assumed identities instead."
-
-        AUDIENCE="${{ inputs.audience }}"
-        if [[ -z "${AUDIENCE}" ]]; then
-          AUDIENCE=issuer.${{ inputs.environment }}
-        fi
-        IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
-
-        # This will start failing once the invite code expires, which is why we have the login guard.
-        if chainctl auth login --create-group=false --identity-token "${IDTOKEN}" --invite-code="${CHAINGUARD_INVITE_CODE}"; then
-          echo Logged in!
-        else
-          echo Failed to log in with invite code
-          exit 1
-        fi
-
-    - name: Authenticate with Chainguard (DEPRECATED registered identity)
-      shell: bash
-      if: ${{ inputs.identity == '' && inputs.invite-code == '' }}
-      env:
-        CHAINGUARD_INVITE_CODE: ${{ inputs.invite-code }}
-        CHAINCTL_DEBUG: "true"
-      run: |
-        echo "::warning::The use of registered Github actions identities is deprecated, use assumed identities instead."
-
-        AUDIENCE="${{ inputs.audience }}"
-        if [[ -z "${AUDIENCE}" ]]; then
-          AUDIENCE=issuer.${{ inputs.environment }}
-        fi
-        IDTOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${AUDIENCE}" | jq -r '.value')
-
-        if chainctl auth login --identity-token "${IDTOKEN}"; then
-          echo Logged in!
-        else
-          echo No invite code is present!  Failing since registration will not do any good.
-          echo Configure a secret named CHAINGUARD_INVITE_CODE to have this workload register itself.
-          exit 1
-        fi
+    - uses: chainguard-dev/setup-chainctl@58c1184bfdcf53576831252e68198d8df26f3e1b # v0.1.0
+      id: digesta
+      with:
+        environment: ${{ inputs.environment }}
+        identity: ${{ inputs.identity }}
+        audience: ${{ inputs.audience }}
+        invite-code: ${{ inputs.invite-code }}
