@@ -3,31 +3,10 @@
 This action installs the latest `chainctl` binary for a particular environment
 and authenticates with it using identity tokens.
 
-## Usage
+setup-chainctl has a new home, please use https://github.com/chainguard-dev/setup-chainctl
 
 ```yaml
-- uses: chainguard-dev/actions/setup-chainctl@main
-  with:
-    # environment determines the environment from which to download the chainctl
-    # binary from.
-    # Optional (default is enforce.dev)
-    environment: enforce.dev
-
-    # identity holds the ID for the identity this workload should assume when
-    # speaking to Chainguard APIs.
-    identity: "..."
+- uses: chainguard-dev/setup-chainctl@v0.1.0
 ```
 
-## Scenarios
-
-```yaml
-permissions:
-  id-token: write
-
-steps:
-- uses: chainguard-dev/actions/setup-chainctl@main
-  with:
-    identity: "deadbeef/badf00d"
-```
-
-See [Authenticating to Chainguard Registry](https://edu.chainguard.dev/chainguard/chainguard-images/registry/authenticating/#authenticating-with-github-actions) for more information about creating an identity to pull images from cgr.dev from GitHub Actions, using `setup-chainctl`.
+_note_: this readme will be removed around August/2024
