@@ -8,13 +8,13 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
 - uses: chainguard-dev/actions/setup-kind@main
   with:
     # K8s version is the minor version of Kubernetes to install (with v).
-    # For example, v1.27.x.
+    # For example, v1.29.x.
     # Required.
-    k8s-version: 1.27.x
+    k8s-version: 1.29.x
     # KinD Version is the version of KinD to use to orchestrate things (without v).
-    # For example, 0.12.0.
+    # For example, 0.23.0.
     # Required.
-    kind-version: 0.19.0
+    kind-version: 0.23.0
     # Registry Authority is the authority of the local container registry to
     # stand up for this KinD cluster.
     # For example, registry.local:5000.
@@ -37,5 +37,5 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
 steps:
 - uses: chainguard-dev/actions/setup-kind@main
   with:
-    k8s-version: 1.24.x
+    k8s-version: 1.29.x
 ```
