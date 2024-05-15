@@ -79,7 +79,7 @@ jobs:
           download: false
           spdx-tools-version: 1.1.0
           sbom-path: example-image-pause.spdx.json
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: Example SBOMs
