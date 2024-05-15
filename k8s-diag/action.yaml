@@ -114,7 +114,7 @@ runs:
         k3d version -ojson > $out/k3d/k3d-version.json
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
         path: /tmp/${{ inputs.artifact-name }}

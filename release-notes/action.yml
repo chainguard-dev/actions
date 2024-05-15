@@ -88,7 +88,7 @@ runs:
         cat CHANGELOG_NEW.md
 
     - name: Archive Release Notes
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: CHANGELOG_${{ inputs.end_rev }}.md
         path: CHANGELOG_NEW.md
