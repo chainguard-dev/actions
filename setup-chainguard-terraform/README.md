@@ -1,10 +1,9 @@
 # Setup `chainguard-terraform-provider`
 
-This action configures the use of the Chainguard terraform provider for a
-particular Chainguard environment.  There are two main things this does:
-1. Installs/Authenticates `chainctl` for the particular environment,
-2. Configure a `~/.terraformrc` that pulls the Chainguard provider from our GCS
-  bucket for this environment.
+> :warning: **This action is depecrated.** Please use https://github.com/chainguard-dev/setup-chainctl
+
+This action installs the latest `chainctl` binary for a particular environment
+and authenticates with it using identity tokens.
 
 ## Usage
 
