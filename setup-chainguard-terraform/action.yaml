@@ -40,6 +40,15 @@ runs:
   using: "composite"
 
   steps:
+    - id: deprecation-message
+      shell: bash
+      run: |
+        echo "*****************************************************************"
+        echo "**            This action is deprecated                        **"
+        echo "** please use https://github.com/chainguard-dev/setup-chainctl **"
+        echo "*****************************************************************"
+        echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
+        
     - id: default-audience
       shell: bash
       run: |
