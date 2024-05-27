@@ -19,7 +19,7 @@ several validation steps.
 If an SBOM path is specified in the inputs, the action will run
 the `Verify` subcommand to check the syntax of the SBOM.
 
-## Usage 
+## Usage
 
 Here is a minimal example validating an SBOM stored in `sbom.spdx`:
 
@@ -42,7 +42,7 @@ jobs:
 
 Here is a full example, it was initially written for the
 [Kubernetes `bom` tool](https://github.com/kubernetes-sigs/bom)
-verification step. It runs the action 3 times one to set up 
+verification step. It runs the action 3 times one to set up
 the tools and one to verify each SBOM format (tag-value, json):
 
 ```yaml
@@ -60,25 +60,31 @@ jobs:
     steps:
       - uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           check-latest: true
+
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
       - run: |
           go run ./cmd/bom/main.go generate -i registry.k8s.io/pause > example-image-pause.spdx
           go run ./cmd/bom/main.go generate --format=json -i registry.k8s.io/pause > example-image-pause.spdx.json
-      - uses: chainguard-dev/actions/setup-spdx@spdx
+
+      - uses: chainguard-dev/actions/setup-spdx@main
         with:
-          spdx-tools-version: 1.1.0
+          spdx-tools-version: 1.1.8
+
       - uses: chainguard-dev/actions/setup-spdx@main
         with:
           download: false
-          spdx-tools-version: 1.1.0
+          spdx-tools-version: 1.1.8
           sbom-path: example-image-pause.spdx
+
       - uses: chainguard-dev/actions/setup-spdx@main
         with:
           download: false
-          spdx-tools-version: 1.1.0
+          spdx-tools-version: 1.1.8
           sbom-path: example-image-pause.spdx.json
+
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:

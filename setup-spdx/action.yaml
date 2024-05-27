@@ -6,8 +6,8 @@
 
 name: 'Setup SPDX Tools'
 description: |
-  This action sets up the SPDX tools jar in the workflow environment 
-  and optionally verifies an SBOM. 
+  This action sets up the SPDX tools jar in the workflow environment
+  and optionally verifies an SBOM.
 
 inputs:
   sbom-path:
@@ -18,34 +18,21 @@ inputs:
 
   spdx-tools-version:
     description: |
-      Version of the SPDX tools. 
-    default:  1.1.3
-    options:
-    - 1.1.3
-    - 1.1.0
-    - 1.0.4
+      Version of the SPDX tools (eg.: 1.1.8, 1.1.3, 1.1.0).
+    default: 1.1.8
 
   download:
     description: |
       When true, the action will try to download the SPDX tools jar. Useful
       when running more than one validation.
-    default: true
-    type: boolean
+    default: 'true'
 
   sbom-format:
     description: |
       Encoding format of the SPDX document. The default is blank meaning that
       the SPDX Verify subcommand will try to infer it from the file extension.
-    default:
-    options:
-    - 
-    - JSON
-    - TAG
-    - YAML
-    - XML
-    - XLS
-    - XLSX    
-    - RDFXML
+      (eg.: "", JSON, TAG, YAML, XML, XLS, XLSX, RDFXML)
+    default: ""
 
 runs:
   using: composite
