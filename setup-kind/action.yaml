@@ -217,7 +217,7 @@ runs:
           kubectl rollout status --timeout 5m --namespace metallb-system "$x"
         done
 
-        network=$(docker network inspect kind -f "{{(index .IPAM.Config 0).Subnet}}" | cut -d '.' -f1,2)
+        network=$(docker network inspect kind | jq -r '.[0].IPAM.Config[] | select(.Subnet | test("^[0-9]+\\.")) | .Subnet' | cut -d '.' -f1,2)
         cat <<EOF >> ./metallb-crds.yaml
         apiVersion: metallb.io/v1beta1
         kind: IPAddressPool
