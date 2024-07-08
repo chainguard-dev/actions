@@ -11,13 +11,18 @@ inputs:
       The path where the git repository resides.
     required: true
     default: ""
+  reviewdog_version:
+    description: |
+      The version of reviewdog to use.
+    required: false
+    default: "v0.18.1"
 
 runs:
   using: "composite"
   steps:
   - uses: reviewdog/action-setup@8f2ec89e6b467ca9175527d2a1641bbd0c05783b # v1.0.3
     with:
-      reviewdog_version: latest
+      reviewdog_version: input.reviewdog_version
 
   - name: EOF newline
     shell: bash
@@ -36,6 +41,8 @@ runs:
       #  - nothing in third_party
       #  - nothing in .git/
       #  - no *.ai (Adobe Illustrator) files.
+      #  - no *.svg (vector) files.
+      #  - no /testdata/ files.
       LINT_FILES=$(git ls-files |
       git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$' | cut -d: -f1 |
       git check-attr --stdin linguist-vendored | grep -Ev ': (set|true)$' | cut -d: -f1 |
