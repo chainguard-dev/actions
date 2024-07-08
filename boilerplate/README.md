@@ -18,7 +18,7 @@ Knative.
     # Language for describing the offending language. For example, "Go" or
     # "Shell".
     # Required.
-    extension: "Shell"
+    language: "Shell"
     # Boilerplate Directory in which to find boilerplate.{extension}.text files.
     # For example, "./hack/boilerplate".
     # Required.
