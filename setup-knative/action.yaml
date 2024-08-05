@@ -84,7 +84,7 @@ runs:
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
           elif [[ ${{ inputs.version }} == *".x"* ]]; then
             INPUT=$(echo ${{ inputs.version }} | sed 's/.x//g')
-            VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/git/refs/tags | jq -r '.[].ref' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -n | tail -1)
+            VERSION=$(curl --retry 3 --retry-all-errors --fail -L -s https://api.github.com/repos/knative/${REPO}/git/refs/tags | jq -r '.[].ref' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -n | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
             REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
