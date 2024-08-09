@@ -52,7 +52,7 @@ runs:
         echo "***********************************************************************************************"
         echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
 
-    - uses: chainguard-dev/digestabot@7dc10a1f7fb063b5130b1116f26a5a0880c2a00f # v1.1.0
+    - uses: chainguard-dev/digestabot@02ea60d2aeb26664ace4a9cc2ecdbea96888aaa4 # v1.2.0
       id: digesta
       with:
         token: ${{ inputs.token }}
