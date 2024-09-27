@@ -11,6 +11,10 @@ inputs:
     description: |
       The goimports -local flag value
     default: ''
+  working-directory:
+    description: |
+      The working directory to run goimports
+    default: "."
 
 runs:
   using: "composite"
@@ -25,6 +29,7 @@ runs:
 
   - name: goimports
     shell: bash
+    working-directory: ${{ inputs.working-directory }}
     run: |
       # We limit the depth to 3 mostly to avoid go.mod files that get pulled into `third_party` like some hashicorp repos.
       for dir in $(find . -type d \( -path "*/third_party" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
