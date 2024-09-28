@@ -13,11 +13,23 @@ inputs:
       Knative, the components are out of sync, so to work around that you can
       specify "latest" and it will fetch the latest ones for all the components.
     required: true
-    default: 1.11.0
+    default: 1.15.0
+
+  serving-version:
+    description: |
+      The Knative serving version to use, e.g. 1.15.2
+    required: false
+    default: ''
+
+  eventing-version:
+    description: |
+      The Knative eventing version to use, e.g. 1.15.1
+    required: false
+    default: ''
 
   istio-version:
     description: |
-      The version of Istion to install, e.g. 1.17.5
+      The version of Istio to install, e.g. 1.17.5
     required: false
     default: 1.17.5
 
@@ -79,10 +91,14 @@ runs:
 
           # If latest specified, fetch that instead. Note that this can vary
           # between versions, so have to fetch for each component.
-          if [ ${{ inputs.version }} == "latest" ]; then
+          if [ "${REPO}" == "serving" -a ${{ inputs.serving-version }} != "" ]; then
+            REAL_KNATIVE_VERSION="knative-v${{ inputs.serving-version }}"
+          elif [ "${REPO}" == "eventing" -a ${{ inputs.eventing-version }} != "" ]; then
+            REAL_KNATIVE_VERSION="knative-v${{ inputs.eventing-version }}"
+          elif [ ${{ inputs.version }} == "latest" ]; then
             REAL_KNATIVE_VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/releases/latest | jq -r '.tag_name')
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
-          elif [[ ${{ inputs.version }} == *".x"* ]]; then
+          elif [[ ${{ inputs.version }} == *".x" ]]; then
             INPUT=$(echo ${{ inputs.version }} | sed 's/.x//g')
             VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/git/refs/tags | jq -r '.[].ref' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -n | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
@@ -266,5 +282,5 @@ runs:
             export IP=$(kubectl get svc -n kourier-system kourier -ojsonpath={.status.loadBalancer.ingress[0].ip})
             ;;
         esac
-        echo LB IP: ${IP}
-        echo "load-balancer-ip=${IP}" >> $GITHUB_OUTPUT
+        echo "LB IP: ${IP}"
+        echo "load-balancer-ip=${IP}" >> "$GITHUB_OUTPUT"
