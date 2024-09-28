@@ -67,6 +67,12 @@ inputs:
     required: false
     default: ""
 
+  feature-gates:
+    description: |
+      A list of comma-separated feature gates to enable
+    required: false
+    default: ""
+
 outputs:
   kind-start-time:
     description: |
@@ -189,6 +195,14 @@ runs:
             networking:
               dnsDomain: "${{ inputs.cluster-suffix }}"
         EOF
+        fi
+
+        if [ ${{ inputs.feature-gates }} != "" ]; then
+          echo "featureGates:" >> kind.yaml
+          IFS=',' read -ra feature_gates <<< "${{ inputs.feature-gates }}"
+          for feature_gate in "${feature_gates[@]}"; do
+            echo "  $feature_gate: true" >> kind.yaml
+          done
         fi
 
         echo '::group:: KinD config'

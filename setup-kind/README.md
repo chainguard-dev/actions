@@ -29,6 +29,10 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
     # For example, cluster.local.
     # Required.
     cluster-suffix: cluster.local
+    # Feature Gates is a list of comma-separated feature gates to enable.
+    # For example, InPlacePodVerticalScaling,HPAScaleToZero.
+    # Optional.
+    feature-gates: InPlacePodVerticalScaling,HPAScaleToZero
 ```
 
 ## Scenarios
