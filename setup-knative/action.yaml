@@ -91,9 +91,9 @@ runs:
 
           # If latest specified, fetch that instead. Note that this can vary
           # between versions, so have to fetch for each component.
-          if [ "${REPO}" == "serving" -a ${{ inputs.serving-version }} != "" ]; then
+          if [ "${REPO}" == "serving" -a "${{ inputs.serving-version }}" != "" ]; then
             REAL_KNATIVE_VERSION="knative-v${{ inputs.serving-version }}"
-          elif [ "${REPO}" == "eventing" -a ${{ inputs.eventing-version }} != "" ]; then
+          elif [ "${REPO}" == "eventing" -a "${{ inputs.eventing-version }}" != "" ]; then
             REAL_KNATIVE_VERSION="knative-v${{ inputs.eventing-version }}"
           elif [ ${{ inputs.version }} == "latest" ]; then
             REAL_KNATIVE_VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/releases/latest | jq -r '.tag_name')
