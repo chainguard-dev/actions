@@ -197,7 +197,7 @@ runs:
         EOF
         fi
 
-        if [ ${{ inputs.feature-gates }} != "" ]; then
+        if [ "${{ inputs.feature-gates }}" != "" ]; then
           echo "featureGates:" >> kind.yaml
           IFS=',' read -ra feature_gates <<< "${{ inputs.feature-gates }}"
           for feature_gate in "${feature_gates[@]}"; do
