@@ -76,6 +76,16 @@ inputs:
       Directory used for pipelines
     default: ''
 
+  git-commit:
+    description: |
+      Commit hash of the git repository containing the build config file
+    default: ''
+
+  git-repo-url:
+    description: |
+      URL of the git repository containing the build config file
+    default: ''
+
 runs:
   using: 'composite'
 
@@ -104,3 +114,5 @@ runs:
         workdir: ${{ inputs.workdir }}
         cache-dir: ${{ inputs.cache-dir }}
         pipeline-dir: ${{ inputs.pipeline-dir }}
+        git-commit: ${{ inputs.git-commit }}
+        git-repo-url: ${{ inputs.git-repo-url }}
