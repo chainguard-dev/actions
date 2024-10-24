@@ -1,87 +1,106 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: 'Build image with apko'
+name: 'Build and Publish OCI Image with apko'
 description: |
-  This action build an OCI image with apko, given a config file
-  and tag to use.
+  This action builds and publishes an OCI image using 
+  apko, based on a provided configuration file and tag.
 
 inputs:
   config:
     description: |
-      The config file to use for building the image.
-    default: .apko.yaml
+      Path to the apko configuration file (usually named `.apko.yaml`).
+      This file defines how apko should build your image. 
+    default: '.apko.yaml' 
+    required: false   #Set 'required: false' for clarity, although the default value already suggests it's optional.
 
-  tag:
-    description: |
-      The tag to use for publishing the image.
-    required: true
+tag:
+  description: |
+    The image tag to use for publishing. 
+    For example: my-image:latest
+  required: true
 
-  repository_owner:
-    description: |
-      The repository owner's GitHub username.
-    default: ${{ github.repository_owner }}
+repository_owner:
+  description: |
+    The GitHub username of the repository owner. 
+    This defaults to the built-in `${{ github.repository_owner }}` context.
+  default: ${{ github.repository_owner }} 
 
-  token:
-    description: |
-      The repository owner's GitHub token.
+token:
+  description: |
+    The Personal Access Token (PAT) of the repository owner.
+    This token is required for apko to publish the image.
     default: ${{ github.token }}
 
-  image_refs:
-    description: |
-      The value to pass to --image-refs.
-    default: /tmp/apko.images
+image_refs:
+  description: |
+    Directory where apko will store image references during the build.
+    You generally won't need to modify this.
+  default: /tmp/apko.images     # This sets a temporary directory for image references.
 
-  keyring-append:
-    description: |
-      The value to pass to --keyring-append.
-    default: ''
+keyring-append:
+  description: |
+    Path to a GPG keyring file to append for signing the image.
+    This allows you to include additional keys for verification.  
+  default: ''  # Leave blank if you don't need to append a keyring.
 
-  archs:
-    description: |
-      The architectures to build for.
-    default: ''
+archs:
+  description: |
+    Target architectures to build the image for (e.g., "amd64", "arm64"). 
+    Separate multiple architectures with commas.  
+  default: '' # If left blank, apko will use its default architecture detection.
 
-  source-date-epoch:
-    description: |
-      The UNIX timestamp to use as the source date when building an image.
-      This is set as the SOURCE_DATE_EPOCH environment variable.
-    default: ''
+source-date-epoch:
+  description: |
+    Specify a UNIX timestamp to be used as the source date when building the image. 
+    This sets the `SOURCE_DATE_EPOCH` environment variable within the apko build environment.
 
-  use-docker-mediatypes:
-    description: |
-      Use Docker mediatypes for building the image.
-    type: boolean
-    required: false
+    # Useful for reproducible builds, ensuring consistent timestamps within your image. 
+    # Leave blank to default to the current system time.
+  default: ''
 
+use-docker-mediatypes:
+  description: |
+    Enable this option to instruct apko to use Docker media types when constructing the image. 
+  type: boolean  # This may be required for compatibility with certain Docker tools or workflows. 
+  required: false
+  default: false # Explicitly set the default value for clarity. 
+
+# This digest can be used to verify the integrity of your image or to reference it precisely.
 outputs:
   digest:
     description: |
-      The digest of the published container image.
-
+      The SHA256 digest (unique content identifier) of the published container image. 
 
 runs:
   using: docker
-  image: "docker://ghcr.io/wolfi-dev/apko:latest"
+  image: "docker://ghcr.io/wolfi-dev/apko:latest"  # Use the latest apko image for building.
   env:
-    # Set up go-containerregistry's GitHub keychain.
+    # Configure go-containerregistry to use your GitHub credentials for image publishing.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
     GITHUB_TOKEN: ${{ inputs.token }}
   entrypoint: /bin/sh
   args:
     - '-c'
     - |
-      set -o errexit
+      set -o errexit  # Ensure the script exits immediately if any command fails.
 
+      # !! Deprecation Warning !!
       echo "***************************************************************************************"
-      echo "This action will be deprecated, please use distroless/actions/apko-publish@main instead"
+      echo "This action is being deprecated. Please migrate to distroless/actions/apko-publish@main for future use." 
       echo "***************************************************************************************"
 
+# Set environment variables based on provided inputs.
       [ -n "${{ inputs.source-date-epoch }}" ] && export SOURCE_DATE_EPOCH='${{ inputs.source-date-epoch }}'
       [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
       [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
+
+      # Publish the container image using apko.
       /usr/bin/apko publish \
         ${{ inputs.use-docker-mediatypes && '--use-docker-mediatypes' }} \
         --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
+
+      # Display the exit code of the script.
       echo EXIT CODE: $?
+      # Output the image digest to the GitHub output.
       echo "digest=$(cat "${{ inputs.image_refs }}")" >> $GITHUB_OUTPUT
