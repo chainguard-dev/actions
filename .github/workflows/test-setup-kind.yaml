@@ -22,12 +22,12 @@ jobs:
       fail-fast: false # Keep running if one leg fails.
       matrix:
         k8s-version:
-        - 1.25.x
         - 1.26.x
         - 1.27.x
         - 1.28.x
         - 1.29.x
         - 1.30.x
+        - 1.31.x
 
         # See https://github.com/chainguard-dev/actions/pull/175
         # We're testing whether setting a custom cluster domain works
@@ -36,18 +36,18 @@ jobs:
         - potato.local
 
         include: 
-        - k8s-version: 1.25.x
-          knative-version: 1.11.0          
         - k8s-version: 1.26.x
           knative-version: 1.12.0
         - k8s-version: 1.27.x
           knative-version: 1.13.0
         - k8s-version: 1.28.x
-          knative-version: 1.13.0
+          knative-version: 1.14.0
         - k8s-version: 1.29.x
-          knative-version: 1.13.0
+          knative-version: 1.14.0
         - k8s-version: 1.30.x
-          knative-version: 1.13.0
+          knative-version: 1.15.0
+        - k8s-version: 1.31.x
+          knative-version: 1.16.0
 
     steps:
     - uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
