@@ -87,7 +87,7 @@ runs:
 
       # !! Deprecation Warning !!
       echo "***************************************************************************************"
-      echo "This action is being deprecated. Please migrate to distroless/actions/apko-publish@main for future use." 
+      echo "This action is being deprecated. Please migrate to chainguard-images/actions/apko-publish@main for future use." 
       echo "***************************************************************************************"
 
 # Set environment variables based on provided inputs.
