@@ -64,7 +64,16 @@ runs:
           rm -rf "${TMP_CLONE_DIR}"
           ;;
         latest-release)
-          tag=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/chainguard-dev/melange/releases/latest | jq -r '.tag_name')
+          # fetch the latest 20 releases, we need to filter by the ones that have assets.
+          releases=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/chainguard-dev/melange/releases?per_page=20)
+
+          # search for the first release that has assets.
+          tag=$(echo $releases | jq -r 'first(.[] | select(.assets | length > 0) | .tag_name)')
+          if [[ -z ${tag} ]]; then
+            # this should, ideally, never happen.
+            echo "No melange release with assets found"
+            exit 1
+          fi
           ;;
         *)
           tag="${{ inputs.version }}"
