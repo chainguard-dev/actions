@@ -14,57 +14,57 @@ inputs:
     default: '.apko.yaml' 
     required: false   #Set 'required: false' for clarity, although the default value already suggests it's optional.
 
-tag:
-  description: |
-    The image tag to use for publishing. 
-    For example: my-image:latest
-  required: true
+  tag:
+    description: |
+      The image tag to use for publishing. 
+      For example: my-image:latest
+    required: true
 
-repository_owner:
-  description: |
-    The GitHub username of the repository owner. 
-    This defaults to the built-in `${{ github.repository_owner }}` context.
-  default: ${{ github.repository_owner }} 
+  repository_owner:
+    description: |
+      The GitHub username of the repository owner. 
+      This defaults to the built-in `${{ github.repository_owner }}` context.
+    default: ${{ github.repository_owner }} 
 
-token:
-  description: |
-    The Personal Access Token (PAT) of the repository owner.
-    This token is required for apko to publish the image.
-    default: ${{ github.token }}
+  token:
+    description: |
+      The Personal Access Token (PAT) of the repository owner.
+      This token is required for apko to publish the image.
+      default: ${{ github.token }}
 
-image_refs:
-  description: |
-    Directory where apko will store image references during the build.
-    You generally won't need to modify this.
-  default: /tmp/apko.images     # This sets a temporary directory for image references.
+  image_refs:
+    description: |
+      Directory where apko will store image references during the build.
+      You generally won't need to modify this.
+    default: /tmp/apko.images     # This sets a temporary directory for image references.
 
-keyring-append:
-  description: |
-    Path to a GPG keyring file to append for signing the image.
-    This allows you to include additional keys for verification.  
-  default: ''  # Leave blank if you don't need to append a keyring.
+  keyring-append:
+    description: |
+      Path to a GPG keyring file to append for signing the image.
+      This allows you to include additional keys for verification.  
+    default: ''  # Leave blank if you don't need to append a keyring.
 
-archs:
-  description: |
-    Target architectures to build the image for (e.g., "amd64", "arm64"). 
-    Separate multiple architectures with commas.  
-  default: '' # If left blank, apko will use its default architecture detection.
+  archs:
+    description: |
+      Target architectures to build the image for (e.g., "amd64", "arm64"). 
+      Separate multiple architectures with commas.  
+    default: '' # If left blank, apko will use its default architecture detection.
 
-source-date-epoch:
-  description: |
-    Specify a UNIX timestamp to be used as the source date when building the image. 
-    This sets the `SOURCE_DATE_EPOCH` environment variable within the apko build environment.
+  source-date-epoch:
+    description: |
+      Specify a UNIX timestamp to be used as the source date when building the image. 
+      This sets the `SOURCE_DATE_EPOCH` environment variable within the apko build environment.
 
-    # Useful for reproducible builds, ensuring consistent timestamps within your image. 
-    # Leave blank to default to the current system time.
-  default: ''
+      # Useful for reproducible builds, ensuring consistent timestamps within your image. 
+      # Leave blank to default to the current system time.
+    default: ''
 
-use-docker-mediatypes:
-  description: |
-    Enable this option to instruct apko to use Docker media types when constructing the image. 
-  type: boolean  # This may be required for compatibility with certain Docker tools or workflows. 
-  required: false
-  default: false # Explicitly set the default value for clarity. 
+  use-docker-mediatypes:
+    description: |
+      Enable this option to instruct apko to use Docker media types when constructing the image. 
+    type: boolean  # This may be required for compatibility with certain Docker tools or workflows. 
+    required: false
+    default: false # Explicitly set the default value for clarity. 
 
 # This digest can be used to verify the integrity of your image or to reference it precisely.
 outputs:
