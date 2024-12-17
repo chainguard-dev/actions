@@ -86,6 +86,12 @@ inputs:
       URL of the git repository containing the build config file
     default: ''
 
+  version:
+    description: |
+      Version of melange to install (tip, latest-release, v0.5.5, etc.)
+    required: true
+    default: 'latest-release'
+
 runs:
   using: 'composite'
 
@@ -95,6 +101,8 @@ runs:
       run: |
         echo "Warning: the --template flag has been removed from melange and will be ignored."
     - uses: chainguard-dev/actions/setup-melange@main
+      with:
+        version: ${{ inputs.version }}
     - uses: chainguard-dev/actions/melange-keygen@main
       if: ${{ inputs.sign-with-temporary-key }}
       with:
