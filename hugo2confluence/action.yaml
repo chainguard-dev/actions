@@ -1,0 +1,52 @@
+# Go-based action definition inspired by https://github.com/opencontainers/distribution-spec/blob/main/action.yml
+name: hugo2confluence
+description: Convert and publish a Hugo site to Confluence
+runs:
+  using: composite
+  steps:
+    - name: Check required hugo2confluence env vars
+      shell: bash
+      id: check-hugo2confluence
+      run: |
+        set -x
+        required_env_vars=(
+          "CONFLUENCE_USER"
+          "CONFLUENCE_TOKEN"
+          "CONFLUENCE_URL"
+          "CONFLUENCE_SPACE"
+          "CONFLUENCE_ANCESTOR"
+          "CONFLUENCE_ROOT"
+        )
+        for v in ${required_env_vars[@]}; do
+          if [[ "${!v}" == "" ]]; then
+            echo "Error: the following environment variable is required: ${v}"
+            exit 1
+          fi
+        done
+
+    - name: Build hugo2confluence binary
+      shell: bash
+      id: build-conformance
+      run: |
+        set -x
+
+        # Enter the directory containing the checkout of this action
+        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)/hugo2confluence"
+
+        # Build the binary
+        go build -o bin/hugo2confluence .
+
+        # Add bin to the PATH so we can just run "hugo2confluence"
+        echo "${PWD}/bin" >> $GITHUB_PATH
+
+    - name: Run hugo2confluence
+      shell: bash
+      id: run-hugo2confluence
+      run: |
+        set -x
+        set +e
+        hugo2confluence
+        hugo2confluence_rc="$?"
+        set -e
+        echo "hugo2confluence return code: ${hugo2confluence_rc}"
+        exit ${hugo2confluence_rc}
