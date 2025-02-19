@@ -31,7 +31,7 @@ runs:
         set -x
 
         # Enter the directory containing the checkout of this action
-        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)/hugo2confluence"
+        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)"
 
         # Build the binary
         go build -o bin/hugo2confluence .
