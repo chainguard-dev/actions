@@ -9,13 +9,21 @@ on:
       - './melange-keygen/**'
       - '.github/workflows/test-setup-melange.yaml'
 
+permissions: {}
+
 jobs:
   test-setup-melange:
     runs-on: ubuntu-latest
-    permissions: {}
+
+    permissions:
+      contents: read
+
     strategy:
       matrix:
-        version: ['tip', 'latest-release', 'v0.5.5']
+        version:
+          - 'tip'
+          - 'latest-release'
+
       fail-fast: false
     steps:
     - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
@@ -35,7 +43,10 @@ jobs:
   # This should do the same thing.
   test-melange-build:
     runs-on: ubuntu-latest
-    permissions: {}
+
+    permissions:
+      contents: read
+
     steps:
       - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
         with:
