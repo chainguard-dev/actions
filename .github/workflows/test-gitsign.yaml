@@ -2,6 +2,9 @@ name: test-gitsign
 
 on:
   pull_request:
+    paths:
+      - './setup-gitsign/**'
+      - '.github/workflows/test-gitsign.yaml'
 
 jobs:
   test_gitsign_action:
@@ -21,23 +24,13 @@ jobs:
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    - id: changed-gitsign
-      uses: tj-actions/changed-files@d6e91a2266cdb9d62096cebf1e8546899c6aa18f # v45.0.6
-      with:
-        files: |
-          ./setup-gitsign/**
-          .github/workflows/test-gitsign.yaml
-
     - name: Install Gitsign
-      if: steps.changed-gitsign.outputs.any_changed == 'true'
       uses: ./setup-gitsign
 
     - name: Check install!
-      if: steps.changed-gitsign.outputs.any_changed == 'true'
       run: gitsign --version
 
     - name: Check root directory
-      if: steps.changed-gitsign.outputs.any_changed == 'true'
       run: |
         if [[ $(git diff --stat) != '' ]]; then
           echo 'should be clean'

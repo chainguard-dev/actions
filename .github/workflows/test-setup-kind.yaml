@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - './setup-kind/**'
+      - './setup-knative/**'
+      - '.github/workflows/test-setup-kind.yaml'
 
 defaults:
   run:
@@ -33,7 +37,7 @@ jobs:
         - cluster.local # default value
         - potato.local
 
-        include: 
+        include:
         - k8s-version: 1.29.x
           knative-version: 1.14.0
         - k8s-version: 1.30.x
@@ -52,23 +56,13 @@ jobs:
 
     - uses: ./whereami # Log where I am.
 
-    - id: changed-kind
-      uses: tj-actions/changed-files@d6e91a2266cdb9d62096cebf1e8546899c6aa18f # v45.0.6
-      with:
-        files: |
-          ./setup-kind/**
-          ./setup-knative/**
-          .github/workflows/test-setup-kind.yaml
-
     - name: setup-kind
-      if: steps.changed-kind.outputs.any_changed == 'true'
       uses: ./setup-kind
       with:
         k8s-version: ${{ matrix.k8s-version }}
         cluster-suffix: ${{ matrix.cluster-suffix }}
 
     - name: check domain
-      if: steps.changed-kind.outputs.any_changed == 'true'
       run: |
         expected_value="${{ matrix.cluster-suffix }}"
         dnsDomain=$(docker exec kind-control-plane cat /kind/kubeadm.conf | { grep dnsDomain || true; } | awk '{ print $2 }')
@@ -90,7 +84,6 @@ jobs:
         fi
 
     - name: Test spinning up Knative
-      if: ${{ steps.changed-kind.outputs.any_changed == 'true' }}
       uses: ./setup-knative
       with:
         version: ${{ matrix.knative-version || 'latest' }}

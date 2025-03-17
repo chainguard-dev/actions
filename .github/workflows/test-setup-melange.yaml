@@ -2,14 +2,28 @@ name: test-setup-melange
 
 on:
   pull_request:
+    paths:
+      - './setup-melange/**'
+      - './melange-build/**'
+      - './melange-build-pkg/**'
+      - './melange-keygen/**'
+      - '.github/workflows/test-setup-melange.yaml'
+
+permissions: {}
 
 jobs:
   test-setup-melange:
     runs-on: ubuntu-latest
-    permissions: {}
+
+    permissions:
+      contents: read
+
     strategy:
       matrix:
-        version: ['tip', 'latest-release', 'v0.5.5']
+        version:
+          - 'tip'
+          - 'latest-release'
+
       fail-fast: false
     steps:
     - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
@@ -18,30 +32,21 @@ jobs:
 
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    - id: changed-melange
-      uses: tj-actions/changed-files@d6e91a2266cdb9d62096cebf1e8546899c6aa18f # v45.0.6
-      with:
-        files: |
-          ./setup-melange/**
-          ./melange-build/**
-          ./melange-build-pkg/**
-          ./melange-keygen/**
-          .github/workflows/test-setup-melange.yaml
-
     - uses: ./setup-melange
-      if: steps.changed-melange.outputs.any_changed == 'true'
       with:
         version: ${{matrix.version}}
 
-    - if: steps.changed-melange.outputs.any_changed == 'true'
-      run: |
-        melange build setup-melange/example/melange.yaml --arch=x86_64
+    - run: |
+        melange build setup-melange/example/melange.yaml --arch=x86_64 --runner docker
         ls -R packages/
 
   # This should do the same thing.
   test-melange-build:
     runs-on: ubuntu-latest
-    permissions: {}
+
+    permissions:
+      contents: read
+
     steps:
       - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
         with:
@@ -49,15 +54,7 @@ jobs:
 
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - id: changed-melange
-        uses: tj-actions/changed-files@d6e91a2266cdb9d62096cebf1e8546899c6aa18f # v45.0.6
-        with:
-          files: |
-            ./setup-melange/**
-            .github/workflows/test-setup-melange.yaml
-
       - uses: ./melange-build
-        if: steps.changed-melange.outputs.any_changed == 'true'
         with:
           config: setup-melange/example/melange.yaml
           archs: x86_64
