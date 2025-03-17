@@ -37,7 +37,7 @@ jobs:
         version: ${{matrix.version}}
 
     - run: |
-        melange build setup-melange/example/melange.yaml --arch=x86_64
+        melange build setup-melange/example/melange.yaml --arch=x86_64 --runner docker
         ls -R packages/
 
   # This should do the same thing.
