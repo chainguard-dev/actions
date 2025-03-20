@@ -76,6 +76,6 @@ runs:
             -name="${{ inputs.language }} headers" \
             -reporter="github-pr-check" \
             -filter-mode="diff_context" \
-            -fail-on-error="true" \
+            -fail-level="error" \
             -level="error"
       echo '::endgroup::'
