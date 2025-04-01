@@ -25,3 +25,6 @@ go.work.sum
 .env
 
 bin/
+
+# Avoid accidentally checking in Hugo content
+content/

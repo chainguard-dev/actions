@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/sethvargo/go-envconfig"
 	confluence "github.com/virtomize/confluence-go-api"
@@ -24,6 +26,7 @@ var env = envconfig.MustProcess(context.Background(), &struct {
 	ConfluenceSpace    string `env:"CONFLUENCE_SPACE,required"`
 	ConfluenceAncestor string `env:"CONFLUENCE_ANCESTOR,required"`
 	ConfluenceRoot     string `env:"CONFLUENCE_ROOT,required"`
+	ConfluenceLabel    string `env:"CONFLUENCE_LABEL,required"`
 	ConfluenceOrig     string `env:"CONFLUENCE_ORIG"`
 	ConfluenceEdit     string `env:"CONFLUENCE_EDIT"`
 }{})
@@ -47,7 +50,14 @@ func main() {
 
 	log.Printf("Starting site sync to Confluence (url: %s space:%s ancestor:%s)",
 		env.ConfluenceURL, env.ConfluenceSpace, env.ConfluenceAncestor)
-	if err := syncPage(api, rootPage); err != nil {
+	ids, err := syncPage(api, rootPage)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Cleaning up old Confluence pages (url: %s space:%s ancestor:%s)",
+		env.ConfluenceURL, env.ConfluenceSpace, env.ConfluenceAncestor)
+	if err := cleanupPages(api, ids); err != nil {
 		log.Fatal(err)
 	}
 
@@ -106,13 +116,13 @@ func getPages(rootDir string) ([]page, error) {
 	return pages, nil
 }
 
-func syncPage(api *confluence.API, p page) error {
+func syncPage(api *confluence.API, p page) ([]string, error) {
 	log.Printf("Syncing %s", p.filePath)
 
 	// Generate the content
 	content, err := contentFromFile(p.parentID, p.filePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check if the page already exists to determine correct version
@@ -135,7 +145,7 @@ func syncPage(api *confluence.API, p page) error {
 			Title:    t,
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(resp.Results) == 0 {
 			break
@@ -172,21 +182,86 @@ func syncPage(api *confluence.API, p page) error {
 	}
 
 	if writeErr != nil {
-		return writeErr
+		return nil, writeErr
 	}
 
 	log.Printf("Wrote page \"%s\" (parent:%s id:%s version:%d url:%s)",
 		written.Title, p.parentID, written.ID, written.Version.Number, written.Links.WebUI)
 
+	// Need to apply the label for cleanup purposes later
+	log.Printf("Applying label \"%s\" to \"%s\" (parent:%s id:%s)",
+		env.ConfluenceLabel, written.Title, p.parentID, written.ID)
+	labels := []confluence.Label{{Name: env.ConfluenceLabel}}
+	if _, err := api.AddLabels(written.ID, &labels); err != nil {
+
+		// Wait 10 seconds and retry (sometimes this endpoint returns a 500?)
+		log.Printf("Got error applying label, retrying in 10 seconds: %s", err)
+		time.Sleep(time.Second * 10)
+		if _, err := api.AddLabels(written.ID, &labels); err != nil {
+			return nil, err
+		}
+	}
+
+	// List of all IDs written in this function call, including recursive ones
+	ids := []string{written.ID}
+
 	// Now recursively write the children
 	// TODO: sync children pages asynchronously?
 	for _, child := range p.children {
 		child.parentID = written.ID
-		if err := syncPage(api, child); err != nil {
-			return err
+		childIds, err := syncPage(api, child)
+		if err != nil {
+			return nil, err
 		}
+		ids = append(childIds, ids...)
 	}
 
+	return ids, nil
+}
+
+func cleanupPages(api *confluence.API, exceptIds []string) error {
+	query := confluence.SearchQuery{
+		CQL:    fmt.Sprintf(`space=%q and label=%q`, env.ConfluenceSpace, env.ConfluenceLabel),
+		Expand: []string{"content.history,content.ancestors"},
+		Limit:  100,
+	}
+	next := ""
+	for {
+		resp, err := api.SearchWithNext(query, next)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if resp == nil {
+			break
+		}
+		for _, result := range resp.Results {
+			if result.Content.History == nil || result.Content.Ancestors == nil {
+				continue
+			}
+
+			// If the ID is one of the ones we have written as part of this run, ignore it
+			id := result.Content.ID
+			if slices.Contains(exceptIds, id) {
+				continue
+			}
+
+			// Now only delete if this page is in the lineage of the root ancestor
+			for _, ancestor := range result.Content.Ancestors {
+				if ancestor.ID == env.ConfluenceAncestor {
+					log.Printf("Cleaning up page %q (id: %s)", result.Content.Title, id)
+					/*if _, err := api.DelContent(id); err != nil {
+						return fmt.Errorf("unable to delete item %s: %v", id, err)
+					}*/
+					break
+				}
+			}
+		}
+		next = resp.Links.Next
+		if next == "" {
+			break
+		}
+		log.Printf("Using next page: %s", next)
+	}
 	return nil
 }
 

@@ -16,6 +16,7 @@ runs:
           "CONFLUENCE_SPACE"
           "CONFLUENCE_ANCESTOR"
           "CONFLUENCE_ROOT"
+          "CONFLUENCE_LABEL"
         )
         for v in ${required_env_vars[@]}; do
           if [[ "${!v}" == "" ]]; then

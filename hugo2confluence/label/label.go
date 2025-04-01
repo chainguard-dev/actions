@@ -24,12 +24,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	next := ""
+	query := confluence.SearchQuery{
+		CQL:    fmt.Sprintf(`space=%q and label in (%q)`, env.ConfluenceSpace, env.ConfluenceLabel),
+		Expand: []string{"content.history,content.ancestors"},
+		Limit:  100,
+	}
+
 	for {
-		resp, err := api.Search(confluence.SearchQuery{
-			CQL:    fmt.Sprintf(`space=%q and label=%q`, env.ConfluenceSpace, env.ConfluenceLabel),
-			Expand: []string{"content.history,content.ancestors"},
-			Limit:  100,
-		})
+		resp, err := api.SearchWithNext(query, next)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -45,17 +48,21 @@ func main() {
 			for _, ancestor := range result.Content.Ancestors {
 				if ancestor.ID == env.ConfluenceAncestor {
 					id := result.Content.ID
-					if _, err := api.DelContent(id); err != nil {
-						log.Printf("unable to delete item %s: %v", id, err)
-					} else {
-						log.Printf("deleted item %s", id)
+					// Need to apply the label for cleanup purposes later
+					log.Printf("Applying label \"%s\" to \"%s\" (id:%s)",
+						env.ConfluenceLabel, result.Content.Title, id)
+					labels := []confluence.Label{{Name: env.ConfluenceLabel}}
+					if _, err := api.AddLabels(id, &labels); err != nil {
+						log.Printf("unable to label item %s: %v", id, err)
 					}
 					break
 				}
 			}
 		}
-		if resp.Size >= resp.TotalSize {
+		next = resp.Links.Next
+		if next == "" {
 			break
 		}
+		log.Printf("Using next page: %s", next)
 	}
 }
