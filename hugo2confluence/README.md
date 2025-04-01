@@ -64,28 +64,35 @@ jobs:
           CONFLUENCE_SPACE: "Myspace"
           CONFLUENCE_ANCESTOR: "12345678"
           CONFLUENCE_ROOT: "content/"
+          CONFLUENCE_LABEL: "my-unique-label"
           CONFLUENCE_ORIG: "https://mywiki.example.com/"
           CONFLUENCE_EDIT: "https://github.com/myorg/mywiki/edit/main/content/"
 ```
 
-## Cleanup
+## Ultities
+
+This section describes some utility programs in this folder
+that may be needed in one-off situations.
+
+Note: These may possibly lead to `429 Too Many Requests` errors depending on size of the Hugo site. Wait a bit and try again.
+
+### Cleanup Utility
 
 If you make a mistake running this tool, you can delete all the pages
 created by it using the [cleanup](./cleanup/) tool:
-
-```sh
-export CONFLUENCE_DISPLAY="My Fullname"
-export CONFLUENCE_USER="myemail@example.com"
-export CONFLUENCE_TOKEN="..."
-```
 
 ```
 go run cleanup/cleanup.go
 ```
 
-This may possibly lead to `429 Too Many Requests` errors depending on size of the Hugo site. Wait a bit and try again.
+### Label Utility
 
-Note: `CONFLUENCE_DISPLAY` is the user's display name (we are strangely unable to use `CONFLUENCE_USER` for search).
+If you need to retroactively apply a label to all the pages,
+you can use the [label](./label/) tool:
+
+```
+go run label/label.go
+```
 
 ## TODO
 
