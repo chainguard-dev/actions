@@ -249,9 +249,9 @@ func cleanupPages(api *confluence.API, exceptIds []string) error {
 			for _, ancestor := range result.Content.Ancestors {
 				if ancestor.ID == env.ConfluenceAncestor {
 					log.Printf("Cleaning up page %q (id: %s)", result.Content.Title, id)
-					/*if _, err := api.DelContent(id); err != nil {
+					if _, err := api.DelContent(id); err != nil {
 						return fmt.Errorf("unable to delete item %s: %v", id, err)
-					}*/
+					}
 					break
 				}
 			}
