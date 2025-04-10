@@ -1,0 +1,87 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: "GitHub Actions SCA with zizmor"
+description: |
+  This action scans a repository's Workflow footprint with zizmor.
+
+inputs:
+  octo_sts_token:
+    description: "octo-sts token for online scans; if empty, scans will be run as 'offline'"
+    required: false
+    default: ""
+  persona:
+    description: "Persona for zizmor scans (auditor, regular, pedantic)"
+    required: false
+    default: "regular"
+  scan_category:
+    description: "Category to store scan results under"
+    required: false
+    default: "zizmor"
+  upload_results:
+    description: "Whether to upload .sarif scan results; if false, output format will be 'github'"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@fcf085fcb4b4b8f63f96906cd713eb52181b5ea4 # stable
+      with:
+        toolchain: stable
+
+    - name: Install zizmor
+      shell: bash
+      run: |
+        cargo install --locked zizmor
+
+    - name: Run zizmor
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.octo_sts_token }}
+        PERSONA: ${{ inputs.persona }}
+        UPLOAD_RESULTS: ${{ inputs.upload_results }}
+      run: |
+        case "${PERSONA}" in
+            auditor|regular|pedantic)
+                echo "Using persona: ${PERSONA}"
+                ;;
+            *)
+                echo "Not a valid persona; using default of 'regular'"
+                PERSONA="regular"
+                ;;
+        esac
+
+        if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+            FORMAT="sarif"
+        else
+            FORMAT="github"
+        fi
+
+        if [[ -z "${GH_TOKEN}" ]]; then
+            if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+                echo "Running offline scan and saving SARIF results"
+                zizmor --offline --persona=${PERSONA} --format=${FORMAT} . > results.sarif
+            else
+                echo "Running offline scan and using GitHub annotations"
+                zizmor --offline --persona=${PERSONA} --format=${FORMAT} .
+            fi
+        else
+            if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+                echo "Running online scan and saving SARIF results"
+                zizmor --persona=${PERSONA} --format=${FORMAT} . > results.sarif
+            else
+                echo "Running online scan and using GitHub annotations"
+                zizmor --persona=${PERSONA} --format=${FORMAT} .
+            fi
+        fi
+
+    - name: Upload Results
+      if: inputs.upload_results == 'true'
+      uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3.28.15
+      env:
+        SCAN_CATEGORY: ${{ inputs.scan_category }}
+      with:
+        sarif_file: results.sarif
+        category: "${SCAN_CATEGORY}"

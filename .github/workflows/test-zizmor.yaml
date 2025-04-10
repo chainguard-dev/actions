@@ -1,0 +1,26 @@
+name: test-zizmor
+
+on:
+  pull_request:
+    paths:
+      - "zizmor/**"
+      - ".github/workflows/test-zizmor.yaml"
+
+permissions: {}
+
+jobs:
+  test_zizmor_action:
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    name: Test Zizmor
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Zizmor in Offline mode
+        uses: ./zizmor
+        with:
+          persona: auditor
