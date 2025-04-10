@@ -3,7 +3,7 @@ name: test-gitsign
 on:
   pull_request:
     paths:
-      - './setup-gitsign/**'
+      - 'setup-gitsign/**'
       - '.github/workflows/test-gitsign.yaml'
 
 jobs:
