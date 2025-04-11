@@ -21,9 +21,9 @@ inputs:
 
   kind-version:
     description: |
-      The exact version of KinD to use in the form: 0.24.0
+      The exact version of KinD to use in the form: 0.27.0
     required: true
-    default: 0.26.0
+    default: 0.27.0
 
   kind-worker-count:
     description: |
@@ -107,19 +107,19 @@ runs:
         K8SVERSION=${{ inputs.k8s-version }}
         case ${K8SVERSION//v} in
           1.29.x)
-            echo "KIND_IMAGE=kindest/node:v1.29.12@sha256:62c0672ba99a4afd7396512848d6fc382906b8f33349ae68fb1dbfe549f70dec" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.29.14@sha256:8703bd94ee24e51b778d5556ae310c6c0fa67d761fae6379c8e0bb480e6fea29" >> $GITHUB_ENV
             ;;
 
           1.30.x)
-            echo "KIND_IMAGE=kindest/node:v1.30.8@sha256:17cd608b3971338d9180b00776cb766c50d0a0b6b904ab4ff52fd3fc5c6369bf" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.30.10@sha256:4de75d0e82481ea846c0ed1de86328d821c1e6a6a91ac37bf804e5313670e507" >> $GITHUB_ENV
             ;;
 
           1.31.x)
-            echo "KIND_IMAGE=kindest/node:v1.31.4@sha256:2cb39f7295fe7eafee0842b1052a599a4fb0f8bcf3f83d96c7f4864c357c6c30" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.31.6@sha256:28b7cbb993dfe093c76641a0c95807637213c9109b761f1d422c2400e22b8e87" >> $GITHUB_ENV
             ;;
 
           1.32.x)
-            echo "KIND_IMAGE=kindest/node:v1.32.0@sha256:c48c62eac5da28cdadcf560d1d8616cfa6783b58f0d94cf63ad1bf49600cb027" >> $GITHUB_ENV
+            echo "KIND_IMAGE=kindest/node:v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f" >> $GITHUB_ENV
             ;;
 
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
