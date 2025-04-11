@@ -3,7 +3,7 @@ name: test-gitsign
 on:
   pull_request:
     paths:
-      - './setup-gitsign/**'
+      - 'setup-gitsign/**'
       - '.github/workflows/test-gitsign.yaml'
 
 jobs:
@@ -13,7 +13,9 @@ jobs:
       matrix:
         os:
           - macos-latest
+          - macos-13
           - ubuntu-latest
+          - ubuntu-24.04-arm
           - windows-latest
 
     runs-on: ${{ matrix.os }}
