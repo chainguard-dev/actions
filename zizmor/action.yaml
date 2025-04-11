@@ -27,6 +27,7 @@ runs:
   using: "composite"
   steps:
     - name: Run zizmor
+      id: zizmor
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.octo_sts_token }}
@@ -43,20 +44,19 @@ runs:
                 ;;
         esac
 
-        if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+        # Only set the format to SARIF if a token is present and the results are to be uploaded
+        if [[ ! -z "${GH_TOKEN}" ]] && [[ "${UPLOAD_RESULTS}" == "true" ]]; then
             FORMAT="sarif"
+            SHOULD_UPLOAD="true"
         else
             FORMAT="plain"
+            SHOULD_UPLOAD="false"
         fi
 
+        # If no token is present, run an offline scan
+        # Even if UPLOAD_RESULTS is true, the upload will fail if no token is present
         if [[ -z "${GH_TOKEN}" ]]; then
-            if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
-                echo "Running offline scan and saving SARIF results"
-                docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif"
-            else
-                echo "Running offline scan and using GitHub annotations"
-                docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace"
-            fi
+          docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace"
         else
             if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
                 echo "Running online scan and saving SARIF results"
@@ -67,8 +67,10 @@ runs:
             fi
         fi
 
+        echo "should_upload=${SHOULD_UPLOAD}" >> $GITHUB_OUTPUT
+
     - name: Upload Results
-      if: inputs.upload_results == 'true'
+      if: steps.zizmor.outputs.should_upload == 'true'
       uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3.28.15
       env:
         GH_TOKEN: ${{ inputs.octo_sts_token }}
