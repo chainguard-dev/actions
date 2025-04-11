@@ -1,8 +1,6 @@
 # zizmor
 
-This action runs a Zizmor scan from within a Wolfi container and can run both online and offline as well as upload findings to GitHub Advanced Security.
-
-This Action is not exhaustively configurable like the Zizmor CLI but offers a way to run scans consistently across Workflows.
+This Action runs a Zizmor scan from within a Wolfi container and can run both online and offline as well as upload findings to GitHub Advanced Security. It is not exhaustively configurable like the Zizmor CLI but offers a way to run scans consistently across Workflows.
 
 The Action can be configured in several ways via these inputs:
 - `octo_sts_token`*
