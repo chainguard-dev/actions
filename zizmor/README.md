@@ -32,9 +32,11 @@ jobs:
       actions: read
       contents: read
 
-    name: Test Zizmor
+    name: Zizmor Scan
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Run Zizmor (Offline)
         uses: chainguard-dev/actions/zizmor@main
@@ -59,15 +61,19 @@ jobs:
       actions: read
       contents: read
 
-    name: Test Zizmor
+    name: Zizmor Scan
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
       - name: Set up Octo-STS
         uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
         id: octo-sts
         with:
           scope: owner/repo
           identity: scan
+
       - name: Run Zizmor (Online)
         uses: chainguard-dev/actions/zizmor@main
         with:
@@ -93,9 +99,11 @@ jobs:
       contents: read
       security-events: write
 
-    name: Test Zizmor
+    name: Zizmor Scan
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Set up Octo-STS
         uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
