@@ -19,23 +19,13 @@ inputs:
     required: false
     default: "zizmor"
   upload_results:
-    description: "Whether to upload .sarif scan results; if false, output format will be 'github'"
+    description: "Whether to upload .sarif scan results; if false, output format will be 'plain'"
     required: false
     default: "false"
 
 runs:
   using: "composite"
   steps:
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@fcf085fcb4b4b8f63f96906cd713eb52181b5ea4 # stable
-      with:
-        toolchain: stable
-
-    - name: Install zizmor
-      shell: bash
-      run: |
-        cargo install --locked zizmor
-
     - name: Run zizmor
       shell: bash
       env:
@@ -56,24 +46,24 @@ runs:
         if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
             FORMAT="sarif"
         else
-            FORMAT="github"
+            FORMAT="plain"
         fi
 
         if [[ -z "${GH_TOKEN}" ]]; then
             if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
                 echo "Running offline scan and saving SARIF results"
-                zizmor --offline --persona=${PERSONA} --format=${FORMAT} . > results.sarif
+                docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif"
             else
                 echo "Running offline scan and using GitHub annotations"
-                zizmor --offline --persona=${PERSONA} --format=${FORMAT} .
+                docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace"
             fi
         else
             if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
                 echo "Running online scan and saving SARIF results"
-                zizmor --persona=${PERSONA} --format=${FORMAT} . > results.sarif
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif"
             else
                 echo "Running online scan and using GitHub annotations"
-                zizmor --persona=${PERSONA} --format=${FORMAT} .
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace"
             fi
         fi
 
@@ -81,6 +71,7 @@ runs:
       if: inputs.upload_results == 'true'
       uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3.28.15
       env:
+        GH_TOKEN: ${{ inputs.octo_sts_token }}
         SCAN_CATEGORY: ${{ inputs.scan_category }}
       with:
         sarif_file: results.sarif
