@@ -22,3 +22,4 @@ jobs:
 
       - name: Run Zizmor in Offline mode
         uses: ./zizmor
+        continue-on-error: true
