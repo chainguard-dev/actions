@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# semver.sh - Semantic Versioning parsing and manipulation tool
+#
+# Original source: https://github.com/fsaintjacques/semver-tool
+# License: Apache License 2.0 (https://github.com/fsaintjacques/semver-tool/blob/master/LICENSE)
+#
+# This file is a copy of semver-tool version v3.4.0, included for internal use
+# in Chainguard GitHub Actions.
+
 set -o errexit -o nounset -o pipefail
 
 NAT='0|[1-9][0-9]*'
