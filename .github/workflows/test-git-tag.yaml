@@ -24,7 +24,7 @@ jobs:
 
       - uses: ./git-tag
         with:
-            git_tag_prefix: "v"
-            bump_level: major
-            dry_run: true
-            forced_version: 2.0.0
+          git_tag_prefix: "v"
+          bump_level: major
+          dry_run: true
+          forced_version: 2.0.0
