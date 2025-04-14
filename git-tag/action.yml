@@ -44,10 +44,9 @@ runs:
       id: download-semver-tool
       shell: bash
       run: |
-        set -x
-        VERSION="3.4.0"
-        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/${VERSION}/src/semver"
+        set -e
 
+        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/3.4.0/src/semver"
         curl -sSL "$SEMVER_URL" -o semver
 
         echo "Verifying SHA256 checksum..."
@@ -68,7 +67,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
-        set -x
+        set -e
 
         # Values to output
         bumped_version=""
