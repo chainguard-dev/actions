@@ -56,6 +56,8 @@ runs:
         if [[ "$ACTUAL_CHECKSUM" != "$KNOWN_CHECKSUM" ]]; then
           echo "❌ Checksum does not match! Exiting."
           exit 1
+        else
+          echo "✅ Checksum matches!"
         fi
 
         chmod +x semver
