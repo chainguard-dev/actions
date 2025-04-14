@@ -39,6 +39,29 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # Semantic Versioning parsing and manipulation tool
+    - name: Download semver-tool and verify checksum
+      id: download-semver-tool
+      shell: bash
+      run: |
+        set -x
+        VERSION="3.4.0"
+        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/${VERSION}/src/semver"
+
+        curl -sSL "$SEMVER_URL" -o semver
+
+        echo "Verifying SHA256 checksum..."
+        KNOWN_CHECKSUM="1ff4a97e4d1e389f6f034f7464ac4365f1be2d900e2dc2121e24a6dc239e8991"
+        ACTUAL_CHECKSUM=$(sha256sum semver | awk '{print $1}')
+
+        if [[ "$ACTUAL_CHECKSUM" != "$KNOWN_CHECKSUM" ]]; then
+          echo "❌ Checksum does not match! Exiting."
+          exit 1
+        fi
+
+        chmod +x semver
+        sudo mv semver /usr/local/bin/
+
     - name: Bump the version or used the forced version
       id: semver-bump
       shell: bash
@@ -56,41 +79,39 @@ runs:
         git_tag_prefix="${{ inputs.git_tag_prefix }}"
         dry_run="${{ inputs.dry_run }}"
 
-        semvertool="$GITHUB_ACTION_PATH/semver.sh"
-
         # Get latest tag and bump version level
         if [[ -z "$forced_version" ]]; then
           # Get the latest Git tag
           latest_tag=$(git tag --sort=-creatordate | head -n 1)
           if [[ -n "$latest_tag" ]]; then
-            echo "Latest Git tag: $latest_tag"
+            echo "ℹ️ Latest Git tag: $latest_tag"
           else
-            echo "No tags found in the repository. Use the forced_version option to initiate a tag."
+            echo "❌ No tags found in the repository. Use the forced_version option to initiate a tag."
             exit 1
           fi
 
           # Remove the prefix if it exists
           latest_version="${latest_tag#$git_tag_prefix}"
-          echo "Version extracted: $latest_version"
+          echo "ℹ️ Version extracted: $latest_version"
 
           # Use YYYYMMDDHHMM format as build metadata.
           # This approach helps for maintaining clarity, uniqueness, and chronological order.
           if [[ "$bump_level" == "build" ]]; then
               build_metadata=$(date +%Y%m%d%H%M)
-              bumped_version=$("$semvertool" bump build "$build_metadata" "$latest_version")
+              bumped_version=$(semver bump build "$build_metadata" "$latest_version")
           else
-              bumped_version=$("$semvertool" bump "$bump_level" "$latest_version")
+              bumped_version=$(semver bump "$bump_level" "$latest_version")
           fi
         # Force a specific version instead of bumping from the latest version
         else
           bumped_version=$forced_version
-          echo "Version forced: '$forced_version'"
+          echo "ℹ️ Version forced: '$forced_version'"
         fi
 
         # check if the final bumped_version is compatible with the SemVer schema
-        version_status=$("$semvertool" validate "$bumped_version")
+        version_status=$(semver validate "$bumped_version")
         if [[ "$version_status" != "valid" ]]; then
-            echo "::error ::Version '$bumped_version' does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'"
+            echo "❌ Version '$bumped_version' does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'"
             exit 1
         fi
 
@@ -98,19 +119,19 @@ runs:
 
         # check dry-run mode
         if [[ "$dry_run" == 'true' ]]; then
-          echo "dry-run mode is enabled. No git tags pushed."
+          echo "ℹ️ dry-run mode is enabled. No git tags pushed."
         else
           # check if the Git tag already exists
           if git show-ref --tags --verify --quiet -- "refs/tags/$git_tag"; then
-            echo "A tag '$git_tag' already exists for the version '$bumped_version'."
+            echo "❌ A tag '$git_tag' already exists for the version '$bumped_version'."
             exit 1
           else
             git tag "$git_tag"
             git push origin "$git_tag"
             if [ $? -eq 0 ]; then
-              echo "Tag '$git_tag' pushed successfully."
+              echo "✅ Tag '$git_tag' pushed successfully."
             else
-              echo "Failed to push tag '$git_tag'."
+              echo "❌ Failed to push tag '$git_tag'."
               exit 1
             fi
           fi
