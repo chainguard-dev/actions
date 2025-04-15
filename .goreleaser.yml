@@ -1,0 +1,15 @@
+version: 2
+
+project_name: actions
+
+# used only to help with the GH release and changelog
+# no builds :)
+
+builds:
+  - skip: true
+
+release:
+  draft: false
+
+changelog:
+  use: github-native
