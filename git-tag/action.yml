@@ -1,0 +1,164 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'GitHub Action to Bump and Push Git Tag (SemVer)'
+description: "A GitHub Action to automatically bump and push a Git tag according to the SemVer 2.0.0 specification."
+
+inputs:
+  bump_level:
+    description: "Specifies which part of the SemVer version to increment: major, minor, bugfix, prerelease, or build."
+    required: true
+    default: 'build'
+  git_tag_prefix:
+    description: "Git tag prefix (v by default)"
+    required: true
+    default: "v"
+  forced_version:
+    description: "Forced version tag to create instead of bumping from the latest version. 
+                  Must be SemVer2 compatible and not already. Do not specify the prefix."
+    required: false
+  dry_run:
+    required: true
+    type: boolean
+    description: "If true, no changes will be pushed 
+                  (useful for testing the workflow without creating a tag)."
+    default: false
+  use-gitsign:
+    description: "Use gitsign to sign commits."
+    default: 'true'
+    required: false
+  token:
+    description: "GitHub token required to push the tag"
+    default: ${{ github.token }}
+  author:
+    description: >
+      The author name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the user who triggered the workflow run.
+    default: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
+  committer:
+    description: >
+      The committer name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the GitHub Actions bot user.
+    default: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
+
+outputs:
+    bumped_version:
+      description: "Version bumped"
+      value: ${{ steps.semver-bump.outputs.bumped_version }}
+    git_tag:
+      description: "Git tag"
+      value: ${{ steps.semver-bump.outputs.git_tag }}
+
+runs:
+  using: "composite"
+  steps:
+    # Semantic Versioning parsing and manipulation tool
+    - name: Download semver-tool and verify checksum
+      id: download-semver-tool
+      shell: bash
+      run: |
+        set -e
+
+        # hash extracted from the tag 3.4.0
+        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/837ad91179c4126e3b7ff73c35091d5ef561d9a3/src/semver"
+        curl -sSL "$SEMVER_URL" -o semver
+
+        echo "Verifying SHA256 checksum..."
+        KNOWN_CHECKSUM="1ff4a97e4d1e389f6f034f7464ac4365f1be2d900e2dc2121e24a6dc239e8991"
+        ACTUAL_CHECKSUM=$(sha256sum semver | awk '{print $1}')
+
+        if [[ "$ACTUAL_CHECKSUM" != "$KNOWN_CHECKSUM" ]]; then
+          echo "❌ Checksum does not match! Exiting."
+          exit 1
+        else
+          echo "✅ Checksum matches!"
+        fi
+
+        chmod +x semver
+        sudo mv semver /usr/local/bin/
+
+    # Configure gitsign for signed commits
+    - uses: chainguard-dev/actions/setup-gitsign@main
+      if: ${{ inputs.use-gitsign == 'true' }}
+
+    - name: Bump the version or used the forced version
+      id: semver-bump
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        set -e
+
+        # Values to output
+        bumped_version=""
+        git_tag=""
+
+        bump_level="${{ inputs.bump_level }}"
+        forced_version="${{ inputs.forced_version }}"
+        git_tag_prefix="${{ inputs.git_tag_prefix }}"
+        dry_run="${{ inputs.dry_run }}"
+
+        # Get latest tag and bump version level
+        if [[ -z "$forced_version" ]]; then
+          # Get the latest Git tag
+          latest_tag=$(git tag --sort=-creatordate | head -n 1)
+          if [[ -n "$latest_tag" ]]; then
+            echo "ℹ️ Latest Git tag: $latest_tag"
+          else
+            echo "❌ No tags found in the repository. Use the forced_version option to initiate a tag."
+            exit 1
+          fi
+
+          # Remove the prefix if it exists
+          latest_version="${latest_tag#$git_tag_prefix}"
+          echo "ℹ️ Version extracted: $latest_version"
+
+          # Use YYYYMMDDHHMM format as build metadata.
+          # This approach helps for maintaining clarity, uniqueness, and chronological order.
+          if [[ "$bump_level" == "build" ]]; then
+              build_metadata=$(date +%Y%m%d%H%M)
+              bumped_version=$(semver bump build "$build_metadata" "$latest_version")
+          else
+              bumped_version=$(semver bump "$bump_level" "$latest_version")
+          fi
+        # Force a specific version instead of bumping from the latest version
+        else
+          bumped_version=$forced_version
+          echo "ℹ️ Version forced: '$forced_version'"
+        fi
+
+        # check if the final bumped_version is compatible with the SemVer schema
+        version_status=$(semver validate "$bumped_version")
+        if [[ "$version_status" != "valid" ]]; then
+            echo "❌ Version '$bumped_version' does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'"
+            exit 1
+        fi
+
+        git_tag=${git_tag_prefix}${bumped_version}
+
+        # check dry-run mode
+        if [[ "$dry_run" == 'true' ]]; then
+          echo "ℹ️ dry-run mode is enabled. No git tags pushed."
+        else
+          # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
+          git config --global user.email "${{ inputs.committer }}"
+          git config --global user.name "${{ inputs.author }}"
+
+          # check if the Git tag already exists
+          if git show-ref --tags --verify --quiet -- "refs/tags/$git_tag"; then
+            echo "❌ A tag '$git_tag' already exists for the version '$bumped_version'."
+            exit 1
+          else
+            git tag "$git_tag"
+            git push origin "$git_tag"
+            if [ $? -eq 0 ]; then
+              echo "✅ Tag '$git_tag' pushed successfully."
+            else
+              echo "❌ Failed to push tag '$git_tag'."
+              exit 1
+            fi
+          fi
+        fi
+       
+        echo "git_tag=${git_tag}" >> "$GITHUB_OUTPUT"
+        echo "bumped_version=$bumped_version" >> "$GITHUB_OUTPUT"
