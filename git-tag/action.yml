@@ -23,13 +23,23 @@ inputs:
     description: "If true, no changes will be pushed 
                   (useful for testing the workflow without creating a tag)."
     default: false
-  github_token:
-    description: "GitHub token required to push the tag"
-    required: false
   use-gitsign:
     description: "Use gitsign to sign commits."
     default: 'true'
     required: false
+  token:
+    description: "GitHub token required to push the tag"
+    default: ${{ github.token }}
+  author:
+    description: >
+      The author name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the user who triggered the workflow run.
+    default: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
+  committer:
+    description: >
+      The committer name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the GitHub Actions bot user.
+    default: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
 
 outputs:
     bumped_version:
@@ -74,7 +84,7 @@ runs:
       id: semver-bump
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_TOKEN: ${{ inputs.token }}
       run: |
         set -e
 
@@ -129,6 +139,10 @@ runs:
         if [[ "$dry_run" == 'true' ]]; then
           echo "ℹ️ dry-run mode is enabled. No git tags pushed."
         else
+          # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
+          git config --global user.email "${{ inputs.committer }}"
+          git config --global user.name "${{ inputs.author }}"
+
           # check if the Git tag already exists
           if git show-ref --tags --verify --quiet -- "refs/tags/$git_tag"; then
             echo "❌ A tag '$git_tag' already exists for the version '$bumped_version'."

@@ -20,8 +20,10 @@ It uses [fsaintjacques/semver-tool](https://github.com/fsaintjacques/semver-tool
 | `git_tag_prefix`| Git tag prefix (e.g. `v`)                                                                   | ✅       | `v`     |
 | `forced_version`| A SemVer-compatible version to force instead of bumping                                     | ❌       |         |
 | `dry_run`       | If `true`, do not push any tags (for testing purposes)                                      | ✅       | `false` |
-| `github_token`  | GitHub token required to authenticate and push the tag                                      | ❌       |         |
-| `use-gitsign`   | Use gitsign to sign commits                                                                 | ❌       |         |
+| `token`         | GitHub token required to authenticate and push the tag                                      | ❌       |  `GITHUB_TOKEN`       |
+| `author`        | The author name and email address (format: `Display Name <email@address.com>`)              | ❌       | `$github.actor <$github.actor_id+$github.actor@users.noreply.github.com>` |
+| `committer`     | The committer name and email address (format: `Display Name <email@address.com>`)           | ❌       | github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>  |
+| `use-gitsign`   | Use gitsign to sign commits                                                                 | ❌       |   `true`      |
 
 ## 📦 Outputs
 
@@ -44,7 +46,9 @@ jobs:
           bump_level: build
           git_tag_prefix: v
           dry_run: false
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.octo-sts.outputs.token }}
+          author: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
+          committer: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
 ```
 
 ## Documentation
