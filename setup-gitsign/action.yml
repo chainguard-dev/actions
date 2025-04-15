@@ -80,7 +80,7 @@ runs:
 
           Windows-ARM64)
             gitsign_filename=gitsign_${gitsign_version}_windows_arm64.exe
-            gitsign_sha=${gitsign_darwin_arm64_sha}
+            gitsign_sha=${gitsign_windows_arm64_sha}
             gitsign_executable_name=gitsign.exe
             ;;
 
