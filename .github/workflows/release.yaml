@@ -55,10 +55,10 @@ jobs:
           git fetch --tags
           if [ -z "$(git tag --points-at HEAD)" ]; then
             echo "Nothing points at HEAD, bump a new tag"
-            echo "bump=yes" >> $GITHUB_OUTPUT
+            echo "bump=yes" >> "$GITHUB_OUTPUT"
           else
             echo "A tag already points to head, don't bump"
-            echo "bump=no" >> $GITHUB_OUTPUT
+            echo "bump=no" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
@@ -68,7 +68,7 @@ jobs:
           identity: release
 
       - name: Bump and push Git tag
-        uses: chainguard-dev/actions/git-tag@855d928df4d35ab87d1495993810ba7725a2f8bb # v1.0.0
+        uses: chainguard-dev/actions/git-tag@f309c81b34d59c103f5b86a2e55a2a647dc8b40a # v1.0.1
         if: steps.check.outputs.bump == 'yes'
         with:
           token: ${{ steps.octo-sts.outputs.token }}
