@@ -14,15 +14,14 @@ inputs:
     required: true
     default: "v"
   forced_version:
-    description: "Forced version tag to create instead of bumping from the latest version. 
+    description: "Forced version tag to create instead of bumping from the latest version.
                   Must be SemVer2 compatible and not already. Do not specify the prefix."
     required: false
   dry_run:
     required: true
-    type: boolean
-    description: "If true, no changes will be pushed 
+    description: "If true, no changes will be pushed
                   (useful for testing the workflow without creating a tag)."
-    default: false
+    default: 'false'
   use-gitsign:
     description: "Use gitsign to sign commits."
     default: 'true'
@@ -149,7 +148,7 @@ runs:
             echo "❌ A tag '$git_tag' already exists for the version '$bumped_version'."
             exit 1
           else
-            git tag "$git_tag"
+            git tag -a "$git_tag" -m "$git_tag"
             git push origin "$git_tag"
             if [ $? -eq 0 ]; then
               echo "✅ Tag '$git_tag' pushed successfully."
@@ -159,6 +158,6 @@ runs:
             fi
           fi
         fi
-       
+
         echo "git_tag=${git_tag}" >> "$GITHUB_OUTPUT"
         echo "bumped_version=$bumped_version" >> "$GITHUB_OUTPUT"
