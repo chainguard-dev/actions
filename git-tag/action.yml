@@ -59,7 +59,8 @@ runs:
       run: |
         set -e
 
-        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/3.4.0/src/semver"
+        # hash extracted from the tag 3.4.0
+        SEMVER_URL="https://raw.githubusercontent.com/fsaintjacques/semver-tool/837ad91179c4126e3b7ff73c35091d5ef561d9a3/src/semver"
         curl -sSL "$SEMVER_URL" -o semver
 
         echo "Verifying SHA256 checksum..."
