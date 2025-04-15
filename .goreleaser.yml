@@ -1,0 +1,12 @@
+version: 2
+
+project_name: actions
+
+builds:
+  - skip: true
+
+release:
+  draft: false # allow for manual edits
+
+changelog:
+  use: github-native
