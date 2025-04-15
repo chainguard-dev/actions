@@ -16,11 +16,12 @@ It uses [fsaintjacques/semver-tool](https://github.com/fsaintjacques/semver-tool
 
 | Name            | Description                                                                                 | Required | Default |
 |-----------------|---------------------------------------------------------------------------------------------|----------|---------|
-| `bump_level`    | Which part of the SemVer version to increment: `major`, `minor`, `bugfix`, `prerelease`, or `build`. | ✅       | `build` |
+| `bump_level`    | Which part of the SemVer version to increment: `major`, `minor`, `patch`, `prerelease`, or `build`. | ✅       | `build` |
 | `git_tag_prefix`| Git tag prefix (e.g. `v`)                                                                   | ✅       | `v`     |
 | `forced_version`| A SemVer-compatible version to force instead of bumping                                     | ❌       |         |
 | `dry_run`       | If `true`, do not push any tags (for testing purposes)                                      | ✅       | `false` |
-| `github_token`  | GitHub token to authenticate and push the tag                                               | ✅       |         |
+| `github_token`  | GitHub token required to authenticate and push the tag                                      | ❌       |         |
+| `use-gitsign`   | Use gitsign to sign commits                                                                 | ❌       |         |
 
 ## 📦 Outputs
 
@@ -49,6 +50,7 @@ jobs:
 ## Documentation
 
 ### Build Metadata
+
 When using `bump_level: build`, the version includes build metadata based on the timestamp:
 
 ```sh

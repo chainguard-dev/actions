@@ -24,9 +24,12 @@ inputs:
                   (useful for testing the workflow without creating a tag)."
     default: false
   github_token:
-    description: "GitHub token to push the tag"
+    description: "GitHub token required to push the tag"
     required: false
-
+  use-gitsign:
+    description: "Use gitsign to sign commits."
+    default: 'true'
+    required: false
 
 outputs:
     bumped_version:
@@ -62,6 +65,10 @@ runs:
 
         chmod +x semver
         sudo mv semver /usr/local/bin/
+
+    # Configure gitsign for signed commits
+    - uses: chainguard-dev/actions/setup-gitsign@main
+      if: ${{ inputs.use-gitsign == 'true' }}
 
     - name: Bump the version or used the forced version
       id: semver-bump
