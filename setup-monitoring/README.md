@@ -6,7 +6,7 @@ You need a running KinD cluster before using this action
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-monitoring@main
+- uses: chainguard-dev/actions/setup-monitoring@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Helm version to be installed
     # Optional.
@@ -24,8 +24,8 @@ You need a running KinD cluster before using this action
 
 ```yaml
 steps:
-- uses: chainguard-dev/actions/setup-kind@main
+- uses: chainguard-dev/actions/setup-kind@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     k8s-version: 1.22.x
-- uses: chainguard-dev/actions/setup-monitoring@main
+- uses: chainguard-dev/actions/setup-monitoring@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
 ```

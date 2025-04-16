@@ -1,11 +1,11 @@
-# Setup chainguard-dev/hakn 
+# Setup chainguard-dev/hakn
 
 This action installs chainguard-dev/hakn Knative into the current kubectl context.
 
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-hakn@main
+- uses: chainguard-dev/actions/setup-hakn@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Version is the version of hakn to install.
     # (defaults to 1.11.0)
@@ -34,7 +34,7 @@ This action installs chainguard-dev/hakn Knative into the current kubectl contex
 
 ```yaml
 steps:
-- uses: chainguard-dev/actions/setup-hakn@main
+- uses: chainguard-dev/actions/setup-hakn@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     version: 1.11.0
     istio-version: 1.17.5

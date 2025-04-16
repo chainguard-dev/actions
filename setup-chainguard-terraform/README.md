@@ -8,7 +8,7 @@ and authenticates with it using identity tokens.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-chainguard-terraform@main
+- uses: chainguard-dev/actions/setup-chainguard-terraform@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # environment determines the environment from which to download the chainctl
     # binary from.
@@ -27,7 +27,7 @@ permissions:
   id-token: write
 
 steps:
-- uses: chainguard-dev/actions/setup-chainguard-terraform@main
+- uses: chainguard-dev/actions/setup-chainguard-terraform@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     identity: "deadbeef/badf00d"
 ```

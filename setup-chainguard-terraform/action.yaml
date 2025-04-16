@@ -48,7 +48,7 @@ runs:
         echo "** please use https://github.com/chainguard-dev/setup-chainctl **"
         echo "*****************************************************************"
         echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
-        
+
     - id: default-audience
       shell: bash
       run: |
@@ -58,7 +58,7 @@ runs:
         fi
         echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
 
-    - uses: chainguard-dev/setup-chainctl@main
+    - uses: chainguard-dev/setup-chainctl@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
       with:
         environment: ${{ inputs.environment }}
         audience: ${{ steps.default-audience.outputs.audience }}

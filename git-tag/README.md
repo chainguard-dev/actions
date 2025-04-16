@@ -39,9 +39,9 @@ jobs:
   bump-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Bump and push Git tag
-        uses: chainguard-dev/actions/git-tag@main
+        uses: chainguard-dev/actions/git-tag@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         with:
           bump_level: build
           git_tag_prefix: v

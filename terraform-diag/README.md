@@ -6,7 +6,7 @@ useful diagnostics extracted from the output.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/terraform-diag@main
+- uses: chainguard-dev/actions/terraform-diag@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   if: ${{ failure() }}
   with:
     # The JSON output of the 'terraform apply -json'
@@ -20,15 +20,15 @@ useful diagnostics extracted from the output.
 
 ```yaml
 steps:
-  - uses: actions/checkout@v3
-  - uses: hashicorp/setup-terraform@v2
+  - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+  - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
     with:
-      terraform_version: '1.5.*'
+      terraform_version: '1.11.*'
       terraform_wrapper: false
   - run: terraform apply -json -auto-approve > foo.json
 
   # Process the JSON output from above.
-  - uses: chainguard-dev/actions/terraform-diag@main
+  - uses: chainguard-dev/actions/terraform-diag@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
     if: ${{ always() }}
     with:
       json-file: foo.json

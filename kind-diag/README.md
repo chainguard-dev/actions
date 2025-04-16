@@ -7,7 +7,7 @@ cluster to the action run.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/kind-diag@main
+- uses: chainguard-dev/actions/kind-diag@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   if: ${{ failure() }}
   with:
     # Cluster Resources. For example, nodes.
@@ -25,15 +25,15 @@ cluster to the action run.
 
 ```yaml
 steps:
-  - uses: actions/setup-go@v3
+  - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
     with:
-      go-version: '1.21'
+      go-version: '1.24'
 
-  - uses: actions/checkout@v3
+  - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
   # Run some KinD-based testing.
 
-  - uses: chainguard-dev/actions/kind-diag@main
+  - uses: chainguard-dev/actions/kind-diag@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
     # Only upload logs on failure.
     if: ${{ failure() }}
     with:

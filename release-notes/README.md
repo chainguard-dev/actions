@@ -6,7 +6,7 @@ and generate the release notes for a particular start/end revision and will open
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/release-notes@main
+- uses: chainguard-dev/actions/release-notes@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Name of the branch that will be used to fetch the changelog
     # Required.
@@ -35,7 +35,7 @@ permissions:
   id-token: write
 
 steps:
-- uses: chainguard-dev/actions/release-notes@main
+- uses: chainguard-dev/actions/release-notes@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     branch_name: 'main'
     start_rev: 6937ed05c9dvdv59ac67528365c2d3964e793b516

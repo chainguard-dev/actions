@@ -5,7 +5,7 @@ This action spins up a K3D cluster with a handful of useful knobs exposed.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-k3d@main
+- uses: chainguard-dev/actions/setup-k3d@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Image to use for k3s. This also inherently sets the k3s version.
     # For example, cgr.dev/chainguard/k3s:latest
@@ -29,5 +29,5 @@ This action spins up a K3D cluster with a handful of useful knobs exposed.
 
 ```yaml
 steps:
-- uses: chainguard-dev/actions/setup-k3d@main
+- uses: chainguard-dev/actions/setup-k3d@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
 ```
