@@ -16,7 +16,7 @@ passed directly to downstream actions by running `fromJSON()` on it.
 
 ```yaml
 - id: extra-inputs
-  uses: chainguard-dev/actions/matrix-extra-inputs@main
+  uses: chainguard-dev/actions/matrix-extra-inputs@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     matrix-json: ${{ toJSON(matrix) }}
   env:

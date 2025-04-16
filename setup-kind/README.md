@@ -5,7 +5,7 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-kind@main
+- uses: chainguard-dev/actions/setup-kind@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # K8s version is the minor version of Kubernetes to install (with v).
     # For example, v1.29.x.
@@ -39,7 +39,7 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
 
 ```yaml
 steps:
-- uses: chainguard-dev/actions/setup-kind@main
+- uses: chainguard-dev/actions/setup-kind@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     k8s-version: 1.31.x
 ```

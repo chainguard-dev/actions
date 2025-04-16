@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run hugo2confluence
-        uses: chainguard-dev/actions/hugo2confluence@main
+        uses: chainguard-dev/actions/hugo2confluence@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         env:
           CONFLUENCE_USER: "myemail@example.com"
           CONFLUENCE_TOKEN: "${{ secrets.CONFLUENCE_TOKEN }}"

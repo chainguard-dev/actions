@@ -35,7 +35,7 @@ jobs:
     name: Check SPDX SBOM
     runs-on: ubuntu-latest
     steps:
-      - uses: chainguard-dev/actions/setup-spdx@main
+      - uses: chainguard-dev/actions/setup-spdx@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         with:
           sbom-path: sbom.spdx
 ```
@@ -58,34 +58,34 @@ jobs:
     name: Check SPDX SBOMs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@d0a58c1c4d2b25278816e339b944508c875f3613 # v3.4.0
+      - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           check-latest: true
 
-      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - run: |
           go run ./cmd/bom/main.go generate -i registry.k8s.io/pause > example-image-pause.spdx
           go run ./cmd/bom/main.go generate --format=json -i registry.k8s.io/pause > example-image-pause.spdx.json
 
-      - uses: chainguard-dev/actions/setup-spdx@main
+      - uses: chainguard-dev/actions/setup-spdx@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         with:
           spdx-tools-version: 1.1.8
 
-      - uses: chainguard-dev/actions/setup-spdx@main
+      - uses: chainguard-dev/actions/setup-spdx@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         with:
           download: false
           spdx-tools-version: 1.1.8
           sbom-path: example-image-pause.spdx
 
-      - uses: chainguard-dev/actions/setup-spdx@main
+      - uses: chainguard-dev/actions/setup-spdx@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
         with:
           download: false
           spdx-tools-version: 1.1.8
           sbom-path: example-image-pause.spdx.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ always() }}
         with:
           name: Example SBOMs

@@ -5,7 +5,7 @@ This action builds an image with APKO given a config file and tag to use.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/apko-build@main
+- uses: chainguard-dev/actions/apko-build@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Config is the configuration file to use for the image build.
     # Optional, will use .apko.yaml without a defined one.
@@ -23,7 +23,7 @@ This action builds an image with APKO given a config file and tag to use.
 
 ```yaml
 steps:
-- uses: chainguard-dev/actions/apko-build@main
+- uses: chainguard-dev/actions/apko-build@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   id: apko
   with:
     config: nginx.yaml

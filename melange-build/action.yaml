@@ -27,7 +27,7 @@ inputs:
     description: |
       Sign packages with a temporary key, useful for multi-stage
       pipelines.
-    default: false
+    default: 'false'
 
   signing-key-path:
     description: |
@@ -59,7 +59,7 @@ inputs:
   empty-workspace:
     description: |
       Whether to use an empty workspace or not.
-    default: false
+    default: 'false'
 
   workdir:
     description: |
@@ -100,14 +100,14 @@ runs:
       shell: bash
       run: |
         echo "Warning: the --template flag has been removed from melange and will be ignored."
-    - uses: chainguard-dev/actions/setup-melange@main
+    - uses: chainguard-dev/actions/setup-melange@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
       with:
         version: ${{ inputs.version }}
-    - uses: chainguard-dev/actions/melange-keygen@main
+    - uses: chainguard-dev/actions/melange-keygen@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
       if: ${{ inputs.sign-with-temporary-key }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
-    - uses: chainguard-dev/actions/melange-build-pkg@main
+    - uses: chainguard-dev/actions/melange-build-pkg@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
       with:
         config: ${{ inputs.config }}
         multi-config: ${{ inputs.multi-config }}

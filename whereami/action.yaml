@@ -8,7 +8,7 @@ description: |
 runs:
   using: "composite"
   steps:
-    - uses: wolfi-dev/wolfi-act@main
+    - uses: wolfi-dev/wolfi-act@d78f3659c50c4520e222df428f4903a1c4b0c6ee # main commit from May 13, 2024
       with:
         packages: curl,jq
         command: |

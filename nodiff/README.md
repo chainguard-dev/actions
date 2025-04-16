@@ -9,7 +9,7 @@ performs formatting.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/nodiff@main
+- uses: chainguard-dev/actions/nodiff@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     # Set when checkout to a non-default path.
     path: ""
@@ -22,13 +22,13 @@ performs formatting.
 
 ```yaml
 steps:
-- uses: actions/checkout@v3
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
 # Format all the Go files in the working tree.
 - run: gofmt -w $(find . -name '*.go')
 
 # Flag any differences from gofmt.
-- uses: chainguard-dev/actions/nodiff@main
+- uses: chainguard-dev/actions/nodiff@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
     path: "src/github.com/${{ github.repository }}"
     fixup-command: "gofmt -w"

@@ -74,7 +74,7 @@ runs:
       set -o errexit
 
       echo "***************************************************************************************"
-      echo "This action will be deprecated, please use distroless/actions/apko-publish@main instead"
+      echo "This action will be deprecated, please use chainguard-images/actions/apko-publish@main instead"
       echo "***************************************************************************************"
 
       [ -n "${{ inputs.source-date-epoch }}" ] && export SOURCE_DATE_EPOCH='${{ inputs.source-date-epoch }}'
