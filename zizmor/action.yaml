@@ -1,0 +1,80 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: "GitHub Actions SCA with zizmor"
+description: |
+  This action scans a repository's Workflow footprint with zizmor.
+
+inputs:
+  octo_sts_token:
+    description: "octo-sts token for online scans; if empty, scans will be run as 'offline'"
+    required: false
+    default: ""
+  persona:
+    description: "Persona for zizmor scans (auditor, regular, pedantic)"
+    required: false
+    default: "regular"
+  scan_category:
+    description: "Category to store scan results under"
+    required: false
+    default: "zizmor"
+  upload_results:
+    description: "Whether to upload .sarif scan results; if false, output format will be 'plain'"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run zizmor
+      id: zizmor
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.octo_sts_token }}
+        PERSONA: ${{ inputs.persona }}
+        UPLOAD_RESULTS: ${{ inputs.upload_results }}
+      run: |
+        case "${PERSONA}" in
+            auditor|regular|pedantic)
+                echo "Using persona: ${PERSONA}"
+                ;;
+            *)
+                echo "Not a valid persona; using default of 'regular'"
+                PERSONA="regular"
+                ;;
+        esac
+
+        # Only set the format to SARIF if a token is present and the results are to be uploaded
+        if [[ ! -z "${GH_TOKEN}" ]] && [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+            FORMAT="sarif"
+            SHOULD_UPLOAD="true"
+        else
+            FORMAT="plain"
+            SHOULD_UPLOAD="false"
+        fi
+
+        # If no token is present, run an offline scan
+        # Even if UPLOAD_RESULTS is true, the upload will fail if no token is present
+        if [[ -z "${GH_TOKEN}" ]]; then
+          docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace"
+        else
+            if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
+                echo "Running online scan and saving SARIF results"
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif"
+            else
+                echo "Running online scan and using GitHub annotations"
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace"
+            fi
+        fi
+
+        echo "should_upload=${SHOULD_UPLOAD}" >> $GITHUB_OUTPUT
+
+    - name: Upload Results
+      if: steps.zizmor.outputs.should_upload == 'true'
+      uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3.28.15
+      env:
+        GH_TOKEN: ${{ inputs.octo_sts_token }}
+        SCAN_CATEGORY: ${{ inputs.scan_category }}
+      with:
+        sarif_file: results.sarif
+        category: "${SCAN_CATEGORY}"
