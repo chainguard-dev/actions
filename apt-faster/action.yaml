@@ -1,0 +1,111 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+name: "apt-faster"
+description: "Make apt go faster"
+
+runs:
+  using: composite
+  steps:
+    - name: Write apt-get wrapper
+      shell: bash
+      run: |
+        sudo tee /usr/bin/apt-get.wrap >/dev/null <<"EOF"
+        #!/bin/sh
+        a=" $* "
+        emd="eatmydata"
+        if ! command -v eatmydata >/dev/null 2>&1; then
+           emd=""
+           if [ "$(id -u)" = "0" ] &&
+              [ "${a#* install }" != "$a" -o "${a#* upgrade }" != "$a" -o \
+                "${a#* dist-upgrade }" != "$a" ]; then
+             # we are root, this is install, so install emd
+             echo "=== first installing eatmydata ===" 1>&2
+             out=$(DEBIAN_FRONTEND=noninteractive "$0.distrib" install \
+                   --quiet --assume-yes eatmydata 2>&1)
+             ret=$?
+             if [ $ret -ne 0 ]; then
+                echo "FAILED: $out" 1>&2;
+                echo "failed to install libeatmydata."
+                exit $ret
+             fi
+             emd="eatmydata"
+          fi
+        fi 1>&2 </dev/null
+        exec $emd "apt-get.distrib" "$@"
+        EOF
+
+        sudo chmod 755 /usr/bin/apt-get.wrap
+
+        command -v eatmydata >/dev/null &&
+          echo "eatmydata was present" ||
+          echo "eatmydata not installed"
+
+    - name: replace apt-get
+      shell: bash
+      run: |
+        [ -e "/usr/bin/apt-get.distrib" ] ||
+          sudo dpkg-divert --local --rename --add /usr/bin/apt-get
+        sudo ln -sf apt-get.wrap /usr/bin/apt-get
+
+    - name: update - disable translations
+      shell: bash
+      run: |
+        f="/etc/apt/apt.conf.d/99notranslations"
+        if [ ! -f "$f" ]; then
+           echo 'Acquire::Languages "none";' | sudo tee "$f" >/dev/null;
+           sudo rm -f /var/lib/apt/lists/*Translation*
+        fi
+
+    - name: update - disable appstream
+      shell: bash
+      run: |
+        # https://askubuntu.com/questions/823329/how-do-i-disable-fetching-of-dep-11-files
+        f="/etc/apt/apt.conf.d/50appstream"
+        if [ -f "$f" ]; then
+           sudo rm -f "$f"
+        fi
+
+    - name: update - disable command not found
+      shell: bash
+      run: |
+        f="/etc/apt/apt.conf.d/50command-not-found"
+        if [ -f "$f" ]; then
+           sudo rm -f "$f"
+        fi
+
+    - name: install - disable recommends by default
+      shell: bash
+      run: |
+        sudo tee /etc/apt/apt.conf.d/99disable-recommends >/dev/null <<"EOF"
+        APT::Install-Recommends "false";
+        EOF
+
+    - name: install - disable man-db update
+      shell: bash
+      run: |
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure --frontend=noninteractive man-db
+
+    - name: install - do not install docs
+      shell: bash
+      run: |
+        sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<"EOF"
+        path-exclude /usr/share/doc/*
+        path-exclude /usr/share/man/*
+        path-exclude /usr/share/info/*
+        EOF
+
+    - name: install - apt-get default to force-unsafe-io
+      shell: bash
+      run: |
+        sudo tee /etc/apt/apt.conf.d/99dpkg-force-unsafe-io >/dev/null <<"EOF"
+        Dpkg::Options:: --force-unsafe-io;
+        EOF
+
+    - name: show apt sources
+      shell: bash
+      run: |
+        find /etc/apt/sources* -type f  | while read f ; do
+           echo === $f ===
+           cat $f
+        done

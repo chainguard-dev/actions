@@ -1,0 +1,46 @@
+name: test-apt-faster
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - './apt-faster/**'
+      - '.github/workflows/test-apt-faster.yaml'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+concurrency:
+  group: test-github-action${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-github-action:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Keep running if one leg fails.
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: "./apt-faster"
+
+      - name: "apt-update"
+        run: |
+          sudo apt-get --quiet update
+
+      - name: "check apt install does not add recommends"
+        run: |
+          sudo apt-get --quiet --assume-yes install \
+            python3-venv qemu-system-x86
+
+          # ovmf is a recommends of qemu-system-x86
+          if dpkg-query --show | grep -q ^ovmf; then
+             echo "ovmf is installed but should not be."
+             echo "seems like recommends is enabled"
+             exit 1
+          fi
