@@ -10,10 +10,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: test-github-action${{ github.head_ref }}
-  cancel-in-progress: true
-
 jobs:
   test-github-action:
     name: test
