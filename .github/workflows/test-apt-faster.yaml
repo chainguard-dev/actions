@@ -1,0 +1,144 @@
+name: test-apt-faster
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - './apt-faster/**'
+      - '.github/workflows/test-apt-faster.yaml'
+
+permissions: {}
+
+jobs:
+  test-github-action:
+    name: test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false # Keep running if one leg fails.
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: "./apt-faster"
+
+      - name: show apt sources
+        run: |
+          find /etc/apt/sources* -type f  | while read f ; do
+             echo === $f ===
+             cat $f
+          done
+
+      - name: "check apt-update"
+        run: |
+          set -o pipefail
+          sudo apt-get --quiet update 2>&1 | tee apt-get-update.log
+
+      - name: "check apt install"
+        run: |
+          sudo apt-get --quiet --assume-yes install \
+            python3-venv qemu-system-x86 | tee apt-get-install.log
+
+      - name: "show configs"
+        run: |
+          for f in \
+              /etc/dpkg/dpkg.cfg.d/aptfaster \
+              /etc/apt/apt.conf.d/99aptfaster ; do
+            echo == $f ==
+            cat $f
+            echo == end $f ==
+            echo
+          done
+
+          echo == apt-config dump ==
+          apt-config dump
+          echo == end apt-config dump ==
+
+      - name: "check settings"
+        run: |
+          # check settings
+          fails=0
+          tests=0
+
+          error() { echo "ERROR:" "$@"; exit 1; }
+          stderr() { echo "$@" 1>&2; }
+          tfail() { echo "FAIL:" "$@"; fails=$((fails+1)); }
+          tpass() { echo "PASS:" "$@"; }
+          nomatch() {
+            for f in "$@"; do [ -e "$f" ] && return 1; done
+            return 0
+          }
+
+          grep_is() {
+            local str="$1" file="$2" exp="$3" out=""
+            [ -f "$file" -a -r "$file" ] || [ "$file" = "-" ] ||
+              { stderr "file '$file' - not a file or not readable"; return 1; }
+            out=$(grep -- "$str" "$file")
+            [ "$out" = "$exp" ] && return 0
+            stderr "grep '$str' '$file' expected '$exp' found '$out'"
+            return 1
+          }
+
+          grep_has() {
+            local str="$1" file="$2" exp="$3" out=""
+            [ -f "$file" -a -r "$file" ] || [ "$file" = "-" ] ||
+              { stderr "file '$file' - not a file or not readable"; return 1; }
+            out=$(grep -- "$str" "$file")
+            printf "%s\n" "$out" | grep -q -- "$exp" && return 0
+            stderr "grep '$str' '$file' did not contain '$exp'. contents: $out"
+            return 1
+          }
+
+          empty_file() {
+            local f="$1"
+            [ -f "$f" ] && [ ! -s "$f" ]
+          }
+
+          t() {
+            local msg="$1"
+            shift
+            tests=$((tests+1))
+            "$@" && tpass "$msg" && return
+            tfail "$msg"
+            fails=$((fails+1))
+          }
+
+          apt-config dump > apt-config.out 2>apt-config.err ||
+            error "apt-config dump failed"
+
+          t "apt-config dump has no stderr" \
+            empty_file "apt-config.err"
+
+          t "/usr/bin/apt-get is /usr/bin/apt-get.aptfaster" \
+            [ /usr/bin/apt-get -ef /usr/bin/apt-get.aptfaster ]
+
+          t "apt-config does not have DEP-11 entries" \
+            grep_is "IndexTargets::deb::DEP-11" apt-config.out ""
+
+          t "apt-config does not have DEP-11 entries" \
+            grep_is "IndexTargets::deb::CNF" apt-config.out ""
+
+          t "apt-config has on only Acquire::Languages:: none" \
+            grep_is "Acquire::Languages::" apt-config.out \
+              'Acquire::Languages:: "none";'
+
+          t "no translation files found" \
+            nomatch /var/lib/apt/lists/*Translation*
+
+          t "apt-config has recommends false" \
+            grep_is "APT::Install-Recommends" apt-config.out \
+               'APT::Install-Recommends "false";'
+
+          t "/etc/dpkg/dpkg.cfg.d/aptfaster exists" \
+            [ -f "/etc/dpkg/dpkg.cfg.d/aptfaster" ]
+
+          t "apt-config has DPkg::Options:: with force-unsafe-io" \
+            grep_has "DPkg::Options::" apt-config.out "--force-unsafe-io"
+
+          echo "summary - $tests tests with $fails fails"
+          [ $fails -eq 0 ] || exit 1
+          exit 0

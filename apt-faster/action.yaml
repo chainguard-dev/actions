@@ -1,0 +1,118 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+name: "apt-faster"
+description: "Make apt go faster"
+
+runs:
+  using: composite
+  steps:
+    - name: cleanup
+      shell: bash
+      run: |
+        sudo sh -ec '
+          : > /etc/apt/apt.conf.d/99aptfaster
+          : > /etc/dpkg/dpkg.cfg.d/aptfaster
+          rm -f /usr/bin/apt-get.aptfaster'
+
+    - name: Write apt-get wrapper
+      shell: bash
+      run: |
+        sudo tee /usr/bin/apt-get.aptfaster >/dev/null <<"EOF"
+        #!/bin/sh
+        a=" $* "
+        emd="eatmydata"
+        if ! command -v eatmydata >/dev/null 2>&1; then
+           emd=""
+           if [ "$(id -u)" = "0" ] &&
+              [ "${a#* install }" != "$a" -o "${a#* upgrade }" != "$a" -o \
+                "${a#* dist-upgrade }" != "$a" ]; then
+             # we are root, this is install, so install emd
+             echo "=== first installing eatmydata ===" 1>&2
+             out=$(DEBIAN_FRONTEND=noninteractive "$0.distrib" install \
+                   --quiet --assume-yes eatmydata 2>&1)
+             ret=$?
+             if [ $ret -ne 0 ]; then
+                echo "FAILED: $out" 1>&2;
+                echo "failed to install libeatmydata."
+                exit $ret
+             fi
+             emd="eatmydata"
+          fi
+        fi 1>&2 </dev/null
+        exec $emd "apt-get.distrib" "$@"
+        EOF
+
+        sudo chmod 755 /usr/bin/apt-get.aptfaster
+
+        command -v eatmydata >/dev/null &&
+          echo "eatmydata was present" ||
+          echo "eatmydata not installed"
+
+    - name: replace apt-get
+      shell: bash
+      run: |
+        [ -e "/usr/bin/apt-get.distrib" ] ||
+          sudo dpkg-divert --local --rename --add /usr/bin/apt-get
+        sudo ln -sf apt-get.aptfaster /usr/bin/apt-get
+
+    - name: update - disable appstream
+      shell: bash
+      run: |
+        # https://askubuntu.com/questions/823329/how-do-i-disable-fetching-of-dep-11-files
+        f=/etc/apt/apt.conf.d/50appstream
+        # rename the file to ".aptfaster.disabled" to avoid apt complaints like:
+        #   N: Ignoring file '50appstream.aptfaster' ...
+        #     as it has an invalid filename extension
+        sudo dpkg-divert --local --rename --divert "$f.aptfaster.disabled" "$f"
+
+    - name: update - disable command not found
+      shell: bash
+      run: |
+        f=/etc/apt/apt.conf.d/50command-not-found
+        sudo dpkg-divert --local --rename --divert "$f.aptfaster.disabled" "$f"
+
+    - name: update - disable translations
+      shell: bash
+      run: |
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # disable translations
+        Acquire::Languages "none";
+        EOF
+
+        sudo rm -f /var/lib/apt/lists/*Translation*
+
+    - name: install - disable recommends by default
+      shell: bash
+      run: |
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # disable recommends by default
+        APT::Install-Recommends "false";
+        EOF
+
+    - name: install - do not install docs
+      shell: bash
+      run: |
+        f=/etc/dpkg/dpkg.cfg.d/aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # do not install docs
+        path-exclude /usr/share/doc/*
+        path-exclude /usr/share/man/*
+        path-exclude /usr/share/info/*
+        EOF
+
+    - name: install - apt-get default to force-unsafe-io
+      shell: bash
+      run: |
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # apt-get default to force-unsafe-io
+        DPkg::Options:: "--force-unsafe-io";
+        EOF
+
+    - name: install - disable man-db update
+      shell: bash
+      run: |
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure --frontend=noninteractive man-db
