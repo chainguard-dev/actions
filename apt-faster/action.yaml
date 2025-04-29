@@ -108,7 +108,7 @@ runs:
         f=/etc/apt/apt.conf.d/99aptfaster
         sudo tee -a "$f" >/dev/null <<"EOF"
         # apt-get default to force-unsafe-io
-        Dpkg::Options:: --force-unsafe-io;
+        DPkg::Options:: "--force-unsafe-io";
         EOF
 
     - name: install - disable man-db update

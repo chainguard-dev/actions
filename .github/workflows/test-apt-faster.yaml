@@ -39,12 +39,28 @@ jobs:
 
       - name: "check apt-update"
         run: |
-          sudo apt-get --quiet update
+          set -o pipefail
+          sudo apt-get --quiet update 2>&1 | tee apt-get-update.log
 
       - name: "check apt install"
         run: |
           sudo apt-get --quiet --assume-yes install \
-            python3-venv qemu-system-x86
+            python3-venv qemu-system-x86 | tee apt-get-install.log
+
+      - name: "show configs"
+        run: |
+          for f in \
+              /etc/dpkg/dpkg.cfg.d/aptfaster \
+              /etc/apt/apt.conf.d/99aptfaster ; do
+            echo == $f ==
+            cat $f
+            echo == end $f ==
+            echo
+          done
+
+          echo == apt-config dump ==
+          apt-config dump
+          echo == end apt-config dump ==
 
       - name: "check settings"
         run: |
@@ -57,11 +73,14 @@ jobs:
           tfail() { echo "FAIL:" "$@"; fails=$((fails+1)); }
           tpass() { echo "PASS:" "$@"; }
           nomatch() {
-            for f in "$@"; do [ -f "$f" ] && return 1; done
+            for f in "$@"; do [ -e "$f" ] && return 1; done
+            return 0
           }
 
           grep_is() {
             local str="$1" file="$2" exp="$3" out=""
+            [ -f "$file" -a -r "$file" ] || [ "$file" = "-" ] ||
+              { stderr "file '$file' - not a file or not readable"; return 1; }
             out=$(grep -- "$str" "$file")
             [ "$out" = "$exp" ] && return 0
             stderr "grep '$str' '$file' expected '$exp' found '$out'"
@@ -69,11 +88,18 @@ jobs:
           }
 
           grep_has() {
-            local str="$1" file="$2" exp="$3"
+            local str="$1" file="$2" exp="$3" out=""
+            [ -f "$file" -a -r "$file" ] || [ "$file" = "-" ] ||
+              { stderr "file '$file' - not a file or not readable"; return 1; }
             out=$(grep -- "$str" "$file")
-            echo "$out" | grep -q -- "$exp" && return 0
+            printf "%s\n" "$out" | grep -q -- "$exp" && return 0
             stderr "grep '$str' '$file' did not contain '$exp'. contents: $out"
             return 1
+          }
+
+          empty_file() {
+            local f="$1"
+            [ -f "$f" ] && [ ! -s "$f" ]
           }
 
           t() {
@@ -85,8 +111,11 @@ jobs:
             fails=$((fails+1))
           }
 
-          apt-config dump > apt-config.out ||
+          apt-config dump > apt-config.out 2>apt-config.err ||
             error "apt-config dump failed"
+
+          t "apt-config dump has no stderr" \
+            empty_file "apt-config.err"
 
           t "/usr/bin/apt-get is /usr/bin/apt-get.aptfaster" \
             [ /usr/bin/apt-get -ef /usr/bin/apt-get.aptfaster ]
@@ -98,7 +127,7 @@ jobs:
             grep_is "IndexTargets::deb::CNF" apt-config.out ""
 
           t "apt-config has on only Acquire::Languages:: none" \
-            grep_is "Acquire::Languages::"apt-config.out \
+            grep_is "Acquire::Languages::" apt-config.out \
               'Acquire::Languages:: "none";'
 
           t "no translation files found" \
@@ -111,8 +140,8 @@ jobs:
           t "/etc/dpkg/dpkg.cfg.d/aptfaster exists" \
             [ -f "/etc/dpkg/dpkg.cfg.d/aptfaster" ]
 
-          t "apt-config has Dpkg::Options with force-unsafe-io" \
-            grep_has "Dpkg::Options::" apt-config.out "--force-unsafe-io;"
+          t "apt-config has DPkg::Options:: with force-unsafe-io" \
+            grep_has "DPkg::Options::" apt-config.out "--force-unsafe-io"
 
           echo "summary - $tests tests with $fails fails"
           [ $fails -eq 0 ] || exit 1
