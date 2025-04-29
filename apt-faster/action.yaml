@@ -6,10 +6,18 @@ description: "Make apt go faster"
 runs:
   using: composite
   steps:
+    - name: cleanup
+      shell: bash
+      run: |
+        sudo sh -ec '
+          : > /etc/apt/apt.conf.d/99aptfaster
+          : > /etc/dpkg/dpkg.cfg.d/aptfaster
+          rm -f /usr/bin/apt-get.aptfaster'
+
     - name: Write apt-get wrapper
       shell: bash
       run: |
-        sudo tee /usr/bin/apt-get.wrap >/dev/null <<"EOF"
+        sudo tee /usr/bin/apt-get.aptfaster >/dev/null <<"EOF"
         #!/bin/sh
         a=" $* "
         emd="eatmydata"
@@ -34,7 +42,7 @@ runs:
         exec $emd "apt-get.distrib" "$@"
         EOF
 
-        sudo chmod 755 /usr/bin/apt-get.wrap
+        sudo chmod 755 /usr/bin/apt-get.aptfaster
 
         command -v eatmydata >/dev/null &&
           echo "eatmydata was present" ||
@@ -45,51 +53,50 @@ runs:
       run: |
         [ -e "/usr/bin/apt-get.distrib" ] ||
           sudo dpkg-divert --local --rename --add /usr/bin/apt-get
-        sudo ln -sf apt-get.wrap /usr/bin/apt-get
-
-    - name: update - disable translations
-      shell: bash
-      run: |
-        f="/etc/apt/apt.conf.d/99notranslations"
-        if [ ! -f "$f" ]; then
-           echo 'Acquire::Languages "none";' | sudo tee "$f" >/dev/null;
-           sudo rm -f /var/lib/apt/lists/*Translation*
-        fi
+        sudo ln -sf apt-get.aptfaster /usr/bin/apt-get
 
     - name: update - disable appstream
       shell: bash
       run: |
         # https://askubuntu.com/questions/823329/how-do-i-disable-fetching-of-dep-11-files
-        f="/etc/apt/apt.conf.d/50appstream"
-        if [ -f "$f" ]; then
-           sudo rm -f "$f"
-        fi
+        f=/etc/apt/apt.conf.d/50appstream
+        # rename the file to ".aptfaster.disabled" to avoid apt complaints like:
+        #   N: Ignoring file '50appstream.aptfaster' ...
+        #     as it has an invalid filename extension
+        sudo dpkg-divert --local --rename --divert "$f.aptfaster.disabled" "$f"
 
     - name: update - disable command not found
       shell: bash
       run: |
-        f="/etc/apt/apt.conf.d/50command-not-found"
-        if [ -f "$f" ]; then
-           sudo rm -f "$f"
-        fi
+        f=/etc/apt/apt.conf.d/50command-not-found
+        sudo dpkg-divert --local --rename --divert "$f.aptfaster.disabled" "$f"
+
+    - name: update - disable translations
+      shell: bash
+      run: |
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # disable translations
+        Acquire::Languages "none";
+        EOF
+
+        sudo rm -f /var/lib/apt/lists/*Translation*
 
     - name: install - disable recommends by default
       shell: bash
       run: |
-        sudo tee /etc/apt/apt.conf.d/99disable-recommends >/dev/null <<"EOF"
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # disable recommends by default
         APT::Install-Recommends "false";
         EOF
-
-    - name: install - disable man-db update
-      shell: bash
-      run: |
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure --frontend=noninteractive man-db
 
     - name: install - do not install docs
       shell: bash
       run: |
-        sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<"EOF"
+        f=/etc/dpkg/dpkg.cfg.d/aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # do not install docs
         path-exclude /usr/share/doc/*
         path-exclude /usr/share/man/*
         path-exclude /usr/share/info/*
@@ -98,14 +105,14 @@ runs:
     - name: install - apt-get default to force-unsafe-io
       shell: bash
       run: |
-        sudo tee /etc/apt/apt.conf.d/99dpkg-force-unsafe-io >/dev/null <<"EOF"
+        f=/etc/apt/apt.conf.d/99aptfaster
+        sudo tee -a "$f" >/dev/null <<"EOF"
+        # apt-get default to force-unsafe-io
         Dpkg::Options:: --force-unsafe-io;
         EOF
 
-    - name: show apt sources
+    - name: install - disable man-db update
       shell: bash
       run: |
-        find /etc/apt/sources* -type f  | while read f ; do
-           echo === $f ===
-           cat $f
-        done
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure --frontend=noninteractive man-db

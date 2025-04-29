@@ -8,10 +8,7 @@ on:
       - './apt-faster/**'
       - '.github/workflows/test-apt-faster.yaml'
 
-defaults:
-  run:
-    shell: bash
-    working-directory: ./
+permissions: {}
 
 concurrency:
   group: test-github-action${{ github.head_ref }}
@@ -21,6 +18,10 @@ jobs:
   test-github-action:
     name: test
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
     strategy:
       fail-fast: false # Keep running if one leg fails.
 
@@ -29,18 +30,90 @@ jobs:
 
       - uses: "./apt-faster"
 
-      - name: "apt-update"
+      - name: show apt sources
+        run: |
+          find /etc/apt/sources* -type f  | while read f ; do
+             echo === $f ===
+             cat $f
+          done
+
+      - name: "check apt-update"
         run: |
           sudo apt-get --quiet update
 
-      - name: "check apt install does not add recommends"
+      - name: "check apt install"
         run: |
           sudo apt-get --quiet --assume-yes install \
             python3-venv qemu-system-x86
 
-          # ovmf is a recommends of qemu-system-x86
-          if dpkg-query --show | grep -q ^ovmf; then
-             echo "ovmf is installed but should not be."
-             echo "seems like recommends is enabled"
-             exit 1
-          fi
+      - name: "check settings"
+        run: |
+          # check settings
+          fails=0
+          tests=0
+
+          error() { echo "ERROR:" "$@"; exit 1; }
+          stderr() { echo "$@" 1>&2; }
+          tfail() { echo "FAIL:" "$@"; fails=$((fails+1)); }
+          tpass() { echo "PASS:" "$@"; }
+          nomatch() {
+            for f in "$@"; do [ -f "$f" ] && return 1; done
+          }
+
+          grep_is() {
+            local str="$1" file="$2" exp="$3" out=""
+            out=$(grep -- "$str" "$file")
+            [ "$out" = "$exp" ] && return 0
+            stderr "grep '$str' '$file' expected '$exp' found '$out'"
+            return 1
+          }
+
+          grep_has() {
+            local str="$1" file="$2" exp="$3"
+            out=$(grep -- "$str" "$file")
+            echo "$out" | grep -q -- "$exp" && return 0
+            stderr "grep '$str' '$file' did not contain '$exp'. contents: $out"
+            return 1
+          }
+
+          t() {
+            local msg="$1"
+            shift
+            tests=$((tests+1))
+            "$@" && tpass "$msg" && return
+            tfail "$msg"
+            fails=$((fails+1))
+          }
+
+          apt-config dump > apt-config.out ||
+            error "apt-config dump failed"
+
+          t "/usr/bin/apt-get is /usr/bin/apt-get.aptfaster" \
+            [ /usr/bin/apt-get -ef /usr/bin/apt-get.aptfaster ]
+
+          t "apt-config does not have DEP-11 entries" \
+            grep_is "IndexTargets::deb::DEP-11" apt-config.out ""
+
+          t "apt-config does not have DEP-11 entries" \
+            grep_is "IndexTargets::deb::CNF" apt-config.out ""
+
+          t "apt-config has on only Acquire::Languages:: none" \
+            grep_is "Acquire::Languages::"apt-config.out \
+              'Acquire::Languages:: "none";'
+
+          t "no translation files found" \
+            nomatch /var/lib/apt/lists/*Translation*
+
+          t "apt-config has recommends false" \
+            grep_is "APT::Install-Recommends" apt-config.out \
+               'APT::Install-Recommends "false";'
+
+          t "/etc/dpkg/dpkg.cfg.d/aptfaster exists" \
+            [ -f "/etc/dpkg/dpkg.cfg.d/aptfaster" ]
+
+          t "apt-config has Dpkg::Options with force-unsafe-io" \
+            grep_has "Dpkg::Options::" apt-config.out "--force-unsafe-io;"
+
+          echo "summary - $tests tests with $fails fails"
+          [ $fails -eq 0 ] || exit 1
+          exit 0
