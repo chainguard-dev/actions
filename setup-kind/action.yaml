@@ -122,6 +122,10 @@ runs:
             echo "KIND_IMAGE=kindest/node:v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f" >> $GITHUB_ENV
             ;;
 
+          1.33.x)
+            echo "KIND_IMAGE=kindest/node:v1.33.0@sha256:91e9ed777db80279c22d1d1068c091b899b2078506e4a0f797fbf6e397c0b0b2" >> $GITHUB_ENV
+            ;;
+
           *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
         esac
 
