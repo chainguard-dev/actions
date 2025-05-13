@@ -3,6 +3,9 @@ name: test-matrix-extra-inputs
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test_action:
     runs-on: ubuntu-latest

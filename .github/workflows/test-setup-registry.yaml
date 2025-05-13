@@ -6,6 +6,9 @@ on:
       - './setup-registry/**'
       - '.github/workflows/test-setup-registry.yaml'
 
+permissions:
+  contents: read
+
 jobs:
   test-mem:
     runs-on: ubuntu-latest
