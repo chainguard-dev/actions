@@ -29,38 +29,48 @@ jobs:
       - uses: "./apt-faster"
 
       - name: show apt sources
+        shell: bash
         run: |
-          find /etc/apt/sources* -type f  | while read f ; do
-             echo === $f ===
-             cat $f
+          find /etc/apt/sources* -type f | while IFS= read -r f; do
+              echo "===" "$f" "==="
+              cat "$f"
           done
 
       - name: "check apt-update"
+        shell: bash
         run: |
           set -o pipefail
           sudo apt-get --quiet update 2>&1 | tee apt-get-update.log
 
       - name: "check apt install"
+        shell: bash
         run: |
+          set -o pipefail
           sudo apt-get --quiet --assume-yes install \
             python3-venv qemu-system-x86 | tee apt-get-install.log
 
       - name: "show configs"
+        shell: bash
         run: |
           for f in \
               /etc/dpkg/dpkg.cfg.d/aptfaster \
               /etc/apt/apt.conf.d/99aptfaster ; do
-            echo == $f ==
-            cat $f
-            echo == end $f ==
+            echo "== $f =="
+            if [ -f "$f" ]; then
+              cat "$f"
+            else
+              echo "File not found"
+            fi
+            echo "== end $f =="
             echo
           done
 
-          echo == apt-config dump ==
+          echo "== apt-config dump =="
           apt-config dump
-          echo == end apt-config dump ==
+          echo "== end apt-config dump =="
 
       - name: "check settings"
+        shell: bash
         run: |
           # check settings
           fails=0
