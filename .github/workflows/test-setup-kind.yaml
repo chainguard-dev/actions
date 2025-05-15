@@ -18,6 +18,8 @@ concurrency:
   group: test-github-action${{ github.head_ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   test-github-action:
     name: test
@@ -50,12 +52,17 @@ jobs:
         - k8s-version: 1.33.x
           knative-version: 1.17.0
 
+    permissions:
+      contents: read
+
     steps:
     - uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
       with:
         egress-policy: audit
     - name: Checkout the current action
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: false
 
     - uses: ./whereami # Log where I am.
 
