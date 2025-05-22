@@ -1,0 +1,43 @@
+name: test-terraform-docs
+
+on:
+  pull_request:
+    paths:
+      - 'setup-terraform-docs/**'
+      - '.github/workflows/test-terraform-docs.yaml'
+
+permissions: {}
+
+jobs:
+  test_terraform_docs_action:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - macos-13
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: read
+
+    name: Install Terraform Docs and test presence in path
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+      with:
+        egress-policy: audit
+
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: false
+
+    - name: Install Terraform Docs
+      uses: ./setup-terraform-docs
+
+    - name: Check install!
+      run: terraform-docs version
