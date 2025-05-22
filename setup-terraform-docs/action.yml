@@ -1,0 +1,93 @@
+name: "Setup terraform-docs"
+description: "Install and configure terraform-docs"
+branding:
+  icon: edit-3
+  color: green
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        shopt -s expand_aliases
+        if [ -z "$NO_COLOR" ]; then
+          alias log_info="echo -e \"\033[1;32mINFO\033[0m:\""
+          alias log_error="echo -e \"\033[1;31mERROR\033[0m:\""
+        else
+          alias log_info="echo \"INFO:\""
+          alias log_error="echo \"ERROR:\""
+        fi
+        set -e
+
+        mkdir -p $HOME/.terraform-docs
+
+        shaprog() {
+          case ${{ runner.os }} in
+            Linux)
+              sha256sum $1 | cut -d' ' -f1
+              ;;
+            macOS)
+              shasum -a256 $1 | cut -d' ' -f1
+              ;;
+            *)
+              log_error "unsupported OS ${{ runner.os }}"
+              exit 1
+              ;;
+          esac
+        }
+
+        terraform_docs_version='v0.20.0'
+        terraform_docs_linux_amd64_sha='34ae01772412bb11474e6718ea62113e38ff5964ee570a98c69fafe3a6dff286'
+        terraform_docs_linux_arm64_sha='371b4ed983781d1efdd8f7de06264baac41b1d80927f7fd718c405a303d863a0'
+        terraform_docs_darwin_amd64_sha='8c7ea42429d7f5e3dae3de32f3873fde0419332932549147f40916d3f613b8f7'
+        terraform_docs_darwin_arm64_sha='8723013cfe0369c389f4e6cb6e3cfca1aebaefd67871e349e7547f2201564dad'
+        terraform_docs_executable_name=terraform-docs
+
+        trap "popd >/dev/null" EXIT
+
+        pushd $HOME/.terraform-docs > /dev/null
+
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-linux-amd64.tar.gz
+            terraform_docs_sha=${terraform_docs_linux_amd64_sha}
+            ;;
+
+          Linux-ARM64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-linux-arm64.tar.gz
+            terraform_docs_sha=${terraform_docs_linux_arm64_sha}
+            ;;
+
+          macOS-X64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-darwin-amd64.tar.gz
+            terraform_docs_sha=${terraform_docs_darwin_amd64_sha}
+            ;;
+
+          macOS-ARM64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-darwin-arm64.tar.gz
+            terraform_docs_sha=${terraform_docs_darwin_arm64_sha}
+            ;;
+
+          *)
+            log_error "unsupported architecture ${{ runner.arch }}"
+            exit 1
+            ;;
+        esac
+
+        expected_tf_docs_version_digest=${terraform_docs_sha}
+        log_info "Downloading terraform-docs version '${terraform_docs_version}' from https://github.com/terraform-docs/terraform-docs/releases/download/${terraform_docs_version}/${terraform_docs_filename}"
+        curl -sL https://github.com/terraform-docs/terraform-docs/releases/download/${terraform_docs_version}/${terraform_docs_filename} -o ${terraform_docs_filename}
+        shaDownloaded=$(shaprog ${terraform_docs_filename});
+        if [[ ${shaDownloaded} != ${expected_tf_docs_version_digest} ]]; then
+          log_error "Unable to validate terraform-docs version: '${terraform_docs_version}': want ${expected_tf_docs_version_digest}, got ${shaDownloaded}"
+          exit 1
+        fi
+        tar -xzf ${terraform_docs_filename} --strip-components=0
+        chmod +x ${terraform_docs_executable_name}
+
+    - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+      run: echo "$HOME/.terraform-docs" >> $GITHUB_PATH
+      shell: bash
+
+    - if: ${{ runner.os == 'Windows' }}
+      run: echo "$HOME/.terraform-docs" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      shell: pwsh
