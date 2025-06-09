@@ -56,14 +56,14 @@ runs:
         # If no token is present, run an offline scan
         # Even if UPLOAD_RESULTS is true, the upload will fail if no token is present
         if [[ -z "${GH_TOKEN}" ]]; then
-          docker run --rm -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --offline --persona=${PERSONA} --format=${FORMAT} /workspace"
+          docker run --rm -v "${PWD}":/workspace ghcr.io/zizmorcore/zizmor:latest --offline --persona=${PERSONA} --format=${FORMAT} /workspace
         else
             if [[ "${UPLOAD_RESULTS}" == "true" ]]; then
                 echo "Running online scan and saving SARIF results"
-                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif"
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace ghcr.io/zizmorcore/zizmor:latest --persona=${PERSONA} --format=${FORMAT} /workspace > /workspace/results.sarif
             else
                 echo "Running online scan and using GitHub annotations"
-                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace cgr.dev/chainguard/wolfi-base:latest /bin/sh -c "apk update; apk add zizmor; zizmor --persona=${PERSONA} --format=${FORMAT} /workspace"
+                docker run --rm -e GH_TOKEN="${GH_TOKEN}" -v "${PWD}":/workspace ghcr.io/zizmorcore/zizmor:latest --persona=${PERSONA} --format=${FORMAT} /workspace
             fi
         fi
 
@@ -71,7 +71,7 @@ runs:
 
     - name: Upload Results
       if: steps.zizmor.outputs.should_upload == 'true'
-      uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3.28.15
+      uses: github/codeql-action/upload-sarif@fca7ace96b7d713c7035871441bd52efbe39e27e # v3.28.19
       env:
         GH_TOKEN: ${{ inputs.octo_sts_token }}
         SCAN_CATEGORY: ${{ inputs.scan_category }}
