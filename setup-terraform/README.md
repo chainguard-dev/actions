@@ -7,7 +7,7 @@ to set the version or falls back to a default version to work within a GitHub Ac
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/setup-terraform@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
+- uses: chainguard-dev/actions/setup-terraform@b84fe5f9e5f9144c970b29aaf83ea851a6768e25 # v1.2.0
   with:
     terraform-version-file: '.terraform-version'
 ```
