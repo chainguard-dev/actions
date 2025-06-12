@@ -1,0 +1,43 @@
+name: "Setup terraform"
+description: "Install and configure terraform using .terraform-version file"
+branding:
+  icon: edit-3
+  color: green
+
+inputs:
+  terraform-version-file:
+    description: 'The file to use for terraform versioning.'
+    required: false
+    default: '.terraform-version'
+  default-terraform-version:
+    description: 'The default version of terraform to use if the version file is not found.'
+    required: false
+    default: '1.11.4'
+  terraform-wrapper:
+    description: 'Whether or not to install a wrapper to wrap subsequent calls of the `terraform` binary and expose its STDOUT, STDERR, and exit code as outputs named `stdout`, `stderr`, and `exitcode` respectively. Defaults to `true`.'
+    required: false
+    default: 'true'
+
+runs:
+
+  using: "composite"
+
+  steps:
+    - name: Check if .terraform-version file exists
+      shell: bash
+      id: check-version-file
+      run: |
+        if [ ! -f "${{ inputs.terraform-version-file }}" ]; then
+          echo "Terraform version file not found: ${{ inputs.terraform-version-file }}"
+          echo "Using default version: ${{ inputs.default-terraform-version }}"
+          echo "value=${{ inputs.default-terraform-version }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "Using version from file: ${{ inputs.terraform-version-file }}"
+          echo "value=$(cat ${{ inputs.terraform-version-file }})" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Setup terraform
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      with:
+        terraform_version: ${{ steps.check-version-file.outputs.value }}
+        terraform_wrapper: ${{ inputs.terraform-wrapper }}

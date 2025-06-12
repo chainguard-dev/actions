@@ -1,0 +1,96 @@
+name: test-setup-terraform
+
+on:
+  pull_request:
+    paths:
+      - 'setup-terraform/**'
+      - '.github/workflows/test-setup-terraform.yaml'
+
+permissions: {}
+
+jobs:
+  test_setup_terraform_action:
+
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: read
+
+    name: Install terraform with a custom path of .terraform-version file
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@002fdce3c6a235733a90a27c80493a3241e56863 # v2.12.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: ./setup-terraform
+        with:
+          terraform-version-file: './hack/.terraform-version'
+
+      - name: Check terraform install
+        shell: bash
+        run: |
+          # Read the required version from file
+          REQUIRED_VERSION=$(tr -d '[:space:]' < ./hack/.terraform-version)
+
+          # Get the current terraform version
+          CURRENT_VERSION=$(terraform version -json | jq -r '.terraform_version' 2>/dev/null)
+
+          # Compare versions
+          if [ "$CURRENT_VERSION" = "$REQUIRED_VERSION" ]; then
+              echo "✓ Terraform version matches: $CURRENT_VERSION"
+              exit 0
+          else
+              echo "✗ Version mismatch!"
+              echo "  Required: $REQUIRED_VERSION"
+              echo "  Current:  $CURRENT_VERSION"
+              exit 1
+          fi
+
+  test_setup_terraform_fallback:
+
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: read
+
+    name: Install terraform with a default action version as there is no .terraform-version file
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@002fdce3c6a235733a90a27c80493a3241e56863 # v2.12.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Terraform Docs
+        uses: ./setup-terraform
+        with:
+          terraform-version-file: './honk/.terraform-version'
+
+      - name: Check terraform install
+        shell: bash
+        run: |
+          # Read the required version from file
+          REQUIRED_VERSION=$(yq '.inputs.default-terraform-version.default' ./setup-terraform/action.yml)
+
+          # Get the current terraform version
+          CURRENT_VERSION=$(terraform version -json | jq -r '.terraform_version' 2>/dev/null)
+
+          # Compare versions
+          if [ "$CURRENT_VERSION" = "$REQUIRED_VERSION" ]; then
+              echo "✓ Terraform version matches: $CURRENT_VERSION"
+              exit 0
+          else
+              echo "✗ Version mismatch!"
+              echo "  Required: $REQUIRED_VERSION"
+              echo "  Current:  $CURRENT_VERSION"
+              exit 1
+          fi
