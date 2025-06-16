@@ -1,0 +1,109 @@
+# Copyright 2022 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup Argo Workflows and CLI'
+description: |
+  This action sets up Argo Workflows and Argo CLI based on the supplied
+  configuration knobs.
+
+inputs:
+
+  argo-version:
+    description: |
+      The version of Argo Workflows to use in the form: 3.6.10
+    required: true
+    default: 3.6.10
+  install-argo-cli-only:
+    description: |
+      If true, only the Argo CLI will be installed, and the Argo Workflows
+      controller will not be installed.
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Install Argo Workflows
+      shell: bash
+      if: ${{ inputs.install-argo-cli-only != 'true' }}
+      run: |
+        kubectl create namespace argo
+        kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/install.yaml
+
+    - name: Install cosign to validate argo-cli binaries
+      uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
+    - shell: bash
+      run: |
+        shopt -s expand_aliases
+        if [ -z "$NO_COLOR" ]; then
+          alias log_info="echo -e \"\033[1;32mINFO\033[0m:\""
+          alias log_error="echo -e \"\033[1;31mERROR\033[0m:\""
+        else
+          alias log_info="echo \"INFO:\""
+          alias log_error="echo \"ERROR:\""
+        fi
+        set -e
+
+        mkdir -p $HOME/.argo-cli
+
+        shaprog() {
+          case ${{ runner.os }} in
+            Linux)
+              sha256sum $1 | cut -d' ' -f1
+              ;;
+            macOS)
+              log_error "unsupported OS ${{ runner.os }}"
+              exit 1
+              ;;
+            *)
+              log_error "unsupported OS ${{ runner.os }}"
+              exit 1
+              ;;
+          esac
+        }
+
+        trap "popd >/dev/null" EXIT
+
+        pushd $HOME/.argo-cli > /dev/null
+
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64)
+            argo_cli_filename=argo-linux-amd64.gz
+            ;;
+
+          Linux-ARM64)
+            argo_cli_filename=argo-linux-arm64.gz
+            ;;
+
+          *)
+            log_error "unsupported architecture ${{ runner.arch }}"
+            exit 1
+            ;;
+        esac
+
+        log_info "Downloading argo-cli version '${{ inputs.argo-version }}' from https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/${argo_cli_filename}"
+        curl -sL https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/${argo_cli_filename} -o argo.gz
+        curl -sL https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cli-checksums.txt -o checksums.txt
+
+        cosign verify-blob  --signature https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cli-checksums.sig --key=https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cosign.pub checksums.txt
+
+        log_info "Validating checksum for ${argo_cli_filename}"
+        expected_checksum=$(grep "${argo_cli_filename}" checksums.txt | cut -d' ' -f1)
+        actual_checksum=$(sha256sum argo.gz | cut -d' ' -f1)
+
+        if [ "$expected_checksum" != "$actual_checksum" ]; then
+          log_error "Checksum verification failed for ${argo_cli_filename}"
+          log_error "Expected: $expected_checksum"
+          log_error "Actual: $actual_checksum"
+          exit 1
+        fi
+        log_info "Checksum verification passed for ${argo_cli_filename}"
+
+        gunzip argo.gz
+        chmod +x argo
+
+    - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+      run: echo "$HOME/.argo-cli" >> $GITHUB_PATH
+      shell: bash
