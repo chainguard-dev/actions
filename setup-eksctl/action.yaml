@@ -20,46 +20,56 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
       run: |
-        [ -n "$VERSION" ] || { echo "FATAL: version input is empty"; exit 1; }
+        TEMP_D=""
+        fail() { echo "FATAL:" "$@"; exit 1; }
+        cleanup() {
+          [ -d "$TEMP_D" ] || return 0
+          rm -Rf "$TEMP_D"
+        }
+
+        TEMP_D=$(mktemp -d) || fail "could not create a temp dir"
+        trap cleanup EXIT
+
+        cd "$TEMP_D" || fail "could not cd to $TEMP_D"
+
+        [ -n "$VERSION" ] || fail "version input is empty"
 
         # install eksctl
         m=$(uname -m)
         case "$m" in
           x86_64) arch=amd64;;
           aarch64) arch=arm64;;
-          *) echo "FATAL: unknown output for 'uname -m' : '$m'";;
+          *) fail "unknown output for 'uname -m': '$m'";;
         esac
-        uname_s=$(uname -s)
+        uname_s=$(uname -s) || fail "uname -s failed"
         platform="${uname_s}_${arch}"
         fname="eksctl_${platform}.tar.gz"
 
         burl="https://github.com/eksctl-io/eksctl/releases"
         if [ "$VERSION" = "latest" ]; then
-           url="$burl/$VERSION/download"
+          url="$burl/$VERSION/download"
         else
-           url="$burl/download/$VERSION"
+          url="$burl/download/$VERSION"
         fi
 
-        echo "download eksctl for ${uname_s}/$arch platform from $url/$fname"
+        echo "download eksctl for $platform platform from $url/$fname"
         curl -sL "$url/$fname" > "$fname" ||
-           { echo "FATAL: download failed $url"; exit 1; }
+          fail "download failed $url"
 
         cksum_url="$url/eksctl_checksums.txt"
         echo "verify download against ${cksum_url}"
-        curl -sL "${cksum_url}" > "checksums.txt" ||
-           { echo "FATAL: failed to download checksums from $cksum_url"; exit 1; }
-        grep "$platform" checksums.txt > checksums.platform || {
-          echo "FATAL: '$platform' not found in checksums.txt";
+        curl -sL "${cksum_url}" > checksums.txt ||
+          fail "failed to download checksums from $cksum_url"
+        grep "$fname" checksums.txt > checksums.platform || {
           cat checksums.txt
-          exit 1
+          fail "$fname was not found in checksums.txt (content above)"
         }
         sha256sum --check < checksums.platform ||
-           { echo "FATAL: checksum verification of $fname failed"; exit 1; }
+          fail "checksum verification of $fname failed"
 
         echo "extract to /usr/local/bin"
         mkdir -p /usr/local/bin
         tar -C /usr/local/bin -xvf "$fname"
-        rm "$fname"
 
     - name: "Show eksctl info"
       shell: bash
