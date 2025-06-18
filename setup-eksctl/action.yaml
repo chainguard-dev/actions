@@ -1,0 +1,67 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup eksctl'
+description: |
+  Install eksctl into /usr/local/bin
+
+inputs:
+  version:
+    description: 'Version of eksctl to install'
+    required: true
+    default: 'latest'
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: "Install eksctl"
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        [ -n "$VERSION" ] || { echo "FATAL: version input is empty"; exit 1; }
+
+        # install eksctl
+        m=$(uname -m)
+        case "$m" in
+          x86_64) arch=amd64;;
+          aarch64) arch=arm64;;
+          *) echo "FATAL: unknown output for 'uname -m' : '$m'";;
+        esac
+        uname_s=$(uname -s)
+        platform="${uname_s}_${arch}"
+        fname="eksctl_${platform}.tar.gz"
+
+        burl="https://github.com/eksctl-io/eksctl/releases"
+        if [ "$VERSION" = "latest" ]; then
+           url="$burl/$VERSION/download"
+        else
+           url="$burl/download/$VERSION"
+        fi
+
+        echo "download eksctl for ${uname_s}/$arch platform from $url/$fname"
+        curl -sL "$url/$fname" > "$fname" ||
+           { echo "FATAL: download failed $url"; exit 1; }
+
+        cksum_url="$url/eksctl_checksums.txt"
+        echo "verify download against ${cksum_url}"
+        curl -sL "${cksum_url}" > "checksums.txt" ||
+           { echo "FATAL: failed to download checksums from $cksum_url"; exit 1; }
+        grep "$platform" checksums.txt > checksums.platform || {
+          echo "FATAL: '$platform' not found in checksums.txt";
+          cat checksums.txt
+          exit 1
+        }
+        sha256sum --check < checksums.platform ||
+           { echo "FATAL: checksum verification of $fname failed"; exit 1; }
+
+        echo "extract to /usr/local/bin"
+        mkdir -p /usr/local/bin
+        tar -C /usr/local/bin -xvf "$fname"
+        rm "$fname"
+
+    - name: "Show eksctl info"
+      shell: bash
+      run: |
+        /usr/local/bin/eksctl info
