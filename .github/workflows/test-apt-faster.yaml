@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - './apt-faster/**'
+      - 'apt-faster/**'
       - '.github/workflows/test-apt-faster.yaml'
 
 permissions: {}

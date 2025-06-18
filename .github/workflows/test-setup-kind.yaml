@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - './setup-kind/**'
-      - './setup-knative/**'
+      - 'setup-kind/**'
+      - 'setup-knative/**'
       - '.github/workflows/test-setup-kind.yaml'
 
 defaults:
