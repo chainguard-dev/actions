@@ -3,7 +3,7 @@ name: test-setup-registry
 on:
   pull_request:
     paths:
-      - './setup-registry/**'
+      - 'setup-registry/**'
       - '.github/workflows/test-setup-registry.yaml'
 
 permissions: {}
