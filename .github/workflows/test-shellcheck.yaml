@@ -1,0 +1,78 @@
+name: test-shellcheck
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'shellcheck/**'
+      - '.github/workflows/test-shellcheck.yaml'
+
+permissions: {}
+
+jobs:
+  test-github-action:
+    name: test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: "write some shell scripts"
+        shell: bash
+        run: |
+          cat > good-script.sh <<"EOF"
+          #!/bin/sh
+          echo "hello world"
+          EOF
+
+          cat > bad-script.sh <<"EOF"
+          #!/bin/sh
+          # this would fail a call to shellcheck
+          echo $VAR1
+          EOF
+
+          cat > good-script <<"EOF"
+          #!/usr/bin/env bash
+          echo "hello env world"
+          EOF
+
+          cat > non-script <<"EOF"
+          go cubs go
+          EOF
+
+          cat > expected <<"EOF"
+          bad-script.sh
+          good-script
+          good-script.sh
+          EOF
+
+      - uses: "./shellcheck"
+        with:
+          subcommand: "find"
+          config_json: |
+            {
+              "excludes": ["[.]git/.*"],
+              "paths": ["."],
+              "match_filename": true,
+              "match_shbang": true,
+              "call_combined": true,
+              "command": [
+                "sh", "-c",
+                "for x in \"$@\"; do echo $x; done | tee /tmp/found.out",
+                "arg0"]
+            }
+
+      - name: "check output"
+        shell: bash
+        run: |
+          sort /tmp/found.out > /tmp/found
+          diff -u expected /tmp/found

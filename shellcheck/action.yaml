@@ -1,0 +1,125 @@
+# Copyright 2025 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup shellcheck'
+description: |
+  Install shellcheck into /usr/local/bin,
+  And run it on all the shellscripts in your tree.
+
+inputs:
+  version:
+    description: 'Version of shellcheck to install'
+    required: true
+    default: 'stable'
+  install-only:
+    description: 'Only do installation, no execution of shellcheck'
+    type: boolean
+    required: false
+    default: false
+  subcommand:
+    description: 'the shell-scripts subcommand'
+    required: false
+    default: "shellcheck"
+  paths:
+    description: |
+      Paths to run on. space separated.
+    default: "."
+    required: false
+  config_json:
+    required: false
+    description: |
+      json blob of config. Overrides paths.
+      Example that represents the default behavior:
+        {
+          "excludes": ["[.]git/.*"],
+          "paths": ["."],
+          "match_filename": true,
+          "match_shbang": true
+        }
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: "Install shellcheck"
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        TEMP_D=""
+        XDIR=/usr/local/bin
+        fail() { echo "FATAL:" "$@"; exit 1; }
+        cleanup() {
+          [ -d "$TEMP_D" ] || return 0
+          rm -Rf "$TEMP_D"
+        }
+
+        TEMP_D=$(mktemp -d) || fail "could not create a temp dir"
+        trap cleanup EXIT
+
+        cd "$TEMP_D" || fail "could not cd to $TEMP_D"
+
+        [ -n "$VERSION" ] || fail "version input is empty"
+        case "$VERSION" in
+            stable|latest|v[0-9]*) :;;
+            *) fail "unexpected version $VERSION";;
+        esac
+
+        m=$(uname -m)
+        case "$m" in
+          x86_64|aarch64) arch=$m;;
+          *) fail "unknown output for 'uname -m': '$m'";;
+        esac
+        uname_s=$(uname -s) || fail "uname -s failed"
+        case "$uname_s" in
+            Linux) platform=linux;;
+            *) fail "unknown output from 'uname -s': $uname_s";;
+        esac
+        fname="shellcheck_${platform}.tar.gz"
+
+        fname="shellcheck-$VERSION.$platform.$arch.tar.xz"
+        burl="https://github.com/koalaman/shellcheck/releases/download"
+        url="$burl/$VERSION"
+
+        echo "download shellcheck for $platform/$arch from $url"
+        curl -sL "$url/$fname" > "$fname" ||
+          fail "download failed $url"
+
+        echo "extract to $XDIR"
+        mkdir -p "$XDIR"
+        tar -C "$XDIR" --strip-components=1 -xvf "$fname" \
+            "shellcheck-$VERSION/shellcheck"
+
+    - name: "Show shellcheck info"
+      shell: bash
+      run: |
+        /usr/local/bin/shellcheck --version
+
+    - name: "Execute shellcheck"
+      if: ${{ inputs.install_only != 'false' }}
+      shell: bash
+      env:
+        CONFIG_JSON: ${{ inputs.config_json }}
+        INCLUDE_PATHS: ${{ inputs.paths }}
+        subcommand: ${{ inputs.subcommand }}
+      run: |
+        if [ "${CONFIG_JSON}" != "" ] && [ "$INCLUDE_PATHS" != "." ]; then
+            echo "FATAL: Cannot provide 'paths' and 'config_json' together" 1>&2
+            exit 1
+        fi
+
+        if [ -n "${CONFIG_JSON}" ]; then
+            INCLUDE_PATHS=""
+        fi
+
+        # find the directory containing the checkout of this action
+        shellscripts="$GITHUB_ACTION_PATH/shell-scripts"
+        if [ ! -f "$shellscripts" ]; then
+           echo "FATAL: could not find shell-scripts"
+           exit 1
+        fi
+
+        echo "shellscripts=$shellscripts"
+        chmod u+x "$shellscripts"
+
+        "$shellscripts" "$subcommand" ${INCLUDE_PATHS}
