@@ -9,7 +9,7 @@ performs formatting.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/nodiff@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
+- uses: chainguard-dev/actions/nodiff@1df2b5598adffbfe72a3abe9243d73e338bbb006 # v1.4.10
   with:
     # Set when checkout to a non-default path.
     path: ""
@@ -28,7 +28,7 @@ steps:
 - run: gofmt -w $(find . -name '*.go')
 
 # Flag any differences from gofmt.
-- uses: chainguard-dev/actions/nodiff@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
+- uses: chainguard-dev/actions/nodiff@1df2b5598adffbfe72a3abe9243d73e338bbb006 # v1.4.10
   with:
     path: "src/github.com/${{ github.repository }}"
     fixup-command: "gofmt -w"
