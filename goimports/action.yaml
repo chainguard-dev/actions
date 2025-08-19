@@ -64,6 +64,6 @@ runs:
       done
 
   - name: Verify goimports
-    uses: chainguard-dev/actions/nodiff@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
+    uses: chainguard-dev/actions/nodiff@1df2b5598adffbfe72a3abe9243d73e338bbb006 # v1.4.10
     with:
       fixup-command: "goimports"
