@@ -14,7 +14,7 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
     # KinD Version is the version of KinD to use to orchestrate things (without v).
     # For example, 0.29.0.
     # Required.
-    kind-version: 0.29.0
+    kind-version: 0.30.0
     # Registry Authority is the authority of the local container registry to
     # stand up for this KinD cluster.
     # For example, registry.local:5000.
