@@ -98,6 +98,6 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@de82dfd62f186b1b55bd0cdf084f484496d88ee3 # v1.4.11
+      uses: chainguard-dev/actions/kind-diag@3caedd3784c809ba873cbb8c6a12e2bc6bf6ab09 # v1.4.13
       with:
         artifact-name: logs.${{ matrix.k8s-version }}
