@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import List, Tuple, Optional
+
+shbang_shell: re.Pattern[str] = re.compile(
+    # Match shebang pattern
+    r"#!\s*(/usr/bin/env\s+)?(/bin/sh|/bin/bash|sh|bash)(\s+|$)"
+)
+
+
+def is_shellscript(filepath: Path, match_filename: bool, match_shbang: bool) -> bool:
+    """
+    Determine if a file is a shell script based on filename and/or shebang.
+
+    Args:
+        filepath: Path to the file to check
+        match_filename: Whether to check filename extensions
+        match_shbang: Whether to check shebang line
+
+    Returns:
+        bool: True if file is determined to be a shell script
+    """
+    if match_filename and str(filepath).endswith(".sh"):
+        return True
+
+    if match_shbang:
+        with open(filepath, "rb") as f:
+            first_bytes = f.read(128)
+            try:
+                first_line = first_bytes.decode("utf-8", errors="ignore")
+            except UnicodeDecodeError:
+                return False
+
+            if shbang_shell.match(first_line):
+                return True
+
+    return False
+
+
+
+def load_config_from_env() -> Optional[dict]:
+    """Load configuration from CONFIG_JSON environment variable."""
+    config_json = os.environ.get("CONFIG_JSON")
+    if not config_json:
+        return None
+
+    try:
+        return json.loads(config_json)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing CONFIG_JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def should_exclude(path: Path, exclude_patterns: List[re.Pattern[str]]) -> bool:
+    """Check if path matches any exclude pattern."""
+    path_str = str(path)
+    for pattern in exclude_patterns:
+        if re.search(pattern, path_str):
+            return True
+    return False
+
+
+def process_directory(
+    directory: Path,
+    match_filename: bool,
+    match_shbang: bool,
+    exclude_patterns: List[re.Pattern[str]],
+) -> Tuple[List[str], bool]:
+    """Recursively process directory for shell scripts."""
+    results: List[str] = []
+    had_error: bool = False
+
+    try:
+        for root, dirs, files in os.walk(directory):
+            root_path = Path(root)
+
+            # Filter out excluded directories
+            dirs[:] = [
+                d for d in dirs if not should_exclude(root_path / d, exclude_patterns)
+            ]
+
+            for file in files:
+                file_path = root_path / file
+
+                # Skip excluded files
+                if should_exclude(file_path, exclude_patterns):
+                    continue
+
+                try:
+                    if is_shellscript(file_path, match_filename, match_shbang):
+                        results.append(str(file_path))
+                except (IOError, OSError) as e:
+                    print(f"Error reading file {file_path}: {e}", file=sys.stderr)
+                    had_error = True
+    except (OSError, IOError) as e:
+        print(f"Error processing directory {directory}: {e}", file=sys.stderr)
+        had_error = True
+
+    return results, had_error
+
+
+def execute_command(command: List[str], results: List[str]) -> bool:
+    """Execute command with results as arguments. Returns True if successful."""
+    if not command:
+        return True
+
+    try:
+        result = subprocess.run(command + results, capture_output=False)
+        if result.returncode != 0:
+            return False
+        return True
+    except FileNotFoundError:
+        print(f"Error: command '{command[0]}' not found in PATH", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Error running command: {e}", file=sys.stderr)
+        return False
+
+
+def cmd_find(args: argparse.Namespace) -> None:
+    """Handle the 'find' subcommand."""
+    # Load configuration from environment variable if present
+    config = load_config_from_env()
+    if config:
+        if len(sys.argv) > 2:  # More than just script name and 'find'
+            print("Error: CONFIG_JSON is set, command line arguments not allowed", file=sys.stderr)
+            sys.exit(1)
+
+        # Override args with config values
+        if "match_shbang" in config:
+            args.match_shbang = config["match_shbang"]
+        if "match_filename" in config:
+            args.match_filename = config["match_filename"]
+        if "excludes" in config:
+            args.exclude = config["excludes"]
+        if "paths" in config:
+            args.paths = config["paths"]
+        if "call_combined" in config:
+            args.call_combined = config["call_combined"]
+        if "command" in config:
+            args.command = config["command"]
+
+    # Validate arguments
+    if not args.paths:
+        print("Error: No files or directories provided", file=sys.stderr)
+        sys.exit(1)
+
+    if not args.match_shbang and not args.match_filename:
+        print(
+            "Error: At least one of --match-shbang or --match-filename must be true",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Add default excludes unless disabled
+    excludes = args.exclude[:]
+    if not getattr(args, 'no_default_excludes', False):
+        excludes = [r'\.git/'] + excludes
+
+    # Compile exclude patterns
+    exclude_patterns: List[re.Pattern[str]] = []
+    for pattern in excludes:
+        try:
+            exclude_patterns.append(re.compile(pattern))
+        except re.error as e:
+            print(f"Error: Invalid regex pattern '{pattern}': {e}", file=sys.stderr)
+            sys.exit(1)
+
+    results: List[str] = []
+    had_errors: bool = False
+
+    for path_str in args.paths:
+        path = Path(path_str)
+
+        if not path.exists():
+            print(f"Warning: Path does not exist: {path_str}", file=sys.stderr)
+            had_errors = True
+            continue
+
+        if path.is_file():
+            if not should_exclude(path, exclude_patterns):
+                try:
+                    if is_shellscript(path, args.match_filename, args.match_shbang):
+                        results.append(str(path))
+                except (IOError, OSError) as e:
+                    print(f"Error reading file {path}: {e}", file=sys.stderr)
+                    had_errors = True
+        elif path.is_dir():
+            dir_results, dir_error = process_directory(
+                path, args.match_filename, args.match_shbang, exclude_patterns
+            )
+            results.extend(dir_results)
+            if dir_error:
+                had_errors = True
+        else:
+            print(
+                f"Warning: Path is neither file nor directory: {path_str}",
+                file=sys.stderr,
+            )
+            had_errors = True
+
+    # If there were errors during find, don't execute command
+    if had_errors:
+        sys.exit(1)
+
+    results = sorted(results)
+
+    # Execute command if provided, otherwise print results
+    if hasattr(args, 'command') and args.command:
+        print(f"found {len(results)} shell scripts. executing {args.command}")
+        if args.call_combined:
+            command_passed = execute_command(args.command, results)
+            if not command_passed:
+                sys.exit(1)
+        else:
+            fails: int = 0
+            for r in results:
+                if not execute_command(args.command, [r]):
+                    fails += 1
+            if fails != 0:
+                sys.exit(1)
+    else:
+        # Output results
+        if hasattr(args, 'print0') and args.print0:
+            for result in results:
+                print(result, end="\0")
+        else:
+            for result in results:
+                print(result)
+
+
+def cmd_shellcheck(args: argparse.Namespace) -> None:
+    """Handle the 'shellcheck' subcommand."""
+    # Build shellcheck command from arguments after --
+    shellcheck_cmd = [os.environ.get("SHELLCHECK", "shellcheck")] + args.shellcheck_args
+
+    # Set the command for find processing
+    args.command = shellcheck_cmd
+
+    # Call find command
+    cmd_find(args)
+
+
+def add_common_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add common arguments shared by find and shellcheck subcommands."""
+    parser.add_argument("paths", nargs="*", help="Files or directories to process")
+    parser.add_argument(
+        "--match-shbang",
+        action="store_true",
+        default=True,
+        help="Enable shebang processing (default: true)",
+    )
+    parser.add_argument(
+        "--no-match-shbang",
+        dest="match_shbang",
+        action="store_false",
+        help="Disable shebang processing",
+    )
+    parser.add_argument(
+        "--match-filename",
+        action="store_true",
+        default=True,
+        help="Enable filename matching (default: true)",
+    )
+    parser.add_argument(
+        "--no-match-filename",
+        dest="match_filename",
+        action="store_false",
+        help="Disable filename matching",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Exclude paths matching regex (can be used multiple times)",
+    )
+    parser.add_argument(
+        "--call-combined",
+        action="store_true",
+        default=False,
+        help="Call command with multiple paths, like xargs (default: false)",
+    )
+    parser.add_argument(
+        "--no-call-combined",
+        dest="call_combined",
+        action="store_false",
+        help="Call command once for each found script",
+    )
+    parser.add_argument(
+        "--no-default-excludes",
+        action="store_true",
+        help="Disable default exclusions (like .git/*)",
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Find shell scripts and optionally run commands on them",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    subparsers = parser.add_subparsers(dest='subcommand', help='Available subcommands')
+
+    # 'find' subcommand
+    find_parser = subparsers.add_parser('find', help='Find shell scripts')
+    add_common_arguments(find_parser)
+    find_parser.add_argument(
+        "--print0",
+        action="store_true",
+        help="Separate output with null characters (like find -print0)",
+    )
+
+    # 'shellcheck' subcommand
+    shellcheck_parser = subparsers.add_parser('shellcheck', help='Find shell scripts and run shellcheck')
+    add_common_arguments(shellcheck_parser)
+
+    # Handle command line argument parsing for -- separator
+    if len(sys.argv) > 1 and sys.argv[1] in ['find', 'shellcheck']:
+        subcommand = sys.argv[1]
+        try:
+            dash_dash_idx = sys.argv.index('--', 1)  # Start search after script name
+            # Split arguments: everything before -- goes to parser, everything after becomes command
+            parser_args = sys.argv[1:dash_dash_idx]
+            command_args = sys.argv[dash_dash_idx + 1:]
+        except ValueError:
+            parser_args = sys.argv[1:]
+            command_args = []
+
+        args = parser.parse_args(parser_args)
+
+        if subcommand == 'find' and command_args:
+            args.command = command_args
+        elif subcommand == 'shellcheck':
+            args.shellcheck_args = command_args if command_args else []
+    else:
+        args = parser.parse_args()
+        # Set default for shellcheck subcommand
+        if hasattr(args, 'subcommand') and args.subcommand == 'shellcheck':
+            args.shellcheck_args = []
+
+    if not args.subcommand:
+        parser.print_help()
+        sys.exit(1)
+
+    if args.subcommand == 'find':
+        cmd_find(args)
+    elif args.subcommand == 'shellcheck':
+        cmd_shellcheck(args)
+
+
+if __name__ == "__main__":
+    main()
