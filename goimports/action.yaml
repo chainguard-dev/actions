@@ -44,13 +44,14 @@ runs:
         pushd $subdir
 
         # We limit the depth to 3 mostly to avoid go.mod files that get pulled into `third_party` like some hashicorp repos.
-        for dir in $(find . -type d \( -path "*/third_party" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
+        for dir in $(find . -type d \( -path "*/third_party" -o -path "*/testdata" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
           echo "::group:: $dir"
           pushd $dir
           goimports -local="${{ inputs.local }}" -w \
             $(find . \
             -path './vendor' -prune \
             -o -path '*/third_party' -prune \
+            -o -path '*/testdata' -prune \
             -o -name '*.pb.go' -prune \
             -o -name '*.pb.gw.go' -prune \
             -o -name 'wire_gen.go' -prune \
