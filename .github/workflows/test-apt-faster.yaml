@@ -42,12 +42,18 @@ jobs:
           set -o pipefail
           sudo apt-get --quiet update 2>&1 | tee apt-get-update.log
 
-      - name: "check apt install"
+      - name: "check apt-get install"
         shell: bash
         run: |
           set -o pipefail
           sudo apt-get --quiet --assume-yes install \
             python3-venv qemu-system-x86 | tee apt-get-install.log
+
+      - name: "check apt install"
+        shell: bash
+        run: |
+          set -o pipefail
+          sudo apt install -y libcap-dev | tee apt-install.log
 
       - name: "show configs"
         shell: bash
