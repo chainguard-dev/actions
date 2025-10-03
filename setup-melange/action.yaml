@@ -27,21 +27,40 @@ runs:
       shell: bash
       run: |
         sudo apt install -y build-essential git jq
-    # TODO: the bubblewrap package available from "apt install"
-    # is outdated and missing newer features such as --clearenv flag,
-    # so instead we download the wolfi .apk and use the binary in there
+
     - name: 'Install dependencies (bubblewrap)'
       shell: bash
       run: |
-        sudo apt install -y libcap-dev meson ninja-build
-        git clone https://github.com/containers/bubblewrap
-        pushd bubblewrap
-        meson --prefix=/usr -Drequire_userns=true . output
-        cd output
-        ninja
-        sudo ninja install
-        popd
-        rm -rf bubblewrap
+        sudo apt install --assume-yes bubblewrap
+
+    - name: Enable bubblewrap in ubuntu
+      shell: bash
+      run: |
+        set -x
+        # https://github.com/chainguard-dev/melange/issues/1508
+        sudo tee /etc/apparmor.d/local-bwrap <<"EOF"
+        abi <abi/4.0>,
+        include <tunables/global>
+
+        profile local-bwrap /usr/bin/bwrap flags=(unconfined) {
+          userns,
+          # Site-specific additions and overrides. See local/README for details.
+          include if exists <local/bwrap>
+        }
+        EOF
+
+        sudo systemctl reload apparmor
+        if ! bwrap --unshare-user --bind / / true ; then
+          echo "FATAL: failed to verify 'bwrap --unshare-user'"
+          which bwrap || :
+          ls /proc/self/ns || echo "no /proc/self/ns"
+          kver=$(uname -r) || echo "uname -r failed"
+          if config="/boot/config-$kver" && [ -f "$config" ]; then
+            grep CONFIG_USER_NS "$config" || echo "no CONFIG_USER_NS in $config"
+          fi
+          exit 1
+        fi
+        echo "bubblewrap (bwrap) installed successfully."
 
     - name: 'Install melange'
       if:
