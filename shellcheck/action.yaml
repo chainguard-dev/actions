@@ -75,15 +75,33 @@ runs:
             Linux) platform=linux;;
             *) fail "unknown output from 'uname -s': $uname_s";;
         esac
-        fname="shellcheck_${platform}.tar.gz"
+        fname="shellcheck-$VERSION.${platform}.$arch.tar.xz"
 
-        fname="shellcheck-$VERSION.$platform.$arch.tar.xz"
-        burl="https://github.com/koalaman/shellcheck/releases/download"
-        url="$burl/$VERSION"
+        url="https://api.github.com/repos/koalaman/shellcheck/releases/tags/$VERSION"
+        curl --fail -s "$url" -u "username:${{ github.token }}" > assets.json ||
+            fail "curl failed for $url"
 
-        echo "download shellcheck for $platform/$arch from $url"
-        curl -sL "$url/$fname" > "$fname" ||
-          fail "download failed $url"
+        out=$(jq -r --arg fname "$fname" '
+        .assets[]
+          | select(.name == $fname)
+          | "\((.digest // "-")) \(.browser_download_url)"' < assets.json ) ||
+          fail "parsing json from $url with jq exited $?"
+
+        [ -n "$out" ] ||
+            fail "did not find file named $fname in release version $VERSION from $url"
+
+        dlurl=${out#* *}
+        # checksum is like 'sha256:<thing>'. split to alg=sha256 and hash=...
+        t=${out%% *}
+        alg=${t%:*}
+        hash=${t#*:}
+
+        echo "download shellcheck version '$VERSION' for $platform/$arch from $dlurl"
+        curl -sL "$dlurl" > "$fname" ||
+          fail "download failed $dlurl"
+
+        echo "$hash $fname" | "${alg}sum" -c ||
+           fail "checksum of $fname failed. expected $hash"
 
         echo "extract to $XDIR"
         mkdir -p "$XDIR"

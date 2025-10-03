@@ -18,6 +18,13 @@ Default value for version is 'stable'
     paths: tools/ scripts/
 ```
 
+Only do the install, of latest 'stable' version.
+```yaml
+- uses: chainguard-dev/actions/shellcheck@xxxxxxxxxxxx # vX.Y.Z
+  with:
+    install-only: true
+```
+
 You can also specify a json blob to pass arguments, which
 allows you to easily pass multiple paths or excludes without
 shell escaping.
