@@ -65,18 +65,24 @@ runs:
           ;;
         latest-release)
           # fetch the latest 20 releases, we need to filter by the ones that have assets.
-          releases=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/chainguard-dev/melange/releases?per_page=20)
+          tmpf=$(mktemp)
+          url="https://api.github.com/repos/chainguard-dev/melange/releases/latest"
+          curl --fail -s -u "username:${{ github.token }}" "$url" > "$tmpf" ||
+            { echo "error in github api call for latest melange release"; exit 1; }
+          tag=$(jq -r .tag_name < "$tmpf") ||
+            { echo "error parsing json from $url"; exit 1; }
 
-          # search for the first release that has assets.
-          tag=$(echo $releases | jq -r 'first(.[] | select(.assets | length > 0) | .tag_name)')
-          if [[ -z ${tag} ]]; then
+          if [ -z "$tag" ]; then
             # this should, ideally, never happen.
             echo "No melange release with assets found"
             exit 1
           fi
+          rm -f "$tmpf"
+          echo "Found 'latest-release' for melange is '$tag'"
           ;;
         *)
           tag="${{ inputs.version }}"
+          ;;
         esac
 
         if [[ ! -z ${tag} ]]; then
