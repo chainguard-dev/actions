@@ -69,7 +69,7 @@ runs:
           url="https://api.github.com/repos/chainguard-dev/melange/releases/latest"
           curl --fail -s -u "username:${{ github.token }}" "$url" > "$tmpf" ||
             { echo "error in github api call for latest melange release"; exit 1; }
-          tag=$(jq .tag_name < "$tmpf") ||
+          tag=$(jq -r .tag_name < "$tmpf") ||
             { echo "error parsing json from $url"; exit 1; }
 
           if [ -z "$tag" ]; then
