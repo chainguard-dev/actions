@@ -19,7 +19,7 @@ Knative.
 
 ```yaml
 steps:
-  - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+  - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
     with:
       go-version: '1.24'
       check-latest: true
