@@ -1,28 +1,30 @@
 version: 2
 updates:
-
-  # workflows
   - package-ecosystem: "github-actions"
-    directory: "/"
     schedule:
       interval: "daily"
-  # boilerplate
-  - package-ecosystem: "github-actions"
-    directory: "/boilerplate"
-    schedule:
-      interval: "daily"
-  # digesta-bot
-  - package-ecosystem: "github-actions"
-    directory: "/digesta-bot"
-    schedule:
-      interval: "daily"
-  # donotsubmit
-  - package-ecosystem: "github-actions"
-    directory: "/donotsubmit"
-    schedule:
-      interval: "daily"
-  # kind-diag
-  - package-ecosystem: "github-actions"
-    directory: "/kind-diag"
-    schedule:
-      interval: "daily"
+    directories:
+      # / covers .github/workflows
+      - "/"
+      - "/apko-build"
+      - "/apt-faster"
+      - "/boilerplate"
+      - "/donotsubmit"
+      - "/eof-newline"
+      - "/githubapp-token"
+      - "/gofmt"
+      - "/goimports"
+      - "/hugo2confluence"
+      - "/inky-build-pkg"
+      - "/k8s-diag"
+      - "/kind-diag"
+      - "/melange-build"
+      - "/melange-build-pkg"
+      - "/melange-keygen"
+      - "/nodiff"
+      - "/setup-*"
+      - "/shellcheck"
+      - "/terraform-diag"
+      - "/trailing-space"
+      - "/whereami"
+      - "/wolfi-build-pkg"
