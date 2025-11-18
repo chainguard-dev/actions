@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Kind
-        uses: chainguard-dev/actions/setup-kind@abcc11e1cf9073eff6c69e91c49756c1430b094c # v1.5.8
+        uses: chainguard-dev/actions/setup-kind@b479012116eacde7f895586c17b598f7ba0ee700 # v1.5.9
 
       - name: Install Argo Workflows
         uses: ./setup-argo-workflows
