@@ -96,11 +96,11 @@ runs:
           elif [ "${REPO}" == "eventing" -a "${{ inputs.eventing-version }}" != "" ]; then
             REAL_KNATIVE_VERSION="knative-v${{ inputs.eventing-version }}"
           elif [ ${{ inputs.version }} == "latest" ]; then
-            REAL_KNATIVE_VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/releases/latest | jq -r '.tag_name')
+            REAL_KNATIVE_VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | sort -V | tail -1)
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
           elif [[ ${{ inputs.version }} == *".x" ]]; then
             INPUT=$(echo ${{ inputs.version }} | sed 's/.x//g')
-            VERSION=$(curl -L -s https://api.github.com/repos/knative/${REPO}/git/refs/tags | jq -r '.[].ref' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -n | tail -1)
+            VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -V | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
             REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
