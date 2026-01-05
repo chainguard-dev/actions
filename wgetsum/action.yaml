@@ -1,0 +1,122 @@
+name: wgetsum
+description: |
+  Download a file using wget and verify its checksum.
+  Fails if the downloaded file's checksum does not match the expected value.
+
+inputs:
+  url:
+    description: |
+      The URL to download.
+    required: true
+  output:
+    description: |
+      The output path for the downloaded file. If not set, wget will use its default behavior.
+    required: false
+    default: ""
+  checksum:
+    description: |
+      The expected checksum(s) of the file. Multiple checksums can be provided
+      (space or newline separated) and all must match. Checksums can optionally
+      include an algorithm prefix (e.g., "sha256:abc123", "sha512:def456").
+      If no prefix is provided, sha256 is assumed.
+      Supported algorithms: sha256, sha512, sha1, md5.
+    required: true
+  wget-flags:
+    description: |
+      Additional flags to pass to wget.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify checksum
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        URL="${{ inputs.url }}"
+        OUTPUT="${{ inputs.output }}"
+        CHECKSUMS="${{ inputs.checksum }}"
+        WGET_FLAGS="${{ inputs.wget-flags }}"
+
+        if [ -n "${OUTPUT}" ]; then
+          echo "Downloading ${URL} to ${OUTPUT}..."
+          wget ${WGET_FLAGS} -O "${OUTPUT}" "${URL}"
+          FILE_PATH="${OUTPUT}"
+        else
+          echo "Downloading ${URL}..."
+          wget ${WGET_FLAGS} "${URL}"
+          FILE_PATH=$(basename "${URL}")
+        fi
+
+        # Function to compute checksum for a given algorithm
+        compute_checksum() {
+          local algo=$1
+          local file=$2
+          case "${algo}" in
+            sha256)
+              if command -v sha256sum &> /dev/null; then
+                sha256sum "${file}" | awk '{print $1}'
+              else
+                shasum -a 256 "${file}" | awk '{print $1}'
+              fi
+              ;;
+            sha512)
+              if command -v sha512sum &> /dev/null; then
+                sha512sum "${file}" | awk '{print $1}'
+              else
+                shasum -a 512 "${file}" | awk '{print $1}'
+              fi
+              ;;
+            sha1)
+              if command -v sha1sum &> /dev/null; then
+                sha1sum "${file}" | awk '{print $1}'
+              else
+                shasum -a 1 "${file}" | awk '{print $1}'
+              fi
+              ;;
+            md5)
+              if command -v md5sum &> /dev/null; then
+                md5sum "${file}" | awk '{print $1}'
+              else
+                md5 -q "${file}"
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported checksum algorithm: ${algo}"
+              exit 1
+              ;;
+          esac
+        }
+
+        echo "Verifying checksum(s)..."
+        FAILED=0
+        for entry in ${CHECKSUMS}; do
+          # Parse algorithm prefix if present
+          if [[ "${entry}" == *:* ]]; then
+            ALGO="${entry%%:*}"
+            EXPECTED="${entry#*:}"
+          else
+            ALGO="sha256"
+            EXPECTED="${entry}"
+          fi
+
+          ACTUAL=$(compute_checksum "${ALGO}" "${FILE_PATH}")
+
+          if [ "${ACTUAL}" != "${EXPECTED}" ]; then
+            echo "::error::${ALGO} checksum mismatch!"
+            echo "Expected: ${EXPECTED}"
+            echo "Actual:   ${ACTUAL}"
+            FAILED=1
+          else
+            echo "${ALGO} checksum verified: ${ACTUAL}"
+          fi
+        done
+
+        if [ "${FAILED}" -eq 1 ]; then
+          rm -f "${FILE_PATH}"
+          exit 1
+        fi
+
+        echo "All checksums verified successfully."
