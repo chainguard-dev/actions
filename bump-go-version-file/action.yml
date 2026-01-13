@@ -1,0 +1,158 @@
+name: Bump Go Version File
+description: 'Checks the latest Go version and updates .go-version file if needed, then opens a PR'
+
+inputs:
+  go-version-file:
+    description: 'Path to the go version file (default: .go-version)'
+    required: false
+    default: '.go-version'
+  token:
+    description: 'GITHUB_TOKEN or a `repo` scoped Personal Access Token (PAT)'
+    required: true
+    default: ${{ github.token }}
+  signoff:
+    description: 'Add `Signed-off-by` line by the committer at the end of the commit log message.'
+    default: 'false'
+  author:
+    description: >
+      The author name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the user who triggered the workflow run.
+    default: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
+  committer:
+    description: >
+      The committer name and email address in the format `Display Name <email@address.com>`.
+      Defaults to the GitHub Actions bot user.
+    default: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
+  labels-for-pr:
+    description: 'A comma or newline separated list of labels to be used in the pull request.'
+    default: 'automated pr, go updates'
+  branch-for-pr:
+    description: 'The pull request branch name.'
+    default: 'automated/bump-go-version'
+  title-for-pr:
+    description: 'The title of the pull request.'
+    default: 'chore: bump Go version'
+  commit-message:
+    description: 'The message to use when committing changes.'
+    default: 'chore: bump Go version'
+  base-branch:
+    description: 'Base branch for the PR (default: main)'
+    required: false
+    default: 'main'
+  dry-run:
+    description: 'Run in dry-run mode (only show changes without creating PR)'
+    required: false
+    default: 'false'
+
+outputs:
+  pull_request_number:
+    description: 'Pull Request Number'
+    value: ${{ steps.pull_request.outputs.pull-request-number }}
+  old-version:
+    description: 'The old Go version'
+    value: ${{ steps.bump.outputs.old_version }}
+  new-version:
+    description: 'The new Go version'
+    value: ${{ steps.bump.outputs.new_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check and bump Go version
+      id: bump
+      shell: bash
+      env:
+        GO_VERSION_FILE: ${{ inputs.go-version-file }}
+      run: |
+        set -e
+
+        # Get the latest stable Go version from the official Go website
+        echo "Fetching latest Go version..."
+        LATEST_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/go//')
+        echo "Latest Go version: $LATEST_VERSION"
+
+        # Read current version from file
+        if [ ! -f "$GO_VERSION_FILE" ]; then
+          echo "Error: $GO_VERSION_FILE not found"
+          exit 1
+        fi
+
+        CURRENT_VERSION=$(cat "$GO_VERSION_FILE" | tr -d '[:space:]')
+        echo "Current Go version in file: $CURRENT_VERSION"
+
+        # Set outputs
+        echo "old_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+        echo "new_version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
+
+        # Compare versions
+        if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
+          echo "Go version is already up to date!"
+          exit 0
+        fi
+
+        echo "Version needs to be updated from $CURRENT_VERSION to $LATEST_VERSION"
+
+        # Update the file
+        echo "$LATEST_VERSION" > "$GO_VERSION_FILE"
+        echo "Updated $GO_VERSION_FILE to $LATEST_VERSION"
+
+    - name: Check workspace
+      id: create_pr_update
+      shell: bash
+      run: |
+        git diff --stat
+        echo "create_pr_update=false" >> "$GITHUB_OUTPUT"
+        if [[ $(git diff --stat) != '' ]]; then
+          echo "create_pr_update=true" >> "$GITHUB_OUTPUT"
+          echo "diff<<EOF" >> "$GITHUB_OUTPUT"
+          git diff >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Dry-run output
+      if: steps.create_pr_update.outputs.create_pr_update == 'true' && inputs.dry-run == 'true'
+      shell: bash
+      run: |
+        echo "## 🧪 Dry-run mode enabled" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**No PR will be created.**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Version Update" >> $GITHUB_STEP_SUMMARY
+        echo "- Old version: \`${{ steps.bump.outputs.old_version }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- New version: \`${{ steps.bump.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Changes that would be made:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```diff' >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.create_pr_update.outputs.diff }}" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+      if: steps.create_pr_update.outputs.create_pr_update == 'true' && inputs.dry-run != 'true'
+      id: pull_request
+      with:
+        token: ${{ inputs.token }}
+        commit-message: ${{ inputs.commit-message }}
+        title: ${{ inputs.title-for-pr }} (from ${{ steps.bump.outputs.old_version }} to ${{ steps.bump.outputs.new_version }})
+        body: |
+          ${{ inputs.description-for-pr }}
+
+          **Old version:** `${{ steps.bump.outputs.old_version }}`
+          **New version:** `${{ steps.bump.outputs.new_version }}`
+
+          ## Changes
+          <details>
+
+          ```diff
+          ${{ steps.create_pr_update.outputs.diff }}
+          ```
+
+          </details>
+        labels: ${{ inputs.labels-for-pr }}
+        branch: ${{ inputs.branch-for-pr }}
+        base: ${{ inputs.base-branch }}
+        signoff: ${{ inputs.signoff }}
+        committer: ${{ inputs.committer }}
+        author: ${{ inputs.author }}
+        delete-branch: true

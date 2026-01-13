@@ -1,0 +1,182 @@
+name: Test Bump Go Version Action
+
+on:
+  pull_request:
+    paths:
+      - 'bump-go-version-file/**'
+      - '.github/workflows/test-bump-go-version.yaml'
+
+permissions: {}
+
+jobs:
+  test-dry-run:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Create test .go-version file
+        run: |
+          echo "1.20.0" > .go-version
+          cat .go-version
+
+      - name: Test action in dry-run mode
+        id: test-dry-run
+        uses: ./bump-go-version-file
+        with:
+          go-version-file: '.go-version'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: 'true'
+
+      - name: Verify outputs
+        run: |
+          echo "Old version: ${{ steps.test-dry-run.outputs.old-version }}"
+          echo "New version: ${{ steps.test-dry-run.outputs.new-version }}"
+          if [ -z "${{ steps.test-dry-run.outputs.old-version }}" ]; then
+            echo "Error: old-version output is empty"
+            exit 1
+          fi
+          if [ -z "${{ steps.test-dry-run.outputs.new-version }}" ]; then
+            echo "Error: new-version output is empty"
+            exit 1
+          fi
+          echo "✅ Outputs are valid"
+
+      - name: Check file was updated
+        run: |
+          CURRENT=$(cat .go-version | tr -d '[:space:]')
+          NEW_VERSION="${{ steps.test-dry-run.outputs.new-version }}"
+          echo "Current version in file: $CURRENT"
+          echo "Expected new version: $NEW_VERSION"
+          if [ "$CURRENT" != "$NEW_VERSION" ]; then
+            echo "Error: File was not updated correctly"
+            exit 1
+          fi
+          echo "✅ File was updated correctly"
+
+  test-already-up-to-date:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Get latest Go version
+        id: get-latest
+        run: |
+          LATEST=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/go//')
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest Go version: $LATEST"
+
+      - name: Create up-to-date .go-version file
+        run: |
+          echo "${{ steps.get-latest.outputs.latest }}" > .go-version
+          cat .go-version
+
+      - name: Test action with up-to-date version
+        id: test-uptodate
+        uses: ./bump-go-version-file
+        with:
+          go-version-file: '.go-version'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: 'true'
+
+      - name: Verify no PR would be created
+        run: |
+          echo "Old version: ${{ steps.test-uptodate.outputs.old-version }}"
+          echo "New version: ${{ steps.test-uptodate.outputs.new-version }}"
+          if [ "${{ steps.test-uptodate.outputs.old-version }}" != "${{ steps.test-uptodate.outputs.new-version }}" ]; then
+            echo "Error: Versions should be the same"
+            exit 1
+          fi
+          echo "✅ Version is already up to date"
+
+  test-custom-file-path:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Create custom path .go-version file
+        run: |
+          mkdir -p .github
+          echo "1.19.0" > .github/go-version
+          cat .github/go-version
+
+      - name: Test action with custom file path
+        id: test-custom
+        uses: ./bump-go-version-file
+        with:
+          go-version-file: '.github/go-version'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: 'true'
+
+      - name: Verify custom file was updated
+        run: |
+          CURRENT=$(cat .github/go-version | tr -d '[:space:]')
+          NEW_VERSION="${{ steps.test-custom.outputs.new-version }}"
+          echo "Current version in custom file: $CURRENT"
+          echo "Expected new version: $NEW_VERSION"
+          if [ "$CURRENT" != "$NEW_VERSION" ]; then
+            echo "Error: Custom file was not updated correctly"
+            exit 1
+          fi
+          echo "✅ Custom file path works correctly"
+
+  test-missing-file:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Test action with missing file (should fail)
+        id: test-missing
+        continue-on-error: true
+        uses: ./bump-go-version-file
+        with:
+          go-version-file: '.go-version-missing'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: 'true'
+
+      - name: Verify failure
+        run: |
+          if [ "${{ steps.test-missing.outcome }}" != "failure" ]; then
+            echo "Error: Action should have failed with missing file"
+            exit 1
+          fi
+          echo "✅ Action correctly fails with missing file"
