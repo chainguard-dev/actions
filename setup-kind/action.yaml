@@ -162,10 +162,8 @@ runs:
         # Configure registry for KinD.
         containerdConfigPatches:
         - |-
-          [plugins."io.containerd.grpc.v1.cri".registry.mirrors."$REGISTRY_NAME:$REGISTRY_PORT"]
-            endpoint = ["http://$REGISTRY_NAME:$REGISTRY_PORT"]
-          [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-            endpoint = ["https://${{ inputs.registry-mirror }}"]
+          [plugins."io.containerd.grpc.v1.cri".registry]
+            config_path = "/etc/containerd/certs.d"
 
         # This is needed in order to support projected volumes with service account tokens.
         # See: https://kubernetes.slack.com/archives/CEKK1KTN2/p1600268272383600
@@ -202,6 +200,26 @@ runs:
         echo '::endgroup::'
 
         kind create cluster --config kind.yaml --wait 5m
+
+        REGISTRY_DIR="/etc/containerd/certs.d/${REGISTRY_NAME}:${REGISTRY_PORT}"
+        for node in $(kind get nodes); do
+          docker exec "${node}" mkdir -p "${REGISTRY_DIR}"
+          cat <<EOF | docker exec -i "${node}" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml"
+        [host."http://${REGISTRY_NAME}:${REGISTRY_PORT}"]
+        EOF
+        done
+
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: local-registry-hosting
+          namespace: kube-public
+        data:
+          localRegistryHosting.v1: |
+            host: "${REGISTRY_NAME}:${REGISTRY_PORT}"
+            help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
+        EOF
 
     - name: Expose OIDC Discovery
       shell: bash
