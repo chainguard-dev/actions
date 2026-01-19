@@ -73,6 +73,27 @@ jobs:
         k8s-version: ${{ matrix.k8s-version }}
         cluster-suffix: ${{ matrix.cluster-suffix }}
 
+    - name: check registry
+      run: |
+        docker pull nginx:latest
+        docker tag nginx:latest registry.local:5000/nginx:latest
+        docker push registry.local:5000/nginx:latest
+
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nginx-local
+        spec:
+          containers:
+          - name: nginx
+            image: registry.local:5000/nginx:latest
+            ports:
+            - containerPort: 80
+        EOF
+
+        kubectl wait --for=condition=ready pod/nginx-local --timeout=60s
+
     - name: check domain
       run: |
         expected_value="${{ matrix.cluster-suffix }}"
