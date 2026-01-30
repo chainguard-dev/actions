@@ -32,6 +32,7 @@ jobs:
         - 1.32.x
         - 1.33.x
         - 1.34.x
+        - 1.35.x
 
         # See https://github.com/chainguard-dev/actions/pull/175
         # We're testing whether setting a custom cluster domain works
@@ -48,17 +49,19 @@ jobs:
           knative-version: 1.17.0
         - k8s-version: 1.34.x
           knative-version: 1.19.0
+        - k8s-version: 1.35.x
+          knative-version: 1.20.0
 
     permissions:
       contents: read
 
     steps:
-    - uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+    - uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
       with:
         egress-policy: audit
 
     - name: Checkout the current action
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
 
@@ -69,6 +72,27 @@ jobs:
       with:
         k8s-version: ${{ matrix.k8s-version }}
         cluster-suffix: ${{ matrix.cluster-suffix }}
+
+    - name: check registry
+      run: |
+        docker pull nginx:latest
+        docker tag nginx:latest registry.local:5000/nginx:latest
+        docker push registry.local:5000/nginx:latest
+
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nginx-local
+        spec:
+          containers:
+          - name: nginx
+            image: registry.local:5000/nginx:latest
+            ports:
+            - containerPort: 80
+        EOF
+
+        kubectl wait --for=condition=ready pod/nginx-local --timeout=60s
 
     - name: check domain
       run: |
@@ -98,6 +122,6 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@7d647f470c4d3692286221bd17ca78206976a61c # v1.5.11
+      uses: chainguard-dev/actions/kind-diag@18e5e3427cf9d6bcfbefe60dca48e40292f000c5 # v1.5.13
       with:
         artifact-name: logs.${{ matrix.k8s-version }}

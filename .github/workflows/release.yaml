@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
         with:
           egress-policy: audit
 
@@ -55,7 +55,7 @@ jobs:
           scope: ${{ github.repository }}
           identity: release
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0 # fetch all history for all tags and branches
           token: ${{ steps.octo-sts.outputs.token }}
@@ -73,7 +73,7 @@ jobs:
           fi
 
       - name: Bump and push Git tag
-        uses: chainguard-dev/actions/git-tag@7d647f470c4d3692286221bd17ca78206976a61c # v1.5.11
+        uses: chainguard-dev/actions/git-tag@18e5e3427cf9d6bcfbefe60dca48e40292f000c5 # v1.5.13
         if: steps.check.outputs.bump == 'yes'
         with:
           token: ${{ steps.octo-sts.outputs.token }}

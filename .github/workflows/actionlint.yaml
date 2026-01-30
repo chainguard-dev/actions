@@ -19,12 +19,12 @@ jobs:
       contents: read
 
     steps:
-      - uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      - uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
         with:
           egress-policy: audit
 
       - name: Check out code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -33,6 +33,6 @@ jobs:
           set -xv
           yamls=$(find . -name "*.y*ml" -not -path "*/.chainguard/source.yaml" -not -path "*/action.y*ml" -not -path "*/.github/chainguard/release.sts.yaml" -not -path ".goreleaser.yml" -exec echo {} +)
           echo "files=${yamls}" >> "$GITHUB_OUTPUT"
-      - uses: reviewdog/action-actionlint@f00ad0691526c10be4021a91b2510f0a769b14d0 # v1.68.0
+      - uses: reviewdog/action-actionlint@e58ee9d111489c31395fbe4857b0be6e7635dbda # v1.70.0
         with:
           actionlint_flags: ${{ steps.get_yamls.outputs.files }}
