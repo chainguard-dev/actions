@@ -53,12 +53,12 @@ runs:
         fi
 
         echo "download eksctl for $platform platform from $url/$fname"
-        curl -sL "$url/$fname" > "$fname" ||
+        curl -o "$fname" -fsL --retry 5 --retry-delay 1 --retry-all-errors "$url/$fname" ||
           fail "download failed $url"
 
         cksum_url="$url/eksctl_checksums.txt"
         echo "verify download against ${cksum_url}"
-        curl -sL "${cksum_url}" > checksums.txt ||
+        curl -o checksums.txt -fsL --retry 5 --retry-delay 1 --retry-all-errors "${cksum_url}" ||
           fail "failed to download checksums from $cksum_url"
         grep "$fname" checksums.txt > checksums.platform || {
           cat checksums.txt
