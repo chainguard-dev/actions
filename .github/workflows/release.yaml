@@ -16,14 +16,12 @@ on:
       release_type:
         description: "Type of Release"
         required: true
-        default: build
+        default: patch
         type: choice
         options:
           - major
           - minor
           - patch
-          - prerelease
-          - build
       forced_version:
         description: "(Optional) SemVer2-compliant forced-version to tag explicitly, instead of auto-bumping.
                       Must not already exist"
