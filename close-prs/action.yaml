@@ -1,0 +1,32 @@
+# Copyright 2026 Chainguard, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Close Pull Requests
+description: |
+  An action to close pull requests with a comment.
+
+inputs:
+  comment:
+    description: |
+      The comment to post when closing the pull request.
+    default: "This pull request is being closed. Please refer to the contributing guidelines for more information."
+  token:
+    description: |
+      The repository owner's GitHub token.
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Close PR with comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        if [[ -z "$PR_NUMBER" ]]; then
+          echo "::error::PR_NUMBER is not set. This action must be used in a pull_request or pull_request_target triggered workflow."
+          exit 1
+        fi
+        gh pr close "$PR_NUMBER" --comment "${{ inputs.comment }}"
