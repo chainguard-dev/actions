@@ -1,0 +1,58 @@
+name: 'OpenTelemetry Export'
+description: 'Collects GitHub Actions workflow metrics and traces, exports via OpenTelemetry Collector'
+author: 'Chainguard'
+branding:
+  icon: 'activity'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+
+  collector-config:
+    description: 'Path to otel-collector config file'
+    required: true
+
+  collector-version:
+    description: 'OpenTelemetry Collector version'
+    required: false
+    default: '0.145.0'
+
+  service-name:
+    description: 'Service name for OpenTelemetry resource attributes'
+    required: false
+    default: 'github-actions'
+
+  service-namespace:
+    description: 'Service namespace for OpenTelemetry resource attributes'
+    required: false
+    default: 'ci'
+
+  metric-prefix:
+    description: 'Prefix for metric names'
+    required: false
+    default: 'github.actions'
+
+  fail-on-error:
+    description: 'Fail the workflow if telemetry export fails'
+    required: false
+    default: 'false'
+
+  attributes:
+    description: 'Additional custom attributes (YAML format: key: value)'
+    required: false
+
+outputs:
+  traceparent:
+    description: 'W3C Trace Context (TRACEPARENT) for creating child spans'
+  trace-id:
+    description: 'OpenTelemetry Trace ID'
+  span-id:
+    description: 'Root span ID for this job'
+
+runs:
+  using: 'node24'
+  main: 'dist/index.js'
+  post: 'dist/post/index.js'
+  post-if: 'always()'

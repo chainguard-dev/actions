@@ -1,0 +1,44 @@
+{
+  "name": "otel-export",
+  "version": "0.1.0",
+  "description": "GitHub Action that exports workflow metrics and traces via OpenTelemetry Collector",
+  "type": "module",
+  "scripts": {
+    "build": "rollup --config rollup.config.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "github-actions",
+    "opentelemetry",
+    "metrics",
+    "traces",
+    "otel-collector"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "@actions/tool-cache": "^4.0.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^2.5.0",
+    "@opentelemetry/resources": "^2.5.0",
+    "@opentelemetry/sdk-metrics": "^2.5.0",
+    "@opentelemetry/sdk-trace-base": "^2.5.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.211.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.211.0",
+    "@opentelemetry/semantic-conventions": "^1.39.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^12.0.0",
+    "@types/node": "^20.19.0",
+    "eslint": "^9.0.0",
+    "rollup": "^4.34.0",
+    "tslib": "^2.8.0",
+    "typescript": "^5.9.0"
+  }
+}
