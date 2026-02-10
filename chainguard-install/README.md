@@ -12,7 +12,10 @@ This action bootstraps the `apk` package manager, installs `chainctl`, and optio
 ```yaml
 - uses: chainguard-dev/actions/chainguard-install@main
   with:
-    packages: "cosign, crane"
+    packages: |
+      jq
+      curl
+      go~1.25
 ```
 
 ### Using the `bin` output
