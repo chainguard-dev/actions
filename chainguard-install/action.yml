@@ -1,0 +1,211 @@
+name: 'Chainguard Install'
+description: 'Install APK packages from Wolfi and Chainguard repositories'
+branding:
+  icon: 'package'
+  color: 'blue'
+
+inputs:
+  packages:
+    description: 'Packages to install (comma or space-separated)'
+    required: false
+    default: ''
+  identity:
+    description: 'Chainguard identity for authentication'
+    required: false
+    default: ''
+  org:
+    description: 'Chainguard organization name for private APK repository access'
+    required: false
+    default: ''
+
+outputs:
+  apk-root:
+    description: 'APK root directory'
+    value: ${{ steps.setup.outputs.apk-root }}
+  bin:
+    description: 'Directory containing installed binaries'
+    value: ${{ steps.setup.outputs.bin }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup APK
+      id: setup
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        IDENTITY: ${{ inputs.identity }}
+        ORG: ${{ inputs.org }}
+      run: |
+        set -euo pipefail
+
+        # =============================================================================
+        # Helper functions
+        # =============================================================================
+
+        # Download a file and verify its SHA256 checksum
+        # Usage: fetch_and_verify <url> <output_path> <expected_sha256> <description>
+        fetch_and_verify() {
+          local url="$1"
+          local output="$2"
+          local expected_sha256="$3"
+          local description="$4"
+
+          curl -sSfL "$url" -o "$output"
+          local actual_sha256
+          actual_sha256=$(sha256sum "$output" | cut -d' ' -f1)
+          if [ "$expected_sha256" != "$actual_sha256" ]; then
+            echo "::error::$description verification failed!"
+            echo "Expected: $expected_sha256"
+            echo "Actual:   $actual_sha256"
+            exit 1
+          fi
+          echo "$description verified"
+        }
+
+        # Run apk with the correct library path (using sudo for proper permissions)
+        # Usage: run_apk [args...]
+        run_apk() {
+          sudo LD_LIBRARY_PATH="$APK_ROOT/usr/lib" "$APK_ROOT/usr/bin/apk" --root "$APK_ROOT" "$@"
+        }
+
+        # =============================================================================
+        # Configuration
+        # =============================================================================
+
+        APK_ROOT="/usr/chainguard"
+        WOLFI_REPO="https://packages.wolfi.dev/os"
+        EXTRAS_REPO="https://packages.cgr.dev/extras"
+
+        # Pinned versions and checksums for bootstrap packages
+        APK_TOOLS_VERSION="2.14.10-r9"
+        APK_TOOLS_SHA256="9f035249cd6f6d9f48c50dd91c7767669156b236d5ffd7d39c868408379df80a"
+        LIBCRYPTO_VERSION="3.6.0-r6"
+        LIBCRYPTO_SHA256="0c85335d1904accf95b5495ad24163348651b472bed9eb741592391f1c7acd38"
+        LIBSSL_VERSION="3.6.0-r6"
+        LIBSSL_SHA256="60d409dd5d9a3c9f5c8fd6ff7f823b7f6e3f0219767a76b391f7db9213a9fa3e"
+
+        # =============================================================================
+        # Bootstrap APK from Wolfi
+        # =============================================================================
+
+        echo "::group::Bootstrap APK from Wolfi"
+
+        # Create APK root structure (Wolfi uses lib -> usr/lib symlink)
+        sudo mkdir -p "$APK_ROOT"/{etc/apk/keys,usr/lib/apk/db,var/cache/apk}
+        sudo ln -s usr/lib "$APK_ROOT/lib"
+
+        # Download signing keys (trusted via HTTPS)
+        curl -sSfL "$WOLFI_REPO/wolfi-signing.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/wolfi-signing.rsa.pub" > /dev/null
+        echo "Downloaded Wolfi signing key"
+
+        curl -sSfL "$EXTRAS_REPO/chainguard-extras.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/chainguard-extras.rsa.pub" > /dev/null
+        echo "Downloaded Chainguard extras signing key"
+
+        # Configure repositories
+        printf '%s\n' "$WOLFI_REPO" "$EXTRAS_REPO" | sudo tee "$APK_ROOT/etc/apk/repositories" > /dev/null
+
+        # Download and verify apk-tools and its OpenSSL dependencies
+        fetch_and_verify "$WOLFI_REPO/x86_64/libcrypto3-${LIBCRYPTO_VERSION}.apk" \
+          /tmp/libcrypto3.apk "$LIBCRYPTO_SHA256" "libcrypto3-${LIBCRYPTO_VERSION}"
+
+        fetch_and_verify "$WOLFI_REPO/x86_64/libssl3-${LIBSSL_VERSION}.apk" \
+          /tmp/libssl3.apk "$LIBSSL_SHA256" "libssl3-${LIBSSL_VERSION}"
+
+        fetch_and_verify "$WOLFI_REPO/x86_64/apk-tools-${APK_TOOLS_VERSION}.apk" \
+          /tmp/apk-tools.apk "$APK_TOOLS_SHA256" "apk-tools-${APK_TOOLS_VERSION}"
+
+        # Extract packages to APK root
+        for pkg in libcrypto3 libssl3 apk-tools; do
+          sudo tar -xzf "/tmp/${pkg}.apk" -C "$APK_ROOT" 2>/dev/null || true
+        done
+
+        # Initialize APK database and update package index
+        run_apk add --initdb
+        run_apk update
+
+        echo "::endgroup::"
+
+        # =============================================================================
+        # Install chainctl
+        # =============================================================================
+
+        echo "::group::Install chainctl"
+        run_apk --no-scripts --force-overwrite add chainctl
+
+        # Create wrapper directory for installed binaries
+        WRAPPER_DIR="$APK_ROOT/wrappers"
+        sudo mkdir -p "$WRAPPER_DIR"
+
+        # Symlink chainctl (statically linked, no wrapper needed)
+        sudo ln -sf "$APK_ROOT/usr/bin/chainctl" "$WRAPPER_DIR/chainctl"
+
+        # Add wrapper directory first in PATH so Wolfi binaries take precedence
+        echo "$WRAPPER_DIR" >> "$GITHUB_PATH"
+        echo "::endgroup::"
+
+        # =============================================================================
+        # Authenticate with Chainguard (optional)
+        # =============================================================================
+
+        if [ -n "$IDENTITY" ]; then
+          echo "::group::Authenticate with Chainguard"
+          "$WRAPPER_DIR/chainctl" auth login --identity="$IDENTITY"
+
+          if [ -n "$ORG" ]; then
+            echo "Configuring private APK repository for org: $ORG"
+            APK_TOKEN=$("$WRAPPER_DIR/chainctl" auth token --audience apk.cgr.dev)
+            export HTTP_AUTH="basic:apk.cgr.dev:user:${APK_TOKEN}"
+            echo "HTTP_AUTH=${HTTP_AUTH}" >> "$GITHUB_ENV"
+            echo "https://apk.cgr.dev/${ORG}" | sudo tee -a "$APK_ROOT/etc/apk/repositories" > /dev/null
+            run_apk update
+          fi
+          echo "::endgroup::"
+        fi
+
+        # =============================================================================
+        # Install additional packages (optional)
+        # =============================================================================
+
+        if [ -n "$PACKAGES" ]; then
+          echo "::group::Install packages"
+          # Convert commas and newlines to spaces for flexible input formats
+          PACKAGES=$(echo "$PACKAGES" | tr ',\n' '  ')
+          run_apk --no-scripts --force-overwrite add $PACKAGES
+
+          # Create wrappers/symlinks for binaries in usr/bin
+          LD_LINUX="$APK_ROOT/lib/ld-linux-x86-64.so.2"
+          for bin in "$APK_ROOT/usr/bin"/*; do
+            bin_name=$(basename "$bin")
+            [ -e "$WRAPPER_DIR/$bin_name" ] && continue
+
+            # Resolve the actual binary path (handle symlinks with absolute targets)
+            if [ -L "$bin" ]; then
+              target=$(readlink "$bin")
+              if [[ "$target" == /* ]]; then
+                # Absolute symlink - resolve relative to APK_ROOT
+                resolved="$APK_ROOT$target"
+              else
+                resolved="$APK_ROOT/usr/bin/$target"
+              fi
+            else
+              resolved="$bin"
+            fi
+
+            [ ! -x "$resolved" ] && continue
+
+            if file "$resolved" | grep -q "dynamically linked" && [ -f "$LD_LINUX" ]; then
+              # Dynamic binaries need wrapper to use Wolfi's linker
+              printf '#!/bin/bash\nexec "%s" --library-path "%s" "%s" "$@"\n' \
+                "$LD_LINUX" "$APK_ROOT/usr/lib" "$resolved" | sudo tee "$WRAPPER_DIR/$bin_name" > /dev/null
+              sudo chmod +x "$WRAPPER_DIR/$bin_name"
+            else
+              # Static binaries can be symlinked directly
+              sudo ln -sf "$resolved" "$WRAPPER_DIR/$bin_name"
+            fi
+          done
+          echo "::endgroup::"
+        fi
+
+        echo "apk-root=$APK_ROOT" >> "$GITHUB_OUTPUT"
+        echo "bin=$WRAPPER_DIR" >> "$GITHUB_OUTPUT"
