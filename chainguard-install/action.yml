@@ -1,5 +1,5 @@
 name: 'Chainguard Install'
-description: 'Install APK packages from Wolfi and Chainguard repositories'
+description: 'Install APK packages from Chainguard repositories'
 branding:
   icon: 'package'
   color: 'blue'
@@ -29,6 +29,9 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3.8.0
+
     - name: Setup APK
       id: setup
       shell: bash
@@ -43,30 +46,10 @@ runs:
         # Helper functions
         # =============================================================================
 
-        # Download a file and verify its SHA256 checksum
-        # Usage: fetch_and_verify <url> <output_path> <expected_sha256> <description>
-        fetch_and_verify() {
-          local url="$1"
-          local output="$2"
-          local expected_sha256="$3"
-          local description="$4"
-
-          curl -sSfL "$url" -o "$output"
-          local actual_sha256
-          actual_sha256=$(sha256sum "$output" | cut -d' ' -f1)
-          if [ "$expected_sha256" != "$actual_sha256" ]; then
-            echo "::error::$description verification failed!"
-            echo "Expected: $expected_sha256"
-            echo "Actual:   $actual_sha256"
-            exit 1
-          fi
-          echo "$description verified"
-        }
-
-        # Run apk with the correct library path (using sudo for proper permissions)
+        # Run apk using Wolfi's dynamic linker (using sudo for proper permissions)
         # Usage: run_apk [args...]
         run_apk() {
-          sudo LD_LIBRARY_PATH="$APK_ROOT/usr/lib" "$APK_ROOT/usr/bin/apk" --root "$APK_ROOT" "$@"
+          sudo "$APK_ROOT/lib/ld-linux-x86-64.so.2" --library-path "$APK_ROOT/usr/lib" "$APK_ROOT/usr/bin/apk" --root "$APK_ROOT" "$@"
         }
 
         # =============================================================================
@@ -77,61 +60,49 @@ runs:
         WOLFI_REPO="https://packages.wolfi.dev/os"
         EXTRAS_REPO="https://packages.cgr.dev/extras"
 
-        # Pinned versions and checksums for bootstrap packages
-        APK_TOOLS_VERSION="2.14.10-r9"
-        APK_TOOLS_SHA256="9f035249cd6f6d9f48c50dd91c7767669156b236d5ffd7d39c868408379df80a"
-        LIBCRYPTO_VERSION="3.6.0-r6"
-        LIBCRYPTO_SHA256="0c85335d1904accf95b5495ad24163348651b472bed9eb741592391f1c7acd38"
-        LIBSSL_VERSION="3.6.0-r6"
-        LIBSSL_SHA256="60d409dd5d9a3c9f5c8fd6ff7f823b7f6e3f0219767a76b391f7db9213a9fa3e"
-
         # =============================================================================
-        # Bootstrap APK from Wolfi
+        # Bootstrap APK from Wolfi using wolfi-base container
         # =============================================================================
 
         echo "::group::Bootstrap APK from Wolfi"
 
-        # Create APK root structure (Wolfi uses lib -> usr/lib symlink)
+        WOLFI_BASE_IMAGE="cgr.dev/chainguard/wolfi-base"
+
+        # Verify image signature before trusting it
+        cosign verify \
+          --certificate-identity="https://github.com/chainguard-images/images/.github/workflows/release.yaml@refs/heads/main" \
+          --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          "$WOLFI_BASE_IMAGE"
+
+        # Create APK root structure on host
         sudo mkdir -p "$APK_ROOT"/{etc/apk/keys,usr/lib/apk/db,var/cache/apk}
         sudo ln -s usr/lib "$APK_ROOT/lib"
 
-        # Download signing keys (trusted via HTTPS)
-        curl -sSfL "$WOLFI_REPO/wolfi-signing.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/wolfi-signing.rsa.pub" > /dev/null
-        echo "Downloaded Wolfi signing key"
-
+        # Download extras signing key (not present in wolfi-base image)
         curl -sSfL "$EXTRAS_REPO/chainguard-extras.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/chainguard-extras.rsa.pub" > /dev/null
         echo "Downloaded Chainguard extras signing key"
 
-        # Configure repositories
-        printf '%s\n' "$WOLFI_REPO" "$EXTRAS_REPO" | sudo tee "$APK_ROOT/etc/apk/repositories" > /dev/null
+        # Use the verified wolfi-base container to bootstrap APK into the host root
+        docker run --rm -v "$APK_ROOT:$APK_ROOT" "$WOLFI_BASE_IMAGE" sh -c "
+          # Copy Wolfi signing keys from the verified image
+          cp /etc/apk/keys/* $APK_ROOT/etc/apk/keys/
 
-        # Download and verify apk-tools and its OpenSSL dependencies
-        fetch_and_verify "$WOLFI_REPO/x86_64/libcrypto3-${LIBCRYPTO_VERSION}.apk" \
-          /tmp/libcrypto3.apk "$LIBCRYPTO_SHA256" "libcrypto3-${LIBCRYPTO_VERSION}"
+          # Configure repositories
+          printf '%s\n' '$WOLFI_REPO' '$EXTRAS_REPO' > $APK_ROOT/etc/apk/repositories
 
-        fetch_and_verify "$WOLFI_REPO/x86_64/libssl3-${LIBSSL_VERSION}.apk" \
-          /tmp/libssl3.apk "$LIBSSL_SHA256" "libssl3-${LIBSSL_VERSION}"
-
-        fetch_and_verify "$WOLFI_REPO/x86_64/apk-tools-${APK_TOOLS_VERSION}.apk" \
-          /tmp/apk-tools.apk "$APK_TOOLS_SHA256" "apk-tools-${APK_TOOLS_VERSION}"
-
-        # Extract packages to APK root
-        for pkg in libcrypto3 libssl3 apk-tools; do
-          sudo tar -xzf "/tmp/${pkg}.apk" -C "$APK_ROOT" 2>/dev/null || true
-        done
-
-        # Initialize APK database and update package index
-        run_apk add --initdb
-        run_apk update
+          # Initialize APK database, update index, and install apk-tools + chainctl
+          apk --root $APK_ROOT add --initdb
+          apk --root $APK_ROOT update
+          apk --root $APK_ROOT --no-scripts --force-overwrite add apk-tools chainctl
+        "
 
         echo "::endgroup::"
 
         # =============================================================================
-        # Install chainctl
+        # Setup chainctl
         # =============================================================================
 
-        echo "::group::Install chainctl"
-        run_apk --no-scripts --force-overwrite add chainctl
+        echo "::group::Setup chainctl"
 
         # Create wrapper directory for installed binaries
         WRAPPER_DIR="$APK_ROOT/wrappers"
