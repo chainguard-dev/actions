@@ -1,0 +1,182 @@
+name: 'Chainguard Install'
+description: 'Install APK packages from Chainguard repositories'
+branding:
+  icon: 'package'
+  color: 'blue'
+
+inputs:
+  packages:
+    description: 'Packages to install (comma or space-separated)'
+    required: false
+    default: ''
+  identity:
+    description: 'Chainguard identity for authentication'
+    required: false
+    default: ''
+  org:
+    description: 'Chainguard organization name for private APK repository access'
+    required: false
+    default: ''
+
+outputs:
+  apk-root:
+    description: 'APK root directory'
+    value: ${{ steps.setup.outputs.apk-root }}
+  bin:
+    description: 'Directory containing installed binaries'
+    value: ${{ steps.setup.outputs.bin }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3.8.0
+
+    - name: Setup APK
+      id: setup
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        IDENTITY: ${{ inputs.identity }}
+        ORG: ${{ inputs.org }}
+      run: |
+        set -euo pipefail
+
+        # =============================================================================
+        # Helper functions
+        # =============================================================================
+
+        # Run apk using Wolfi's dynamic linker (using sudo for proper permissions)
+        # Usage: run_apk [args...]
+        run_apk() {
+          sudo "$APK_ROOT/lib/ld-linux-x86-64.so.2" --library-path "$APK_ROOT/usr/lib" "$APK_ROOT/usr/bin/apk" --root "$APK_ROOT" "$@"
+        }
+
+        # =============================================================================
+        # Configuration
+        # =============================================================================
+
+        APK_ROOT="/usr/chainguard"
+        WOLFI_REPO="https://packages.wolfi.dev/os"
+        EXTRAS_REPO="https://packages.cgr.dev/extras"
+
+        # =============================================================================
+        # Bootstrap APK from Wolfi using wolfi-base container
+        # =============================================================================
+
+        echo "::group::Bootstrap APK from Wolfi"
+
+        WOLFI_BASE_IMAGE="cgr.dev/chainguard/wolfi-base"
+
+        # Verify image signature before trusting it
+        cosign verify \
+          --certificate-identity="https://github.com/chainguard-images/images/.github/workflows/release.yaml@refs/heads/main" \
+          --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          "$WOLFI_BASE_IMAGE"
+
+        # Create APK root structure on host
+        sudo mkdir -p "$APK_ROOT"/{etc/apk/keys,usr/lib/apk/db,var/cache/apk}
+        sudo ln -s usr/lib "$APK_ROOT/lib"
+
+        # Download extras signing key (not present in wolfi-base image)
+        curl -sSfL "$EXTRAS_REPO/chainguard-extras.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/chainguard-extras.rsa.pub" > /dev/null
+        echo "Downloaded Chainguard extras signing key"
+
+        # Use the verified wolfi-base container to bootstrap APK into the host root
+        docker run --rm -v "$APK_ROOT:$APK_ROOT" "$WOLFI_BASE_IMAGE" sh -c "
+          # Copy Wolfi signing keys from the verified image
+          cp /etc/apk/keys/* $APK_ROOT/etc/apk/keys/
+
+          # Configure repositories
+          printf '%s\n' '$WOLFI_REPO' '$EXTRAS_REPO' > $APK_ROOT/etc/apk/repositories
+
+          # Initialize APK database, update index, and install apk-tools + chainctl
+          apk --root $APK_ROOT add --initdb
+          apk --root $APK_ROOT update
+          apk --root $APK_ROOT --no-scripts --force-overwrite add apk-tools chainctl
+        "
+
+        echo "::endgroup::"
+
+        # =============================================================================
+        # Setup chainctl
+        # =============================================================================
+
+        echo "::group::Setup chainctl"
+
+        # Create wrapper directory for installed binaries
+        WRAPPER_DIR="$APK_ROOT/wrappers"
+        sudo mkdir -p "$WRAPPER_DIR"
+
+        # Symlink chainctl (statically linked, no wrapper needed)
+        sudo ln -sf "$APK_ROOT/usr/bin/chainctl" "$WRAPPER_DIR/chainctl"
+
+        # Add wrapper directory first in PATH so Wolfi binaries take precedence
+        echo "$WRAPPER_DIR" >> "$GITHUB_PATH"
+        echo "::endgroup::"
+
+        # =============================================================================
+        # Authenticate with Chainguard (optional)
+        # =============================================================================
+
+        if [ -n "$IDENTITY" ]; then
+          echo "::group::Authenticate with Chainguard"
+          "$WRAPPER_DIR/chainctl" auth login --identity="$IDENTITY"
+
+          if [ -n "$ORG" ]; then
+            echo "Configuring private APK repository for org: $ORG"
+            APK_TOKEN=$("$WRAPPER_DIR/chainctl" auth token --audience apk.cgr.dev)
+            export HTTP_AUTH="basic:apk.cgr.dev:user:${APK_TOKEN}"
+            echo "HTTP_AUTH=${HTTP_AUTH}" >> "$GITHUB_ENV"
+            echo "https://apk.cgr.dev/${ORG}" | sudo tee -a "$APK_ROOT/etc/apk/repositories" > /dev/null
+            run_apk update
+          fi
+          echo "::endgroup::"
+        fi
+
+        # =============================================================================
+        # Install additional packages (optional)
+        # =============================================================================
+
+        if [ -n "$PACKAGES" ]; then
+          echo "::group::Install packages"
+          # Convert commas and newlines to spaces for flexible input formats
+          PACKAGES=$(echo "$PACKAGES" | tr ',\n' '  ')
+          run_apk --no-scripts --force-overwrite add $PACKAGES
+
+          # Create wrappers/symlinks for binaries in usr/bin
+          LD_LINUX="$APK_ROOT/lib/ld-linux-x86-64.so.2"
+          for bin in "$APK_ROOT/usr/bin"/*; do
+            bin_name=$(basename "$bin")
+            [ -e "$WRAPPER_DIR/$bin_name" ] && continue
+
+            # Resolve the actual binary path (handle symlinks with absolute targets)
+            if [ -L "$bin" ]; then
+              target=$(readlink "$bin")
+              if [[ "$target" == /* ]]; then
+                # Absolute symlink - resolve relative to APK_ROOT
+                resolved="$APK_ROOT$target"
+              else
+                resolved="$APK_ROOT/usr/bin/$target"
+              fi
+            else
+              resolved="$bin"
+            fi
+
+            [ ! -x "$resolved" ] && continue
+
+            if file "$resolved" | grep -q "dynamically linked" && [ -f "$LD_LINUX" ]; then
+              # Dynamic binaries need wrapper to use Wolfi's linker
+              printf '#!/bin/bash\nexec "%s" --library-path "%s" "%s" "$@"\n' \
+                "$LD_LINUX" "$APK_ROOT/usr/lib" "$resolved" | sudo tee "$WRAPPER_DIR/$bin_name" > /dev/null
+              sudo chmod +x "$WRAPPER_DIR/$bin_name"
+            else
+              # Static binaries can be symlinked directly
+              sudo ln -sf "$resolved" "$WRAPPER_DIR/$bin_name"
+            fi
+          done
+          echo "::endgroup::"
+        fi
+
+        echo "apk-root=$APK_ROOT" >> "$GITHUB_OUTPUT"
+        echo "bin=$WRAPPER_DIR" >> "$GITHUB_OUTPUT"
