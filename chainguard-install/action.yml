@@ -30,7 +30,7 @@ runs:
   using: 'composite'
   steps:
     - name: Install cosign
-      uses: sigstore/cosign-installer@v3.8.0
+      uses: sigstore/cosign-installer@c56c2d3e59e4281cc41dea2217323ba5694b171e # v3.8.0
 
     - name: Setup APK
       id: setup
