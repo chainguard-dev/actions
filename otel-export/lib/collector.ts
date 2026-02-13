@@ -10,9 +10,12 @@ interface GitHubJob {
   name: string;
   status: string | null;
   conclusion: string | null;
+  created_at: string;
   started_at: string | null;
   completed_at: string | null;
   runner_name: string | null;
+  runner_group_name: string | null;
+  runner_group_id: number | null;
   labels: string[];
   steps?: {
     name: string;
@@ -177,10 +180,7 @@ export async function collectMetrics(octokit: Octokit, context: Context): Promis
 
   const currentJobName = process.env.GITHUB_JOB ?? 'unknown';
 
-  const [job, { data: workflowRun }] = await Promise.all([
-    fetchJobWithStableSteps(octokit, owner, repo, runId, currentJobName),
-    octokit.rest.actions.getWorkflowRun({ owner, repo, run_id: runId }),
-  ]);
+  const job = await fetchJobWithStableSteps(octokit, owner, repo, runId, currentJobName);
 
   core.info(`Analyzing job: ${job.name} (${job.id})`);
 
@@ -190,10 +190,8 @@ export async function collectMetrics(octokit: Octokit, context: Context): Promis
   const jobCompletedAt = job.completed_at ? new Date(job.completed_at) : new Date();
   const jobDurationMs = jobCompletedAt.getTime() - jobStartedAt.getTime();
 
-  const runStartedAt = workflowRun.run_started_at
-    ? new Date(workflowRun.run_started_at)
-    : jobStartedAt;
-  const queueDurationMs = Math.max(0, jobStartedAt.getTime() - runStartedAt.getTime());
+  const jobCreatedAt = new Date(job.created_at);
+  const queueDurationMs = Math.max(0, jobStartedAt.getTime() - jobCreatedAt.getTime());
 
   const jobConclusion = inferJobConclusion(job.conclusion, steps);
   const prNumber = extractPRNumber(context);
@@ -237,6 +235,7 @@ export async function collectMetrics(octokit: Octokit, context: Context): Promis
       os: process.env.RUNNER_OS || 'unknown',
       arch: process.env.RUNNER_ARCH || 'unknown',
       name: process.env.RUNNER_NAME || null,
+      groupName: job.runner_group_name || null,
       labels: job.labels || [],
     },
   };

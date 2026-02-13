@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { downloadCollector, startCollector, waitForCollector, COLLECTOR_ENDPOINT } from './lib/otelcol.js';
+import { downloadCollector, startCollector, waitForCollector, COLLECTOR_ENDPOINT, type ResourceAttributes } from './lib/otelcol.js';
 import { generateTraceId, generateRootSpanId } from './lib/exporter.js';
 
 async function run(): Promise<void> {
@@ -20,7 +20,16 @@ async function run(): Promise<void> {
     core.info('Starting OpenTelemetry Export action');
 
     const binaryPath = await downloadCollector(collectorVersion);
-    const { pid, logPath } = startCollector(binaryPath, configPath);
+
+    const serviceName = core.getInput('service-name');
+    const serviceNamespace = core.getInput('service-namespace');
+    const resourceAttrs: ResourceAttributes = {
+      serviceName,
+      serviceNamespace,
+      serviceInstanceId: process.env.GITHUB_RUN_ID || 'unknown',
+    };
+
+    const { pid, logPath } = startCollector(binaryPath, configPath, resourceAttrs);
 
     core.saveState('collector-pid', pid.toString());
     core.saveState('collector-log', logPath);

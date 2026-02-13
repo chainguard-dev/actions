@@ -39743,19 +39743,14 @@ async function collectMetrics(octokit, context) {
     const runId = context.runId;
     info(`Collecting metrics for run ${runId} in ${owner}/${repo}`);
     const currentJobName = process.env.GITHUB_JOB ?? 'unknown';
-    const [job, { data: workflowRun }] = await Promise.all([
-        fetchJobWithStableSteps(octokit, owner, repo, runId, currentJobName),
-        octokit.rest.actions.getWorkflowRun({ owner, repo, run_id: runId }),
-    ]);
+    const job = await fetchJobWithStableSteps(octokit, owner, repo, runId, currentJobName);
     info(`Analyzing job: ${job.name} (${job.id})`);
     const steps = parseSteps(job.steps);
     const jobStartedAt = job.started_at ? new Date(job.started_at) : new Date();
     const jobCompletedAt = job.completed_at ? new Date(job.completed_at) : new Date();
     const jobDurationMs = jobCompletedAt.getTime() - jobStartedAt.getTime();
-    const runStartedAt = workflowRun.run_started_at
-        ? new Date(workflowRun.run_started_at)
-        : jobStartedAt;
-    const queueDurationMs = Math.max(0, jobStartedAt.getTime() - runStartedAt.getTime());
+    const jobCreatedAt = new Date(job.created_at);
+    const queueDurationMs = Math.max(0, jobStartedAt.getTime() - jobCreatedAt.getTime());
     const jobConclusion = inferJobConclusion(job.conclusion, steps);
     const prNumber = extractPRNumber(context);
     const workflowName = context.workflow || 'unknown';
@@ -39796,6 +39791,7 @@ async function collectMetrics(octokit, context) {
             os: process.env.RUNNER_OS || 'unknown',
             arch: process.env.RUNNER_ARCH || 'unknown',
             name: process.env.RUNNER_NAME || null,
+            groupName: job.runner_group_name || null,
             labels: job.labels || [],
         },
     };
@@ -52635,6 +52631,9 @@ function buildCicdAttributes(metrics, customAttributes = {}) {
     if (metrics.runner.labels.length > 0) {
         attrs['github.runner.label'] = metrics.runner.labels[0];
     }
+    if (metrics.runner.groupName) {
+        attrs['github.runner.group'] = metrics.runner.groupName;
+    }
     return { ...attrs, ...customAttributes };
 }
 const CONCLUSION_MAP = {
@@ -52705,6 +52704,18 @@ function recordMetrics(meter, metrics, metricPrefix, customAttributes = {}) {
                 'cicd.pipeline.task.run.result': mapToOtelResult(step.conclusion ?? 'unknown'),
             });
         }
+    }
+    const runAttempt = parseInt(metrics.run.attempt, 10);
+    if (runAttempt > 1) {
+        const rerunCounter = meter.createCounter(`${metricPrefix}.pipeline.task.rerun`, {
+            description: 'Count of re-run job executions (attempt > 1)',
+        });
+        rerunCounter.add(1, {
+            ...baseAttributes,
+            'cicd.pipeline.task.name': metrics.job.name,
+            'cicd.pipeline.task.run.id': metrics.job.id.toString(),
+            'cicd.pipeline.task.run.result': mapToOtelResult(metrics.job.conclusion),
+        });
     }
     info(`Recorded metrics for job and ${metrics.steps.length} steps`);
 }

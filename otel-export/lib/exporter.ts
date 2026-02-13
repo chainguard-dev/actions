@@ -71,6 +71,9 @@ function buildCicdAttributes(
   if (metrics.runner.labels.length > 0) {
     attrs['github.runner.label'] = metrics.runner.labels[0];
   }
+  if (metrics.runner.groupName) {
+    attrs['github.runner.group'] = metrics.runner.groupName;
+  }
 
   return { ...attrs, ...customAttributes };
 }
@@ -169,6 +172,20 @@ export function recordMetrics(
         'cicd.pipeline.task.run.result': mapToOtelResult(step.conclusion ?? 'unknown'),
       });
     }
+  }
+
+  const runAttempt = parseInt(metrics.run.attempt, 10);
+  if (runAttempt > 1) {
+    const rerunCounter = meter.createCounter(`${metricPrefix}.pipeline.task.rerun`, {
+      description: 'Count of re-run job executions (attempt > 1)',
+    });
+
+    rerunCounter.add(1, {
+      ...baseAttributes,
+      'cicd.pipeline.task.name': metrics.job.name,
+      'cicd.pipeline.task.run.id': metrics.job.id.toString(),
+      'cicd.pipeline.task.run.result': mapToOtelResult(metrics.job.conclusion),
+    });
   }
 
   core.info(`Recorded metrics for job and ${metrics.steps.length} steps`);

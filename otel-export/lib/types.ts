@@ -47,6 +47,7 @@ export interface WorkflowMetrics {
     os: string;
     arch: string;
     name: string | null;
+    groupName: string | null;
     labels: string[];
   };
 }
