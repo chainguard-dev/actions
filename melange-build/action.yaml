@@ -26,7 +26,15 @@ inputs:
   sign-with-temporary-key:
     description: |
       Sign packages with a temporary key, useful for multi-stage
-      pipelines.
+      pipelines. When true, a temporary signing key is generated and
+      takes priority over sign-with-own-key.
+    default: 'false'
+
+  sign-with-own-key:
+    description: |
+      Sign packages with a user-provided key from the path specified
+      in signing-key-path. This is overridden if sign-with-temporary-key
+      is also true.
     default: 'false'
 
   signing-key-path:
@@ -104,7 +112,7 @@ runs:
       with:
         version: ${{ inputs.version }}
     - uses: chainguard-dev/actions/melange-keygen@4ed96e952ef2982fe89a50f3c40e9643bb9fe803 # v1.6.3
-      if: ${{ inputs.sign-with-temporary-key }}
+      if: ${{ inputs.sign-with-temporary-key == 'true' }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
     - uses: chainguard-dev/actions/melange-build-pkg@4ed96e952ef2982fe89a50f3c40e9643bb9fe803 # v1.6.3
@@ -112,7 +120,7 @@ runs:
         config: ${{ inputs.config }}
         multi-config: ${{ inputs.multi-config }}
         archs: ${{ inputs.archs }}
-        sign-with-key: ${{ inputs.sign-with-temporary-key }}
+        sign-with-key: ${{ inputs.sign-with-temporary-key == 'true' || inputs.sign-with-own-key == 'true' }}
         signing-key-path: ${{ inputs.signing-key-path }}
         repository-path: ${{ inputs.repository-path }}
         repository-append: ${{ inputs.repository-append }}
