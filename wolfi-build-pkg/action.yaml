@@ -43,7 +43,7 @@ runs:
   using: 'composite'
 
   steps:
-    - uses: chainguard-dev/actions/melange-build-pkg@081e79ee578199ef583d4ca74edc376b50b9409c # v1.6.0
+    - uses: chainguard-dev/actions/melange-build-pkg@0cf1221da92242205c2d9f8a63add344ebd6b304 # v1.6.1
       with:
         config: ${{ inputs.package-name }}.yaml
         archs: ${{ inputs.archs }}
