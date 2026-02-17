@@ -32926,15 +32926,32 @@ async function downloadCollector(version) {
     info(`Collector cached at: ${binaryPath}`);
     return binaryPath;
 }
-function startCollector(binaryPath, configPath) {
+function startCollector(binaryPath, configPath, resourceAttrs) {
     const tempDir = process.env.RUNNER_TEMP || '/tmp';
     const logPath = path$1.join(tempDir, 'otelcol.log');
     const logFd = fs$1.openSync(logPath, 'a');
     info(`Starting collector with config: ${configPath}`);
     info(`Collector logs: ${logPath}`);
+    // Set OTEL_RESOURCE_ATTRIBUTES so the resourcedetection processor's `env`
+    // detector injects identity into collector-scraped data (e.g. hostmetrics).
+    // SDK-sent OTLP data already carries its own resource attributes which the
+    // detector will not override (override defaults to false).
+    const env = { ...process.env };
+    if (resourceAttrs) {
+        const attrs = [
+            `service.name=${resourceAttrs.serviceName}`,
+            `service.namespace=${resourceAttrs.serviceNamespace}`,
+            `service.instance.id=${resourceAttrs.serviceInstanceId}`,
+        ].join(',');
+        env.OTEL_RESOURCE_ATTRIBUTES = env.OTEL_RESOURCE_ATTRIBUTES
+            ? `${env.OTEL_RESOURCE_ATTRIBUTES},${attrs}`
+            : attrs;
+        info(`Collector OTEL_RESOURCE_ATTRIBUTES: ${env.OTEL_RESOURCE_ATTRIBUTES}`);
+    }
     const proc = spawn(binaryPath, ['--config', configPath], {
         detached: true,
         stdio: ['ignore', logFd, logFd],
+        env,
     });
     // Close the fd in the parent — the child retains its own copy via fork.
     fs$1.closeSync(logFd);
@@ -33000,7 +33017,14 @@ async function run() {
         }
         info('Starting OpenTelemetry Export action');
         const binaryPath = await downloadCollector(collectorVersion);
-        const { pid, logPath } = startCollector(binaryPath, configPath);
+        const serviceName = getInput('service-name');
+        const serviceNamespace = getInput('service-namespace');
+        const resourceAttrs = {
+            serviceName,
+            serviceNamespace,
+            serviceInstanceId: process.env.GITHUB_RUN_ID || 'unknown',
+        };
+        const { pid, logPath } = startCollector(binaryPath, configPath, resourceAttrs);
         saveState('collector-pid', pid.toString());
         saveState('collector-log', logPath);
         await waitForCollector();

@@ -52658,7 +52658,9 @@ function createMeterProvider(config) {
     });
     const metricReader = new PeriodicExportingMetricReader({
         exporter,
-        exportIntervalMillis: 5000,
+        // Metrics are recorded once then exported via shutdown(). Set a large
+        // interval so the periodic timer never fires before that.
+        exportIntervalMillis: 3_600_000,
     });
     const meterProvider = new MeterProvider({
         resource,
@@ -52720,7 +52722,7 @@ function recordMetrics(meter, metrics, metricPrefix, customAttributes = {}) {
     info(`Recorded metrics for job and ${metrics.steps.length} steps`);
 }
 async function shutdownMeterProvider(meterProvider) {
-    await meterProvider.forceFlush();
+    // shutdown() already calls onForceFlush() internally.
     await meterProvider.shutdown();
     info('MeterProvider shut down');
 }
@@ -52820,7 +52822,7 @@ function recordTraces(tracer, metrics, customAttributes = {}) {
     info(`Recorded traces for job and ${metrics.steps.length} steps`);
 }
 async function shutdownTracerProvider(tracerProvider) {
-    await tracerProvider.forceFlush();
+    // shutdown() already calls forceFlush() internally.
     await tracerProvider.shutdown();
     info('TracerProvider shut down');
 }

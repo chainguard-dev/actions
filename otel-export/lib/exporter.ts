@@ -111,7 +111,9 @@ export function createMeterProvider(config: OtelConfig): {
 
   const metricReader = new PeriodicExportingMetricReader({
     exporter,
-    exportIntervalMillis: 5000,
+    // Metrics are recorded once then exported via shutdown(). Set a large
+    // interval so the periodic timer never fires before that.
+    exportIntervalMillis: 3_600_000,
   });
 
   const meterProvider = new MeterProvider({
@@ -192,7 +194,7 @@ export function recordMetrics(
 }
 
 export async function shutdownMeterProvider(meterProvider: MeterProvider): Promise<void> {
-  await meterProvider.forceFlush();
+  // shutdown() already calls onForceFlush() internally.
   await meterProvider.shutdown();
   core.info('MeterProvider shut down');
 }
@@ -324,7 +326,7 @@ export function recordTraces(
 }
 
 export async function shutdownTracerProvider(tracerProvider: BasicTracerProvider): Promise<void> {
-  await tracerProvider.forceFlush();
+  // shutdown() already calls forceFlush() internally.
   await tracerProvider.shutdown();
   core.info('TracerProvider shut down');
 }
