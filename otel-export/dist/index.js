@@ -32902,7 +32902,8 @@ function _getGlobal(key, defaultValue) {
 }
 
 const COLLECTOR_NAME = 'otelcol-contrib';
-const COLLECTOR_ENDPOINT = 'localhost:4318';
+const COLLECTOR_HTTP_ENDPOINT = 'localhost:4318';
+const COLLECTOR_GRPC_ENDPOINT = 'localhost:4317';
 function getDownloadUrl(version) {
     const platform = process.platform === 'win32' ? 'windows' : process.platform;
     const arch = process.arch === 'x64' ? 'amd64' : process.arch;
@@ -32967,8 +32968,8 @@ function startCollector(binaryPath, configPath, resourceAttrs) {
     return { pid, logPath };
 }
 async function waitForCollector(timeoutMs = 30000) {
-    info(`Waiting for collector to be ready on ${COLLECTOR_ENDPOINT}...`);
-    const healthUrl = `http://${COLLECTOR_ENDPOINT}/v1/metrics`;
+    info(`Waiting for collector to be ready on ${COLLECTOR_HTTP_ENDPOINT}...`);
+    const healthUrl = `http://${COLLECTOR_HTTP_ENDPOINT}/v1/metrics`;
     const startTime = Date.now();
     const pollInterval = 500;
     while (Date.now() - startTime < timeoutMs) {
@@ -33033,10 +33034,15 @@ async function run() {
         const traceId = generateTraceId(runId, runAttempt);
         const spanId = generateRootSpanId(runId, runAttempt);
         const traceparent = `00-${traceId}-${spanId}-01`;
+        const protocol = getInput('otlp-protocol');
+        const collectorEndpoint = protocol === 'grpc' ? COLLECTOR_GRPC_ENDPOINT : COLLECTOR_HTTP_ENDPOINT;
         const envFile = process.env.GITHUB_ENV;
         if (envFile) {
             fs$1.appendFileSync(envFile, `TRACEPARENT=${traceparent}\n`);
-            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_ENDPOINT=http://${COLLECTOR_ENDPOINT}\n`);
+            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_PROTOCOL=${protocol}\n`);
+            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_ENDPOINT=http://${collectorEndpoint}\n`);
+            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_GRPC_ENDPOINT=${COLLECTOR_GRPC_ENDPOINT}\n`);
+            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_HTTP_ENDPOINT=http://${COLLECTOR_HTTP_ENDPOINT}\n`);
         }
         setOutput('traceparent', traceparent);
         setOutput('trace-id', traceId);
