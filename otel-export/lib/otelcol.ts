@@ -5,7 +5,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const COLLECTOR_NAME = 'otelcol-contrib';
-export const COLLECTOR_ENDPOINT = 'localhost:4318';
+export const COLLECTOR_HTTP_ENDPOINT = 'localhost:4318';
+export const COLLECTOR_GRPC_ENDPOINT = 'localhost:4317';
 
 function getDownloadUrl(version: string): string {
   const platform = process.platform === 'win32' ? 'windows' : process.platform;
@@ -152,9 +153,9 @@ export function dumpCollectorLogs(logPath: string): void {
 }
 
 export async function waitForCollector(timeoutMs = 30000): Promise<void> {
-  core.info(`Waiting for collector to be ready on ${COLLECTOR_ENDPOINT}...`);
+  core.info(`Waiting for collector to be ready on ${COLLECTOR_HTTP_ENDPOINT}...`);
 
-  const healthUrl = `http://${COLLECTOR_ENDPOINT}/v1/metrics`;
+  const healthUrl = `http://${COLLECTOR_HTTP_ENDPOINT}/v1/metrics`;
   const startTime = Date.now();
   const pollInterval = 500;
 

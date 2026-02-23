@@ -42549,7 +42549,7 @@ requireSemver();
 process.platform === 'win32';
 process.platform === 'darwin';
 
-const COLLECTOR_ENDPOINT = 'localhost:4318';
+const COLLECTOR_HTTP_ENDPOINT = 'localhost:4318';
 async function stopCollector(pid, timeoutMs = 10000) {
     info(`Stopping collector (PID: ${pid})`);
     try {
@@ -52654,7 +52654,7 @@ function createMeterProvider(config) {
     info('Initializing MeterProvider with OTLP HTTP exporter');
     const resource = buildResource(config);
     const exporter = new OTLPMetricExporter({
-        url: `http://${COLLECTOR_ENDPOINT}/v1/metrics`,
+        url: `http://${COLLECTOR_HTTP_ENDPOINT}/v1/metrics`,
     });
     const metricReader = new PeriodicExportingMetricReader({
         exporter,
@@ -52762,7 +52762,7 @@ function createTracerProvider(config, idGenerator) {
     info('Initializing TracerProvider with OTLP HTTP exporter');
     const resource = buildResource(config);
     const exporter = new OTLPTraceExporter({
-        url: `http://${COLLECTOR_ENDPOINT}/v1/traces`,
+        url: `http://${COLLECTOR_HTTP_ENDPOINT}/v1/traces`,
     });
     const tracerProvider = new BasicTracerProvider({
         resource,

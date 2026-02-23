@@ -8,7 +8,7 @@ import { context, trace, SpanKind, SpanStatusCode, type Tracer, type Meter } fro
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import type { WorkflowMetrics, OtelConfig, CustomAttributes } from './types.js';
-import { COLLECTOR_ENDPOINT } from './otelcol.js';
+import { COLLECTOR_HTTP_ENDPOINT } from './otelcol.js';
 
 // Incubating in the semconv package — not yet in the stable export.
 const ATTR_SERVICE_NAMESPACE = 'service.namespace';
@@ -106,7 +106,7 @@ export function createMeterProvider(config: OtelConfig): {
   const resource = buildResource(config);
 
   const exporter = new OTLPMetricExporter({
-    url: `http://${COLLECTOR_ENDPOINT}/v1/metrics`,
+    url: `http://${COLLECTOR_HTTP_ENDPOINT}/v1/metrics`,
   });
 
   const metricReader = new PeriodicExportingMetricReader({
@@ -245,7 +245,7 @@ export function createTracerProvider(
   const resource = buildResource(config);
 
   const exporter = new OTLPTraceExporter({
-    url: `http://${COLLECTOR_ENDPOINT}/v1/traces`,
+    url: `http://${COLLECTOR_HTTP_ENDPOINT}/v1/traces`,
   });
 
   const tracerProvider = new BasicTracerProvider({
