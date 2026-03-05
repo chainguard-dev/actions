@@ -1,19 +1,18 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
 
 	"github.com/sethvargo/go-envconfig"
 	confluence "github.com/virtomize/confluence-go-api"
@@ -278,7 +277,7 @@ func contentFromFile(parentID string, path string) (*confluence.Content, error) 
 
 	html := extraHTML(path)
 	if s != "" {
-		converted, err := remoteConvertMarkdown(s)
+		converted, err := localConvertMarkdown(s)
 		if err != nil {
 			return nil, err
 		}
@@ -364,42 +363,20 @@ func extractTitle(s string, path string) string {
 	return title
 }
 
-type convertMarkdownRequest struct {
-	Wiki string `json:"wiki"`
-}
+// localConvertMarkdown converts markdown to well-formed XHTML suitable
+// for Confluence's Fabric editor storage format, replacing the legacy
+// tinymce/1/markdownxhtmlconverter endpoint which produces malformed HTML.
+func localConvertMarkdown(rawMarkdown string) (string, error) {
+	extensions := parser.CommonExtensions |
+		parser.AutoHeadingIDs |
+		parser.NoEmptyLineBeforeBlock
 
-// Hit an endpoint available on Confluence which converts Markdown
-// to HTML that works well in Conlfuence
-// Note: this feature is apparently only available in the legacy editor
-func remoteConvertMarkdown(rawMarkdown string) (string, error) {
-	payload := convertMarkdownRequest{
-		Wiki: rawMarkdown,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	buf := bytes.NewBuffer(b)
-	url := strings.TrimSuffix(env.ConfluenceURL, "/api") + "/tinymce/1/markdownxhtmlconverter"
-	req, err := http.NewRequest(http.MethodPost, url, buf)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(env.ConfluenceUser+":"+env.ConfluenceToken)))
-	req.Header.Add("Content-type", "application/json")
-	client := http.DefaultClient
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	bodyString := string(bodyBytes)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%d: %s", resp.StatusCode, bodyString)
-	}
-	return bodyString, nil
+	p := parser.NewWithExtensions(extensions)
+
+	htmlFlags := html.CommonFlags
+	opts := html.RendererOptions{Flags: htmlFlags}
+	renderer := html.NewRenderer(opts)
+
+	result := markdown.ToHTML([]byte(rawMarkdown), p, renderer)
+	return string(result), nil
 }
