@@ -85,6 +85,11 @@ inputs:
       Directory used for cached inputs
     default: ''
 
+  apk-cache-dir:
+    description: |
+      Directory used for cached apk packages
+    default: ''
+
   pipeline-dir:
     description: |
       Directory used for pipelines
@@ -98,6 +103,11 @@ inputs:
   git-repo-url:
     description: |
       URL of the git repository containing the build config file
+    default: ''
+
+  env-file:
+    description: |
+      File to use for preloaded environment variables
     default: ''
 
 runs:
@@ -117,9 +127,11 @@ runs:
         [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
         [ -n '${{ inputs.namespace }}' ] && nsarg="--namespace ${{ inputs.namespace }}"
         [ -n '${{ inputs.cache-dir }}' ] && cachearg="--cache-dir=${{ inputs.cache-dir }}"
+        [ -n '${{ inputs.apk-cache-dir }}' ] && apkcachearg="--apk-cache-dir=${{ inputs.apk-cache-dir }}"
         [ -n '${{ inputs.pipeline-dir }}' ] && pipelinedirarg="--pipeline-dir=${{ inputs.pipeline-dir }}"
         [ -n '${{ inputs.git-commit }}' ] && gitcommitarg="--git-commit ${{ inputs.git-commit }}"
         [ -n '${{ inputs.git-repo-url }}' ] && gitrepoarg="--git-repo-url ${{ inputs.git-repo-url }}"
+        [ -n '${{ inputs.env-file }}' ] && envfilearg="--env-file ${{ inputs.env-file }}"
         ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
         ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}/${{ inputs.workdir }}"
         ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
@@ -133,7 +145,7 @@ runs:
             repoarg="${repoarg} --repository-append ${{ inputs.repository-path }}"
             keyringarg="${keyringarg} --keyring-append ${{ inputs.signing-key-path }}.pub"
           fi
-          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg $cachearg $pipelinedirarg $gitcommitarg $gitrepoarg
+          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg $cachearg $apkcachearg $pipelinedirarg $gitcommitarg $gitrepoarg $envfile
         done
     - name: 'Fix local repository permissions'
       shell: bash
