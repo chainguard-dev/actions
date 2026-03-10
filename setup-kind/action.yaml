@@ -1,7 +1,7 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: 'Setup KinD'
+name: "Setup KinD"
 description: |
   This action sets up a KinD cluster based on the supplied
   configuration knobs.
@@ -9,7 +9,7 @@ description: |
 inputs:
   service-account-issuer:
     description: |
-      The service account issuer defines the identifier of the service account token issuer: https://kubernetes.default.svc 
+      The service account issuer defines the identifier of the service account token issuer: https://kubernetes.default.svc
     required: false
     default: "https://kubernetes.default.svc"
 
@@ -97,7 +97,15 @@ runs:
         sudo mkdir -p /tmp/etcd
         sudo mount -t tmpfs tmpfs /tmp/etcd
 
-        curl -Lo ./kind --fail --retry 5 --retry-delay 3 --retry-connrefused "https://github.com/kubernetes-sigs/kind/releases/download/v${{ inputs.kind-version }}/kind-$(uname)-amd64"
+        case "${RUNNER_ARCH}" in
+          X64)   ARCH=amd64 ;;
+          ARM64) ARCH=arm64 ;;
+          *)     echo "Unsupported architecture: ${RUNNER_ARCH}"; exit 1 ;;
+        esac
+
+        curl -Lo ./kind --fail --retry 5 --retry-delay 3 --retry-connrefused \
+          "https://github.com/kubernetes-sigs/kind/releases/download/v${{ inputs.kind-version }}/kind-$(uname)-${ARCH}"
+
         chmod +x ./kind
         sudo mv kind /usr/local/bin
 
