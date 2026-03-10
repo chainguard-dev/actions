@@ -1,7 +1,7 @@
 # Copyright 2022 Chainguard, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: 'Where Am I'
+name: "Where Am I"
 description: |
   This action logs some Azure metadata about the runner environment.
 
