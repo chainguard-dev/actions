@@ -225,6 +225,7 @@ export async function collectMetrics(octokit: Octokit, context: Context): Promis
       sha: context.sha || process.env.GITHUB_SHA || '',
       ref: context.ref || process.env.GITHUB_REF || '',
       refName: process.env.GITHUB_REF_NAME || null,
+      headBranch: (context.payload?.pull_request?.head?.ref as string) || null,
     },
     event: {
       name: context.eventName || process.env.GITHUB_EVENT_NAME || '',

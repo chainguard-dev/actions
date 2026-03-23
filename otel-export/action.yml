@@ -17,7 +17,7 @@ inputs:
   collector-version:
     description: 'OpenTelemetry Collector version'
     required: false
-    default: '0.145.0'
+    default: '0.148.0'
 
   otlp-protocol:
     description: 'OTLP exporter protocol (grpc, http/protobuf)'
@@ -38,6 +38,10 @@ inputs:
     description: 'Prefix for metric names'
     required: false
     default: 'github.actions'
+
+  job-name:
+    description: 'Job name for deterministic span ID (defaults to GITHUB_JOB). For matrix jobs, include the matrix key for unique per-shard traces (e.g., "build (images/go)").'
+    required: false
 
   fail-on-error:
     description: 'Fail the workflow if telemetry export fails'

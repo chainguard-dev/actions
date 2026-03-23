@@ -33005,6 +33005,10 @@ function generateTraceId(runId, runAttempt) {
 function generateRootSpanId(runId, runAttempt) {
     return crypto$1.createHash('sha256').update(`${runId}${runAttempt}s`).digest('hex').substring(16, 32);
 }
+/** sha256("{runId}{runAttempt}{jobName}")[16:32] — matches githubreceiver newJobSpanID */
+function generateJobSpanId(runId, runAttempt, jobName) {
+    return crypto$1.createHash('sha256').update(`${runId}${runAttempt}${jobName}`).digest('hex').substring(16, 32);
+}
 
 async function run() {
     try {
@@ -33031,9 +33035,11 @@ async function run() {
         await waitForCollector();
         const runId = process.env.GITHUB_RUN_ID || '0';
         const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+        const jobName = getInput('job-name') || process.env.GITHUB_JOB || 'unknown';
         const traceId = generateTraceId(runId, runAttempt);
-        const spanId = generateRootSpanId(runId, runAttempt);
-        const traceparent = `00-${traceId}-${spanId}-01`;
+        const rootSpanId = generateRootSpanId(runId, runAttempt);
+        const jobSpanId = generateJobSpanId(runId, runAttempt, jobName);
+        const traceparent = `00-${traceId}-${jobSpanId}-01`;
         const protocol = getInput('otlp-protocol');
         const collectorEndpoint = protocol === 'grpc' ? COLLECTOR_GRPC_ENDPOINT : COLLECTOR_HTTP_ENDPOINT;
         const envFile = process.env.GITHUB_ENV;
@@ -33041,13 +33047,15 @@ async function run() {
             fs$1.appendFileSync(envFile, `TRACEPARENT=${traceparent}\n`);
             fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_PROTOCOL=${protocol}\n`);
             fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_ENDPOINT=http://${collectorEndpoint}\n`);
-            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_GRPC_ENDPOINT=${COLLECTOR_GRPC_ENDPOINT}\n`);
+            fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_GRPC_ENDPOINT=http://${COLLECTOR_GRPC_ENDPOINT}\n`);
             fs$1.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_HTTP_ENDPOINT=http://${COLLECTOR_HTTP_ENDPOINT}\n`);
         }
+        saveState('job-name', jobName);
         setOutput('traceparent', traceparent);
         setOutput('trace-id', traceId);
-        setOutput('span-id', spanId);
+        setOutput('span-id', jobSpanId);
         info(`Trace ID: ${traceId}`);
+        info(`Job: ${jobName} (root=${rootSpanId}, job=${jobSpanId})`);
         info(`TRACEPARENT=${traceparent}`);
         info('OpenTelemetry collector running, telemetry will be exported after job completes');
     }
