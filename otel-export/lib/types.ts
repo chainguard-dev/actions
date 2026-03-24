@@ -37,6 +37,7 @@ export interface WorkflowMetrics {
     sha: string;
     ref: string;
     refName: string | null;
+    headBranch: string | null;
   };
   event: {
     name: string;

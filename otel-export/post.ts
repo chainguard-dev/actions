@@ -7,6 +7,7 @@ import { stopCollector, dumpCollectorLogs } from './lib/otelcol.js';
 import {
   generateTraceId,
   generateRootSpanId,
+  generateJobSpanId,
   DeterministicIdGenerator,
   createMeterProvider,
   recordMetrics,
@@ -49,8 +50,10 @@ async function run(): Promise<void> {
 
   const runId = process.env.GITHUB_RUN_ID || '0';
   const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+  const jobName = core.getState('job-name') || process.env.GITHUB_JOB || 'unknown';
   const traceId = generateTraceId(runId, runAttempt);
   const rootSpanId = generateRootSpanId(runId, runAttempt);
+  const jobSpanId = generateJobSpanId(runId, runAttempt, jobName);
 
   try {
     core.info('Starting OpenTelemetry export post-action');
@@ -79,12 +82,12 @@ async function run(): Promise<void> {
     const { meterProvider: mp, meter } = createMeterProvider(config);
     meterProvider = mp;
 
-    const idGenerator = new DeterministicIdGenerator(traceId, rootSpanId);
+    const idGenerator = new DeterministicIdGenerator(traceId, jobSpanId);
     const { tracerProvider: tp, tracer } = createTracerProvider(config, idGenerator);
     tracerProvider = tp;
 
     recordMetrics(meter, metrics, metricPrefix, customAttributes);
-    recordTraces(tracer, metrics, customAttributes);
+    recordTraces(tracer, metrics, rootSpanId, customAttributes);
 
     await shutdownMeterProvider(meterProvider);
     await shutdownTracerProvider(tracerProvider);

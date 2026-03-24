@@ -39781,6 +39781,7 @@ async function collectMetrics(octokit, context) {
             sha: context.sha || process.env.GITHUB_SHA || '',
             ref: context.ref || process.env.GITHUB_REF || '',
             refName: process.env.GITHUB_REF_NAME || null,
+            headBranch: context.payload?.pull_request?.head?.ref || null,
         },
         event: {
             name: context.eventName || process.env.GITHUB_EVENT_NAME || '',
@@ -52607,6 +52608,10 @@ function generateTraceId(runId, runAttempt) {
 function generateRootSpanId(runId, runAttempt) {
     return crypto.createHash('sha256').update(`${runId}${runAttempt}s`).digest('hex').substring(16, 32);
 }
+/** sha256("{runId}{runAttempt}{jobName}")[16:32] — matches githubreceiver newJobSpanID */
+function generateJobSpanId(runId, runAttempt, jobName) {
+    return crypto.createHash('sha256').update(`${runId}${runAttempt}${jobName}`).digest('hex').substring(16, 32);
+}
 function buildCicdAttributes(metrics, customAttributes = {}) {
     const attrs = {
         'cicd.pipeline.name': metrics.workflow,
@@ -52615,6 +52620,7 @@ function buildCicdAttributes(metrics, customAttributes = {}) {
         'vcs.repository.url.full': `https://github.com/${metrics.repository.fullName}`,
         'vcs.ref.head.name': metrics.git.refName || metrics.git.ref,
         'vcs.ref.head.revision': metrics.git.sha,
+        ...(metrics.git.headBranch ? { 'vcs.ref.head.branch': metrics.git.headBranch } : {}),
         'github.run.number': metrics.run.number.toString(),
         'github.run.attempt': metrics.run.attempt,
         'github.event.name': metrics.event.name,
@@ -52771,27 +52777,36 @@ function createTracerProvider(config, idGenerator) {
     });
     return { tracerProvider, tracer: tracerProvider.getTracer(config.metricPrefix) };
 }
-function recordTraces(tracer, metrics, customAttributes = {}) {
+function recordTraces(tracer, metrics, parentSpanId, customAttributes = {}) {
     info('Recording traces');
     const baseAttributes = buildCicdAttributes(metrics, customAttributes);
     const jobResult = mapToOtelResult(metrics.job.conclusion);
     const runUrl = `https://github.com/${metrics.repository.fullName}/actions/runs/${metrics.run.id}`;
+    // Create a remote parent context pointing at the run-level root span
+    // (sha256("{runId}{runAttempt}s")). This makes the job span a child of
+    // the workflow run span, matching the githubreceiver hierarchy:
+    //   workflow_run (root) → job → steps
+    const traceId = generateTraceId(metrics.run.id.toString(), metrics.run.attempt);
+    const parentContext = trace.setSpanContext(context.active(), {
+        traceId,
+        spanId: parentSpanId,
+        traceFlags: TraceFlags.SAMPLED,
+        isRemote: true,
+    });
     const jobSpan = tracer.startSpan(`RUN ${metrics.workflow}`, {
         kind: SpanKind.SERVER,
         startTime: metrics.job.startedAt,
         attributes: {
             ...baseAttributes,
-            // Pipeline-level attributes (this is our root span)
             'cicd.pipeline.action.name': 'RUN',
             'cicd.pipeline.result': jobResult,
             'cicd.pipeline.run.url.full': runUrl,
-            // Task-level attributes
             'cicd.pipeline.task.name': metrics.job.name,
             'cicd.pipeline.task.run.id': metrics.job.id.toString(),
             'cicd.pipeline.task.run.result': jobResult,
             'cicd.pipeline.task.run.url.full': `${runUrl}/job/${metrics.job.id}`,
         },
-    });
+    }, parentContext);
     const jobContext = trace.setSpan(context.active(), jobSpan);
     for (const step of metrics.steps) {
         if (step.startedAt && step.completedAt) {
@@ -52855,8 +52870,10 @@ async function run() {
     const collectorLog = getState('collector-log');
     const runId = process.env.GITHUB_RUN_ID || '0';
     const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+    const jobName = getState('job-name') || process.env.GITHUB_JOB || 'unknown';
     const traceId = generateTraceId(runId, runAttempt);
     const rootSpanId = generateRootSpanId(runId, runAttempt);
+    const jobSpanId = generateJobSpanId(runId, runAttempt, jobName);
     try {
         info('Starting OpenTelemetry export post-action');
         const token = getInput('github-token', { required: true });
@@ -52879,11 +52896,11 @@ async function run() {
         const metrics = await collectMetrics(octokit, context$1);
         const { meterProvider: mp, meter } = createMeterProvider(config);
         meterProvider = mp;
-        const idGenerator = new DeterministicIdGenerator(traceId, rootSpanId);
+        const idGenerator = new DeterministicIdGenerator(traceId, jobSpanId);
         const { tracerProvider: tp, tracer } = createTracerProvider(config, idGenerator);
         tracerProvider = tp;
         recordMetrics(meter, metrics, metricPrefix, customAttributes);
-        recordTraces(tracer, metrics, customAttributes);
+        recordTraces(tracer, metrics, rootSpanId, customAttributes);
         await shutdownMeterProvider(meterProvider);
         await shutdownTracerProvider(tracerProvider);
         if (traceId) {

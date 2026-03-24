@@ -4,7 +4,7 @@ import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { BasicTracerProvider, BatchSpanProcessor, RandomIdGenerator, type IdGenerator } from '@opentelemetry/sdk-trace-base';
-import { context, trace, SpanKind, SpanStatusCode, type Tracer, type Meter } from '@opentelemetry/api';
+import { context, trace, SpanKind, SpanStatusCode, TraceFlags, type Tracer, type Meter } from '@opentelemetry/api';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import type { WorkflowMetrics, OtelConfig, CustomAttributes } from './types.js';
@@ -41,6 +41,11 @@ export function generateRootSpanId(runId: string, runAttempt: string): string {
   return crypto.createHash('sha256').update(`${runId}${runAttempt}s`).digest('hex').substring(16, 32);
 }
 
+/** sha256("{runId}{runAttempt}{jobName}")[16:32] — matches githubreceiver newJobSpanID */
+export function generateJobSpanId(runId: string, runAttempt: string, jobName: string): string {
+  return crypto.createHash('sha256').update(`${runId}${runAttempt}${jobName}`).digest('hex').substring(16, 32);
+}
+
 function buildCicdAttributes(
   metrics: WorkflowMetrics,
   customAttributes: CustomAttributes = {},
@@ -53,6 +58,7 @@ function buildCicdAttributes(
     'vcs.repository.url.full': `https://github.com/${metrics.repository.fullName}`,
     'vcs.ref.head.name': metrics.git.refName || metrics.git.ref,
     'vcs.ref.head.revision': metrics.git.sha,
+    ...(metrics.git.headBranch ? { 'vcs.ref.head.branch': metrics.git.headBranch } : {}),
 
     'github.run.number': metrics.run.number.toString(),
     'github.run.attempt': metrics.run.attempt,
@@ -260,6 +266,7 @@ export function createTracerProvider(
 export function recordTraces(
   tracer: Tracer,
   metrics: WorkflowMetrics,
+  parentSpanId: string,
   customAttributes: CustomAttributes = {},
 ): void {
   core.info('Recording traces');
@@ -269,22 +276,35 @@ export function recordTraces(
   const jobResult = mapToOtelResult(metrics.job.conclusion);
   const runUrl = `https://github.com/${metrics.repository.fullName}/actions/runs/${metrics.run.id}`;
 
+  // Create a remote parent context pointing at the run-level root span
+  // (sha256("{runId}{runAttempt}s")). This makes the job span a child of
+  // the workflow run span, matching the githubreceiver hierarchy:
+  //   workflow_run (root) → job → steps
+  const traceId = generateTraceId(
+    metrics.run.id.toString(),
+    metrics.run.attempt,
+  );
+  const parentContext = trace.setSpanContext(context.active(), {
+    traceId,
+    spanId: parentSpanId,
+    traceFlags: TraceFlags.SAMPLED,
+    isRemote: true,
+  });
+
   const jobSpan = tracer.startSpan(`RUN ${metrics.workflow}`, {
     kind: SpanKind.SERVER,
     startTime: metrics.job.startedAt,
     attributes: {
       ...baseAttributes,
-      // Pipeline-level attributes (this is our root span)
       'cicd.pipeline.action.name': 'RUN',
       'cicd.pipeline.result': jobResult,
       'cicd.pipeline.run.url.full': runUrl,
-      // Task-level attributes
       'cicd.pipeline.task.name': metrics.job.name,
       'cicd.pipeline.task.run.id': metrics.job.id.toString(),
       'cicd.pipeline.task.run.result': jobResult,
       'cicd.pipeline.task.run.url.full': `${runUrl}/job/${metrics.job.id}`,
     },
-  });
+  }, parentContext);
 
   const jobContext = trace.setSpan(context.active(), jobSpan);
 

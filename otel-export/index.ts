@@ -2,7 +2,7 @@ import * as core from '@actions/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { downloadCollector, startCollector, waitForCollector, COLLECTOR_HTTP_ENDPOINT, COLLECTOR_GRPC_ENDPOINT, type ResourceAttributes } from './lib/otelcol.js';
-import { generateTraceId, generateRootSpanId } from './lib/exporter.js';
+import { generateTraceId, generateRootSpanId, generateJobSpanId } from './lib/exporter.js';
 
 async function run(): Promise<void> {
   try {
@@ -38,9 +38,11 @@ async function run(): Promise<void> {
 
     const runId = process.env.GITHUB_RUN_ID || '0';
     const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+    const jobName = core.getInput('job-name') || process.env.GITHUB_JOB || 'unknown';
     const traceId = generateTraceId(runId, runAttempt);
-    const spanId = generateRootSpanId(runId, runAttempt);
-    const traceparent = `00-${traceId}-${spanId}-01`;
+    const rootSpanId = generateRootSpanId(runId, runAttempt);
+    const jobSpanId = generateJobSpanId(runId, runAttempt, jobName);
+    const traceparent = `00-${traceId}-${jobSpanId}-01`;
 
     const protocol = core.getInput('otlp-protocol');
     const collectorEndpoint = protocol === 'grpc' ? COLLECTOR_GRPC_ENDPOINT : COLLECTOR_HTTP_ENDPOINT;
@@ -50,15 +52,18 @@ async function run(): Promise<void> {
       fs.appendFileSync(envFile, `TRACEPARENT=${traceparent}\n`);
       fs.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_PROTOCOL=${protocol}\n`);
       fs.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_ENDPOINT=http://${collectorEndpoint}\n`);
-      fs.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_GRPC_ENDPOINT=${COLLECTOR_GRPC_ENDPOINT}\n`);
+      fs.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_GRPC_ENDPOINT=http://${COLLECTOR_GRPC_ENDPOINT}\n`);
       fs.appendFileSync(envFile, `OTEL_EXPORTER_OTLP_HTTP_ENDPOINT=http://${COLLECTOR_HTTP_ENDPOINT}\n`);
     }
 
+    core.saveState('job-name', jobName);
+
     core.setOutput('traceparent', traceparent);
     core.setOutput('trace-id', traceId);
-    core.setOutput('span-id', spanId);
+    core.setOutput('span-id', jobSpanId);
 
     core.info(`Trace ID: ${traceId}`);
+    core.info(`Job: ${jobName} (root=${rootSpanId}, job=${jobSpanId})`);
     core.info(`TRACEPARENT=${traceparent}`);
     core.info('OpenTelemetry collector running, telemetry will be exported after job completes');
   } catch (error) {
