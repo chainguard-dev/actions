@@ -25,8 +25,10 @@ jobs:
           9236a389bd48b984df91adc1bc924620.r2.cloudflarestorage.com:443
           api.github.com:443
           cgr.dev:443
+          dl.google.com:443
           github.com:443
           go.dev:443
+          objects.githubusercontent.com:443
           proxy.golang.org:443
           release-assets.githubusercontent.com:443
           storage.googleapis.com:443
@@ -60,8 +62,10 @@ jobs:
           9236a389bd48b984df91adc1bc924620.r2.cloudflarestorage.com:443
           api.github.com:443
           cgr.dev:443
+          dl.google.com:443
           github.com:443
           go.dev:443
+          objects.githubusercontent.com:443
           proxy.golang.org:443
           release-assets.githubusercontent.com:443
           storage.googleapis.com:443
