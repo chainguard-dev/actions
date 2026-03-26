@@ -62,7 +62,7 @@ outputs:
 
 runs:
   using: docker
-  image: "docker://ghcr.io/wolfi-dev/apko:latest"
+  image: "docker://ghcr.io/wolfi-dev/apko:latest@sha256:045f6a7ebadf2885785bd728b73644b69aca297bda762f2f78be9bb1fdc86e48"
   env:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
