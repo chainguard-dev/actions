@@ -48,7 +48,7 @@ runs:
         echo "*****************************************************************"
         echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
 
-    - uses: chainguard-dev/setup-chainctl@c125f765e82b09a42af3185f3214465314d75c5d # v0.5.0
+    - uses: chainguard-dev/setup-chainctl@2cddd35a2f120d9973e58094dc6878c93cf58c28 # v0.5.1
       id: digesta
       with:
         environment: ${{ inputs.environment }}
