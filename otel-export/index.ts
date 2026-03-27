@@ -7,11 +7,14 @@ import { generateTraceId, generateRootSpanId, generateJobSpanId } from './lib/ex
 async function run(): Promise<void> {
   try {
     const collectorConfigPath = core.getInput('collector-config', { required: true });
-    const collectorVersion = core.getInput('collector-version');
 
-    const configPath = path.isAbsolute(collectorConfigPath)
-      ? collectorConfigPath
-      : path.join(process.env.GITHUB_WORKSPACE || process.cwd(), collectorConfigPath);
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const configPath = path.resolve(workspace, collectorConfigPath);
+    const resolvedWorkspace = path.resolve(workspace);
+
+    if (configPath !== resolvedWorkspace && !configPath.startsWith(resolvedWorkspace + path.sep)) {
+      throw new Error(`collector-config must be within the workspace: ${configPath}`);
+    }
 
     if (!fs.existsSync(configPath)) {
       throw new Error(`Collector config not found: ${configPath}`);
@@ -19,7 +22,7 @@ async function run(): Promise<void> {
 
     core.info('Starting OpenTelemetry Export action');
 
-    const binaryPath = await downloadCollector(collectorVersion);
+    const binaryPath = await downloadCollector();
 
     const serviceName = core.getInput('service-name');
     const serviceNamespace = core.getInput('service-namespace');
@@ -45,6 +48,10 @@ async function run(): Promise<void> {
     const traceparent = `00-${traceId}-${jobSpanId}-01`;
 
     const protocol = core.getInput('otlp-protocol');
+    const VALID_PROTOCOLS = new Set(['grpc', 'http/protobuf']);
+    if (!VALID_PROTOCOLS.has(protocol)) {
+      throw new Error(`Invalid otlp-protocol "${protocol}", must be one of: ${[...VALID_PROTOCOLS].join(', ')}`);
+    }
     const collectorEndpoint = protocol === 'grpc' ? COLLECTOR_GRPC_ENDPOINT : COLLECTOR_HTTP_ENDPOINT;
 
     const envFile = process.env.GITHUB_ENV;

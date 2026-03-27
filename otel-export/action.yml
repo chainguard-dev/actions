@@ -14,11 +14,6 @@ inputs:
     description: 'Path to otel-collector config file'
     required: true
 
-  collector-version:
-    description: 'OpenTelemetry Collector version'
-    required: false
-    default: '0.148.0'
-
   otlp-protocol:
     description: 'OTLP exporter protocol (grpc, http/protobuf)'
     required: false
