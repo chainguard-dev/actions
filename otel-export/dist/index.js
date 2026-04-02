@@ -22,8 +22,8 @@ import { setTimeout as setTimeout$1 } from 'timers';
 import * as fs$1 from 'node:fs';
 import * as path$1 from 'node:path';
 import * as stream from 'stream';
-import { spawn } from 'node:child_process';
 import * as crypto$1 from 'node:crypto';
+import { spawn } from 'node:child_process';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -32904,26 +32904,42 @@ function _getGlobal(key, defaultValue) {
 const COLLECTOR_NAME = 'otelcol-contrib';
 const COLLECTOR_HTTP_ENDPOINT = 'localhost:4318';
 const COLLECTOR_GRPC_ENDPOINT = 'localhost:4317';
-function getDownloadUrl(version) {
-    const platform = process.platform === 'win32' ? 'windows' : process.platform;
-    const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-    return `https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${version}/${COLLECTOR_NAME}_${version}_${platform}_${arch}.tar.gz`;
+// Pinned collector version and SHA256 checksums.
+// To upgrade: update COLLECTOR_VERSION and both checksums below.
+const COLLECTOR_VERSION = '0.148.0';
+const COLLECTOR_CHECKSUMS = {
+    amd64: '224be33baa9eb534838e3d742d5327eff6a6bb60cdf4a16daf9c4e70d438fe00',
+    arm64: 'cdacaa17eba2d7aec7338734669a15de0f3382828ba1f835a35a81fc3e55a9fa',
+};
+function verifyChecksum(filePath, expected) {
+    const content = fs$1.readFileSync(filePath);
+    const actual = crypto$1.createHash('sha256').update(content).digest('hex');
+    if (actual !== expected) {
+        throw new Error(`Checksum mismatch for collector binary.\n` +
+            `  Expected: ${expected}\n` +
+            `  Actual:   ${actual}`);
+    }
+    info(`Checksum verified: ${actual}`);
 }
-async function downloadCollector(version) {
-    const toolPath = find(COLLECTOR_NAME, version);
+async function downloadCollector() {
+    const toolPath = find(COLLECTOR_NAME, COLLECTOR_VERSION);
     if (toolPath) {
         info(`Using cached collector: ${toolPath}`);
         return path$1.join(toolPath, COLLECTOR_NAME);
     }
-    const url = getDownloadUrl(version);
-    info(`Downloading OpenTelemetry Collector v${version} from ${url}`);
-    const downloadPath = await downloadTool(url);
-    const extractedPath = await extractTar(downloadPath);
-    const cachedPath = await cacheDir(extractedPath, COLLECTOR_NAME, version);
-    const binaryPath = path$1.join(cachedPath, COLLECTOR_NAME);
-    if (process.platform !== 'win32') {
-        fs$1.chmodSync(binaryPath, '755');
+    const arch = process.arch === 'x64' ? 'amd64' : process.arch;
+    const expectedChecksum = COLLECTOR_CHECKSUMS[arch];
+    if (!expectedChecksum) {
+        throw new Error(`Unsupported architecture: ${arch}`);
     }
+    const url = `https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${COLLECTOR_VERSION}/${COLLECTOR_NAME}_${COLLECTOR_VERSION}_linux_${arch}.tar.gz`;
+    info(`Downloading OpenTelemetry Collector v${COLLECTOR_VERSION} from ${url}`);
+    const downloadPath = await downloadTool(url);
+    verifyChecksum(downloadPath, expectedChecksum);
+    const extractedPath = await extractTar(downloadPath);
+    const cachedPath = await cacheDir(extractedPath, COLLECTOR_NAME, COLLECTOR_VERSION);
+    const binaryPath = path$1.join(cachedPath, COLLECTOR_NAME);
+    fs$1.chmodSync(binaryPath, '755');
     info(`Collector cached at: ${binaryPath}`);
     return binaryPath;
 }
@@ -33013,15 +33029,17 @@ function generateJobSpanId(runId, runAttempt, jobName) {
 async function run() {
     try {
         const collectorConfigPath = getInput('collector-config', { required: true });
-        const collectorVersion = getInput('collector-version');
-        const configPath = path$1.isAbsolute(collectorConfigPath)
-            ? collectorConfigPath
-            : path$1.join(process.env.GITHUB_WORKSPACE || process.cwd(), collectorConfigPath);
+        const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+        const configPath = path$1.resolve(workspace, collectorConfigPath);
+        const resolvedWorkspace = path$1.resolve(workspace);
+        if (configPath !== resolvedWorkspace && !configPath.startsWith(resolvedWorkspace + path$1.sep)) {
+            throw new Error(`collector-config must be within the workspace: ${configPath}`);
+        }
         if (!fs$1.existsSync(configPath)) {
             throw new Error(`Collector config not found: ${configPath}`);
         }
         info('Starting OpenTelemetry Export action');
-        const binaryPath = await downloadCollector(collectorVersion);
+        const binaryPath = await downloadCollector();
         const serviceName = getInput('service-name');
         const serviceNamespace = getInput('service-namespace');
         const resourceAttrs = {
@@ -33041,6 +33059,10 @@ async function run() {
         const jobSpanId = generateJobSpanId(runId, runAttempt, jobName);
         const traceparent = `00-${traceId}-${jobSpanId}-01`;
         const protocol = getInput('otlp-protocol');
+        const VALID_PROTOCOLS = new Set(['grpc', 'http/protobuf']);
+        if (!VALID_PROTOCOLS.has(protocol)) {
+            throw new Error(`Invalid otlp-protocol "${protocol}", must be one of: ${[...VALID_PROTOCOLS].join(', ')}`);
+        }
         const collectorEndpoint = protocol === 'grpc' ? COLLECTOR_GRPC_ENDPOINT : COLLECTOR_HTTP_ENDPOINT;
         const envFile = process.env.GITHUB_ENV;
         if (envFile) {
