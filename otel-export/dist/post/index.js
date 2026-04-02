@@ -17,9 +17,9 @@ import 'child_process';
 import 'timers';
 import * as fs$1 from 'node:fs';
 import { Readable } from 'stream';
+import * as crypto from 'node:crypto';
 import 'node:child_process';
 import 'node:path';
-import * as crypto from 'node:crypto';
 import * as zlib from 'zlib';
 
 // We use any as a valid input type
