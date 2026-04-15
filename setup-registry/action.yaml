@@ -32,11 +32,13 @@ runs:
     - name: Run registry
       if: ${{inputs.disk != 'true' }}
       shell: bash
-      run: |
-        PORT=${{inputs.port}} crane registry serve &
+      env:
+        PORT: ${{inputs.port}}
+      run: crane registry serve &
 
     - name: Run registry
       if: ${{inputs.disk == 'true' }}
       shell: bash
-      run: |
-        PORT=${{inputs.port}} crane registry serve --blobs-to-disk=true &
+      env:
+        PORT: ${{inputs.port}}
+      run: crane registry serve --blobs-to-disk=true &
