@@ -20,57 +20,69 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 }
 
 describe('findCurrentJob', () => {
-  it('returns exact name match', () => {
-    const jobs = [makeJob({ name: 'build' }), makeJob({ name: 'test' })];
-    expect(findCurrentJob(jobs, 'build').name).toBe('build');
-  });
-
-  it('matches single matrix job by prefix', () => {
-    const jobs = [makeJob({ name: 'build (images/go)' })];
-    expect(findCurrentJob(jobs, 'build').name).toBe('build (images/go)');
-  });
-
-  it('matches matrix job by RUNNER_NAME when multiple candidates exist', () => {
+  function withRunner(name: string, fn: () => void) {
     const saved = process.env.RUNNER_NAME;
     try {
-      process.env.RUNNER_NAME = 'runner-2';
-      const jobs = [
-        makeJob({ name: 'build (images/go)', runner_name: 'runner-1' }),
-        makeJob({ name: 'build (images/redis)', runner_name: 'runner-2' }),
-      ];
-      expect(findCurrentJob(jobs, 'build').name).toBe('build (images/redis)');
+      process.env.RUNNER_NAME = name;
+      fn();
     } finally {
       if (saved === undefined) delete process.env.RUNNER_NAME;
       else process.env.RUNNER_NAME = saved;
     }
-  });
+  }
 
-  it('falls back to in_progress job when runner name does not match', () => {
+  function withoutRunner(fn: () => void) {
     const saved = process.env.RUNNER_NAME;
     try {
       delete process.env.RUNNER_NAME;
-      const jobs = [
-        makeJob({ name: 'build (images/go)', status: 'completed' }),
-        makeJob({ name: 'build (images/redis)', status: 'in_progress' }),
-      ];
-      expect(findCurrentJob(jobs, 'build').name).toBe('build (images/redis)');
+      fn();
     } finally {
       if (saved !== undefined) process.env.RUNNER_NAME = saved;
     }
+  }
+
+  it('matches by runner name regardless of job naming', () => {
+    withRunner('runner-3', () => {
+      const jobs = [
+        makeJob({ name: 'skipped', runner_name: null }),
+        makeJob({ name: 'caller / inner', runner_name: 'runner-3' }),
+      ];
+      expect(findCurrentJob(jobs, 'wrong-name').name).toBe('caller / inner');
+    });
   });
 
-  it('falls back to most recently started job', () => {
-    const saved = process.env.RUNNER_NAME;
-    try {
-      delete process.env.RUNNER_NAME;
+  it('handles matrix jobs via runner name', () => {
+    withRunner('runner-2', () => {
       const jobs = [
-        makeJob({ name: 'build (images/go)', status: 'completed', started_at: '2024-01-01T00:00:00Z' }),
-        makeJob({ name: 'build (images/redis)', status: 'completed', started_at: '2024-01-01T00:05:00Z' }),
+        makeJob({ name: 'build (a)', runner_name: 'runner-1' }),
+        makeJob({ name: 'build (b)', runner_name: 'runner-2' }),
       ];
-      expect(findCurrentJob(jobs, 'build').name).toBe('build (images/redis)');
-    } finally {
-      if (saved !== undefined) process.env.RUNNER_NAME = saved;
-    }
+      expect(findCurrentJob(jobs, 'build').name).toBe('build (b)');
+    });
+  });
+
+  it('handles reusable workflows via runner name', () => {
+    withRunner('runner-5', () => {
+      const jobs = [
+        makeJob({ name: 'other', runner_name: null, conclusion: 'skipped' }),
+        makeJob({ name: 'caller / inner', runner_name: 'runner-5' }),
+      ];
+      expect(findCurrentJob(jobs, 'inner').name).toBe('caller / inner');
+    });
+  });
+
+  it('falls back to exact name match without runner name', () => {
+    withoutRunner(() => {
+      const jobs = [makeJob({ name: 'build' }), makeJob({ name: 'test' })];
+      expect(findCurrentJob(jobs, 'build').name).toBe('build');
+    });
+  });
+
+  it('falls back to matrix prefix match without runner name', () => {
+    withoutRunner(() => {
+      const jobs = [makeJob({ name: 'build (variant-a)' })];
+      expect(findCurrentJob(jobs, 'build').name).toBe('build (variant-a)');
+    });
   });
 
   it('throws when no jobs exist', () => {

@@ -28,32 +28,20 @@ interface GitHubJob {
 }
 
 export function findCurrentJob(jobs: GitHubJob[], currentJobName: string): GitHubJob {
+  // RUNNER_NAME uniquely identifies the current job regardless of how GitHub
+  // formats the display name (reusable workflows, matrix expansions, etc.).
+  const runnerName = process.env.RUNNER_NAME;
+  if (runnerName) {
+    const byRunner = jobs.find((j) => j.runner_name === runnerName);
+    if (byRunner) return byRunner;
+  }
+
   const exactMatch = jobs.find((job) => job.name === currentJobName);
   if (exactMatch) return exactMatch;
 
-  // For matrix jobs, GITHUB_JOB is the base name without matrix values
-  const matrixJobs = jobs.filter((job) => job.name.startsWith(currentJobName + ' ('));
+  const matrixMatch = jobs.find((job) => job.name.startsWith(currentJobName + ' ('));
+  if (matrixMatch) return matrixMatch;
 
-  if (matrixJobs.length === 1) {
-    return matrixJobs[0];
-  } else if (matrixJobs.length > 1) {
-    const runnerName = process.env.RUNNER_NAME;
-    if (runnerName) {
-      const jobByRunner = matrixJobs.find((j) => j.runner_name === runnerName);
-      if (jobByRunner) return jobByRunner;
-    }
-
-    const inProgress = matrixJobs.find((j) => j.status === 'in_progress');
-    if (inProgress) return inProgress;
-
-    return matrixJobs.sort((a, b) => {
-      const aTime = a.started_at ? new Date(a.started_at).getTime() : 0;
-      const bTime = b.started_at ? new Date(b.started_at).getTime() : 0;
-      return bTime - aTime;
-    })[0];
-  }
-
-  // Fallback — may pick the wrong job in multi-job workflows
   const job = jobs[0];
   if (!job) throw new Error('No jobs found for this workflow run');
   core.warning(`Could not match job name "${currentJobName}", falling back to "${job.name}"`);
