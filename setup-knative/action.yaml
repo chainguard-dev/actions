@@ -106,7 +106,11 @@ runs:
             REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
           fi
 
-          curl -L -s "https://github.com/knative/${REPO}/releases/download/${REAL_KNATIVE_VERSION}/${FILE}" \
+          # -f makes curl fail on HTTP errors instead of piping an error body
+          # into yq, where it would surface as a confusing YAML parse error.
+          # --retry rides out transient GitHub release-asset blips.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+            "https://github.com/knative/${REPO}/releases/download/${REAL_KNATIVE_VERSION}/${FILE}" \
             | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
