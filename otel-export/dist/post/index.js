@@ -915,6 +915,24 @@ function requireErrors () {
 	  [kSecureProxyConnectionError] = true
 	}
 
+	const kMessageSizeExceededError = Symbol.for('undici.error.UND_ERR_WS_MESSAGE_SIZE_EXCEEDED');
+	class MessageSizeExceededError extends UndiciError {
+	  constructor (message) {
+	    super(message);
+	    this.name = 'MessageSizeExceededError';
+	    this.message = message || 'Max decompressed message size exceeded';
+	    this.code = 'UND_ERR_WS_MESSAGE_SIZE_EXCEEDED';
+	  }
+
+	  static [Symbol.hasInstance] (instance) {
+	    return instance && instance[kMessageSizeExceededError] === true
+	  }
+
+	  get [kMessageSizeExceededError] () {
+	    return true
+	  }
+	}
+
 	errors = {
 	  AbortError,
 	  HTTPParserError,
@@ -938,7 +956,8 @@ function requireErrors () {
 	  ResponseExceededMaxSizeError,
 	  RequestRetryError,
 	  ResponseError,
-	  SecureProxyConnectionError
+	  SecureProxyConnectionError,
+	  MessageSizeExceededError
 	};
 	return errors;
 }
@@ -2242,6 +2261,10 @@ function requireRequest$1 () {
 	      throw new InvalidArgumentError('upgrade must be a string')
 	    }
 
+	    if (upgrade && !isValidHeaderValue(upgrade)) {
+	      throw new InvalidArgumentError('invalid upgrade header')
+	    }
+
 	    if (headersTimeout != null && (!Number.isFinite(headersTimeout) || headersTimeout < 0)) {
 	      throw new InvalidArgumentError('invalid headersTimeout')
 	    }
@@ -2536,13 +2559,19 @@ function requireRequest$1 () {
 	    val = `${val}`;
 	  }
 
-	  if (request.host === null && headerName === 'host') {
+	  if (headerName === 'host') {
+	    if (request.host !== null) {
+	      throw new InvalidArgumentError('duplicate host header')
+	    }
 	    if (typeof val !== 'string') {
 	      throw new InvalidArgumentError('invalid host header')
 	    }
 	    // Consumed by Client
 	    request.host = val;
-	  } else if (request.contentLength === null && headerName === 'content-length') {
+	  } else if (headerName === 'content-length') {
+	    if (request.contentLength !== null) {
+	      throw new InvalidArgumentError('duplicate content-length header')
+	    }
 	    request.contentLength = parseInt(val, 10);
 	    if (!Number.isFinite(request.contentLength)) {
 	      throw new InvalidArgumentError('invalid content-length header')
@@ -2663,15 +2692,23 @@ function requireDispatcherBase () {
 	const kOnDestroyed = Symbol('onDestroyed');
 	const kOnClosed = Symbol('onClosed');
 	const kInterceptedDispatch = Symbol('Intercepted Dispatch');
+	const kWebSocketOptions = Symbol('webSocketOptions');
 
 	class DispatcherBase extends Dispatcher {
-	  constructor () {
+	  constructor (opts) {
 	    super();
 
 	    this[kDestroyed] = false;
 	    this[kOnDestroyed] = null;
 	    this[kClosed] = false;
 	    this[kOnClosed] = [];
+	    this[kWebSocketOptions] = opts?.webSocket ?? {};
+	  }
+
+	  get webSocketOptions () {
+	    return {
+	      maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
+	    }
 	  }
 
 	  get destroyed () {
@@ -11064,9 +11101,10 @@ function requireClient () {
 	    autoSelectFamilyAttemptTimeout,
 	    // h2
 	    maxConcurrentStreams,
-	    allowH2
+	    allowH2,
+	    webSocket
 	  } = {}) {
-	    super();
+	    super({ webSocket });
 
 	    if (keepAlive !== undefined) {
 	      throw new InvalidArgumentError('unsupported keepAlive, use pipelining=0 instead')
@@ -11773,8 +11811,8 @@ function requirePoolBase () {
 	const kStats = Symbol('stats');
 
 	class PoolBase extends DispatcherBase {
-	  constructor () {
-	    super();
+	  constructor (opts) {
+	    super(opts);
 
 	    this[kQueue] = new FixedQueue();
 	    this[kClients] = [];
@@ -11993,8 +12031,6 @@ function requirePool () {
 	    allowH2,
 	    ...options
 	  } = {}) {
-	    super();
-
 	    if (connections != null && (!Number.isFinite(connections) || connections < 0)) {
 	      throw new InvalidArgumentError('invalid connections')
 	    }
@@ -12018,6 +12054,8 @@ function requirePool () {
 	        ...connect
 	      });
 	    }
+
+	    super(options);
 
 	    this[kInterceptors] = options.interceptors?.Pool && Array.isArray(options.interceptors.Pool)
 	      ? options.interceptors.Pool
@@ -12312,7 +12350,6 @@ function requireAgent () {
 
 	class Agent extends DispatcherBase {
 	  constructor ({ factory = defaultFactory, maxRedirections = 0, connect, ...options } = {}) {
-	    super();
 
 	    if (typeof factory !== 'function') {
 	      throw new InvalidArgumentError('factory must be a function.')
@@ -12325,6 +12362,8 @@ function requireAgent () {
 	    if (!Number.isInteger(maxRedirections) || maxRedirections < 0) {
 	      throw new InvalidArgumentError('maxRedirections must be a positive number')
 	    }
+
+	    super(options);
 
 	    if (connect && typeof connect !== 'function') {
 	      connect = { ...connect };
@@ -24926,6 +24965,12 @@ function requireUtil$1 () {
 	 * @param {string} value
 	 */
 	function isValidClientWindowBits (value) {
+	  // Must have at least one character
+	  if (value.length === 0) {
+	    return false
+	  }
+
+	  // Check all characters are ASCII digits
 	  for (let i = 0; i < value.length; i++) {
 	    const byte = value.charCodeAt(i);
 
@@ -24934,7 +24979,9 @@ function requireUtil$1 () {
 	    }
 	  }
 
-	  return true
+	  // Check numeric range: zlib requires windowBits in range 8-15
+	  const num = Number.parseInt(value, 10);
+	  return num >= 8 && num <= 15
 	}
 
 	// https://nodejs.org/api/intl.html#detecting-internationalization-support
@@ -25464,6 +25511,7 @@ function requirePermessageDeflate () {
 
 	const { createInflateRaw, Z_DEFAULT_WINDOWBITS } = __require$7();
 	const { isValidClientWindowBits } = requireUtil$1();
+	const { MessageSizeExceededError } = requireErrors();
 
 	const tail = Buffer.from([0x00, 0x00, 0xff, 0xff]);
 	const kBuffer = Symbol('kBuffer');
@@ -25475,17 +25523,29 @@ function requirePermessageDeflate () {
 
 	  #options = {}
 
-	  constructor (extensions) {
+	  #maxPayloadSize = 0
+
+	  /**
+	   * @param {Map<string, string>} extensions
+	   */
+	  constructor (extensions, options) {
 	    this.#options.serverNoContextTakeover = extensions.has('server_no_context_takeover');
 	    this.#options.serverMaxWindowBits = extensions.get('server_max_window_bits');
+
+	    this.#maxPayloadSize = options.maxPayloadSize;
 	  }
 
+	  /**
+	   * Decompress a compressed payload.
+	   * @param {Buffer} chunk Compressed data
+	   * @param {boolean} fin Final fragment flag
+	   * @param {Function} callback Callback function
+	   */
 	  decompress (chunk, fin, callback) {
 	    // An endpoint uses the following algorithm to decompress a message.
 	    // 1.  Append 4 octets of 0x00 0x00 0xff 0xff to the tail end of the
 	    //     payload of the message.
 	    // 2.  Decompress the resulting data using DEFLATE.
-
 	    if (!this.#inflate) {
 	      let windowBits = Z_DEFAULT_WINDOWBITS;
 
@@ -25498,13 +25558,26 @@ function requirePermessageDeflate () {
 	        windowBits = Number.parseInt(this.#options.serverMaxWindowBits);
 	      }
 
-	      this.#inflate = createInflateRaw({ windowBits });
+	      try {
+	        this.#inflate = createInflateRaw({ windowBits });
+	      } catch (err) {
+	        callback(err);
+	        return
+	      }
 	      this.#inflate[kBuffer] = [];
 	      this.#inflate[kLength] = 0;
 
 	      this.#inflate.on('data', (data) => {
-	        this.#inflate[kBuffer].push(data);
 	        this.#inflate[kLength] += data.length;
+
+	        if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
+	          callback(new MessageSizeExceededError());
+	          this.#inflate.removeAllListeners();
+	          this.#inflate = null;
+	          return
+	        }
+
+	        this.#inflate[kBuffer].push(data);
 	      });
 
 	      this.#inflate.on('error', (err) => {
@@ -25519,6 +25592,10 @@ function requirePermessageDeflate () {
 	    }
 
 	    this.#inflate.flush(() => {
+	      if (!this.#inflate) {
+	        return
+	      }
+
 	      const full = Buffer.concat(this.#inflate[kBuffer], this.#inflate[kLength]);
 
 	      this.#inflate[kBuffer].length = 0;
@@ -25558,6 +25635,7 @@ function requireReceiver () {
 	const { WebsocketFrameSend } = requireFrame();
 	const { closeWebSocketConnection } = requireConnection();
 	const { PerMessageDeflate } = requirePermessageDeflate();
+	const { MessageSizeExceededError } = requireErrors();
 
 	// This code was influenced by ws released under the MIT license.
 	// Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
@@ -25566,6 +25644,7 @@ function requireReceiver () {
 
 	class ByteParser extends Writable {
 	  #buffers = []
+	  #fragmentsBytes = 0
 	  #byteOffset = 0
 	  #loop = false
 
@@ -25577,14 +25656,23 @@ function requireReceiver () {
 	  /** @type {Map<string, PerMessageDeflate>} */
 	  #extensions
 
-	  constructor (ws, extensions) {
+	  /** @type {number} */
+	  #maxPayloadSize
+
+	  /**
+	   * @param {import('./websocket').WebSocket} ws
+	   * @param {Map<string, string>|null} extensions
+	   * @param {{ maxPayloadSize?: number }} [options]
+	   */
+	  constructor (ws, extensions, options = {}) {
 	    super();
 
 	    this.ws = ws;
 	    this.#extensions = extensions == null ? new Map() : extensions;
+	    this.#maxPayloadSize = options.maxPayloadSize ?? 0;
 
 	    if (this.#extensions.has('permessage-deflate')) {
-	      this.#extensions.set('permessage-deflate', new PerMessageDeflate(extensions));
+	      this.#extensions.set('permessage-deflate', new PerMessageDeflate(extensions, options));
 	    }
 	  }
 
@@ -25598,6 +25686,19 @@ function requireReceiver () {
 	    this.#loop = true;
 
 	    this.run(callback);
+	  }
+
+	  #validatePayloadLength () {
+	    if (
+	      this.#maxPayloadSize > 0 &&
+	      !isControlFrame(this.#info.opcode) &&
+	      this.#info.payloadLength > this.#maxPayloadSize
+	    ) {
+	      failWebsocketConnection(this.ws, 'Payload size exceeds maximum allowed size');
+	      return false
+	    }
+
+	    return true
 	  }
 
 	  /**
@@ -25688,6 +25789,10 @@ function requireReceiver () {
 	        if (payloadLength <= 125) {
 	          this.#info.payloadLength = payloadLength;
 	          this.#state = parserStates.READ_DATA;
+
+	          if (!this.#validatePayloadLength()) {
+	            return
+	          }
 	        } else if (payloadLength === 126) {
 	          this.#state = parserStates.PAYLOADLENGTH_16;
 	        } else if (payloadLength === 127) {
@@ -25712,6 +25817,10 @@ function requireReceiver () {
 
 	        this.#info.payloadLength = buffer.readUInt16BE(0);
 	        this.#state = parserStates.READ_DATA;
+
+	        if (!this.#validatePayloadLength()) {
+	          return
+	        }
 	      } else if (this.#state === parserStates.PAYLOADLENGTH_64) {
 	        if (this.#byteOffset < 8) {
 	          return callback()
@@ -25719,6 +25828,7 @@ function requireReceiver () {
 
 	        const buffer = this.consume(8);
 	        const upper = buffer.readUInt32BE(0);
+	        const lower = buffer.readUInt32BE(4);
 
 	        // 2^31 is the maximum bytes an arraybuffer can contain
 	        // on 32-bit systems. Although, on 64-bit systems, this is
@@ -25726,15 +25836,17 @@ function requireReceiver () {
 	        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Invalid_array_length
 	        // https://source.chromium.org/chromium/chromium/src/+/main:v8/src/common/globals.h;drc=1946212ac0100668f14eb9e2843bdd846e510a1e;bpv=1;bpt=1;l=1275
 	        // https://source.chromium.org/chromium/chromium/src/+/main:v8/src/objects/js-array-buffer.h;l=34;drc=1946212ac0100668f14eb9e2843bdd846e510a1e
-	        if (upper > 2 ** 31 - 1) {
+	        if (upper !== 0 || lower > 2 ** 31 - 1) {
 	          failWebsocketConnection(this.ws, 'Received payload length > 2^31 bytes.');
 	          return
 	        }
 
-	        const lower = buffer.readUInt32BE(4);
-
-	        this.#info.payloadLength = (upper << 8) + lower;
+	        this.#info.payloadLength = lower;
 	        this.#state = parserStates.READ_DATA;
+
+	        if (!this.#validatePayloadLength()) {
+	          return
+	        }
 	      } else if (this.#state === parserStates.READ_DATA) {
 	        if (this.#byteOffset < this.#info.payloadLength) {
 	          return callback()
@@ -25747,42 +25859,53 @@ function requireReceiver () {
 	          this.#state = parserStates.INFO;
 	        } else {
 	          if (!this.#info.compressed) {
-	            this.#fragments.push(body);
+	            this.writeFragments(body);
+
+	            if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
+	              failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+	              return
+	            }
 
 	            // If the frame is not fragmented, a message has been received.
 	            // If the frame is fragmented, it will terminate with a fin bit set
 	            // and an opcode of 0 (continuation), therefore we handle that when
 	            // parsing continuation frames, not here.
 	            if (!this.#info.fragmented && this.#info.fin) {
-	              const fullMessage = Buffer.concat(this.#fragments);
-	              websocketMessageReceived(this.ws, this.#info.binaryType, fullMessage);
-	              this.#fragments.length = 0;
+	              websocketMessageReceived(this.ws, this.#info.binaryType, this.consumeFragments());
 	            }
 
 	            this.#state = parserStates.INFO;
 	          } else {
-	            this.#extensions.get('permessage-deflate').decompress(body, this.#info.fin, (error, data) => {
-	              if (error) {
-	                closeWebSocketConnection(this.ws, 1007, error.message, error.message.length);
-	                return
-	              }
+	            this.#extensions.get('permessage-deflate').decompress(
+	              body,
+	              this.#info.fin,
+	              (error, data) => {
+	                if (error) {
+	                  failWebsocketConnection(this.ws, error.message);
+	                  return
+	                }
 
-	              this.#fragments.push(data);
+	                this.writeFragments(data);
 
-	              if (!this.#info.fin) {
-	                this.#state = parserStates.INFO;
+	                if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
+	                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+	                  return
+	                }
+
+	                if (!this.#info.fin) {
+	                  this.#state = parserStates.INFO;
+	                  this.#loop = true;
+	                  this.run(callback);
+	                  return
+	                }
+
+	                websocketMessageReceived(this.ws, this.#info.binaryType, this.consumeFragments());
+
 	                this.#loop = true;
+	                this.#state = parserStates.INFO;
 	                this.run(callback);
-	                return
 	              }
-
-	              websocketMessageReceived(this.ws, this.#info.binaryType, Buffer.concat(this.#fragments));
-
-	              this.#loop = true;
-	              this.#state = parserStates.INFO;
-	              this.#fragments.length = 0;
-	              this.run(callback);
-	            });
+	            );
 
 	            this.#loop = false;
 	            break
@@ -25832,6 +25955,26 @@ function requireReceiver () {
 	    this.#byteOffset -= n;
 
 	    return buffer
+	  }
+
+	  writeFragments (fragment) {
+	    this.#fragmentsBytes += fragment.length;
+	    this.#fragments.push(fragment);
+	  }
+
+	  consumeFragments () {
+	    const fragments = this.#fragments;
+
+	    if (fragments.length === 1) {
+	      this.#fragmentsBytes = 0;
+	      return fragments.shift()
+	    }
+
+	    const output = Buffer.concat(fragments, this.#fragmentsBytes);
+	    this.#fragments = [];
+	    this.#fragmentsBytes = 0;
+
+	    return output
 	  }
 
 	  parseCloseBody (data) {
@@ -26515,11 +26658,15 @@ function requireWebsocket () {
 	   * @see https://websockets.spec.whatwg.org/#feedback-from-the-protocol
 	   */
 	  #onConnectionEstablished (response, parsedExtensions) {
-	    // processResponse is called when the "response’s header list has been received and initialized."
+	    // processResponse is called when the "response's header list has been received and initialized."
 	    // once this happens, the connection is open
 	    this[kResponse] = response;
 
-	    const parser = new ByteParser(this, parsedExtensions);
+	    const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
+
+	    const parser = new ByteParser(this, parsedExtensions, {
+	      maxPayloadSize
+	    });
 	    parser.on('drain', onParserDrain);
 	    parser.on('error', onParserError.bind(this));
 
@@ -28965,6 +29112,19 @@ function getProxyFetch(destinationUrl) {
 function getApiBaseUrl() {
     return process.env['GITHUB_API_URL'] || 'https://api.github.com';
 }
+function getUserAgentWithOrchestrationId(baseUserAgent) {
+    var _a;
+    const orchId = (_a = process.env['ACTIONS_ORCHESTRATION_ID']) === null || _a === void 0 ? void 0 : _a.trim();
+    if (orchId) {
+        const sanitizedId = orchId.replace(/[^a-z0-9_.-]/gi, '_');
+        const tag = `actions_orchestration_id/${sanitizedId}`;
+        if (baseUserAgent === null || baseUserAgent === void 0 ? void 0 : baseUserAgent.includes(tag))
+            return baseUserAgent;
+        const ua = baseUserAgent ? `${baseUserAgent} ` : '';
+        return `${ua}${tag}`;
+    }
+    return baseUserAgent;
+}
 
 function getUserAgent() {
   if (typeof navigator === "object" && "userAgent" in navigator) {
@@ -29111,10 +29271,10 @@ var Hook = { Collection: Collection$1 };
 // pkg/dist-src/defaults.js
 
 // pkg/dist-src/version.js
-var VERSION$8 = "0.0.0-development";
+var VERSION$9 = "0.0.0-development";
 
 // pkg/dist-src/defaults.js
-var userAgent = `octokit-endpoint.js/${VERSION$8} ${getUserAgent()}`;
+var userAgent = `octokit-endpoint.js/${VERSION$9} ${getUserAgent()}`;
 var DEFAULTS = {
   method: "GET",
   baseUrl: "https://api.github.com",
@@ -29265,7 +29425,7 @@ function isKeyOperator(operator) {
 function getValues(context, operator, key, modifier) {
   var value = context[key], result = [];
   if (isDefined(value) && value !== "") {
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
       value = value.toString();
       if (modifier && modifier !== "*") {
         value = value.substring(0, parseInt(modifier, 10));
@@ -29631,6 +29791,212 @@ function requireFastContentTypeParse () {
 
 var fastContentTypeParseExports = requireFastContentTypeParse();
 
+const intRegex = /^-?\d+$/;
+const noiseValue = /^-?\d+n+$/; // Noise - strings that match the custom format before being converted to it
+const originalStringify = JSON.stringify;
+const originalParse = JSON.parse;
+const customFormat = /^-?\d+n$/;
+
+const bigIntsStringify = /([\[:])?"(-?\d+)n"($|([\\n]|\s)*(\s|[\\n])*[,\}\]])/g;
+const noiseStringify =
+  /([\[:])?("-?\d+n+)n("$|"([\\n]|\s)*(\s|[\\n])*[,\}\]])/g;
+
+/**
+ * @typedef {(this: any, key: string | number | undefined, value: any) => any} Replacer
+ * @typedef {(key: string | number | undefined, value: any, context?: { source: string }) => any} Reviver
+ */
+
+/**
+ * Converts a JavaScript value to a JSON string.
+ *
+ * Supports serialization of BigInt values using two strategies:
+ * 1. Custom format "123n" → "123" (universal fallback)
+ * 2. Native JSON.rawJSON() (Node.js 22+, fastest) when available
+ *
+ * All other values are serialized exactly like native JSON.stringify().
+ *
+ * @param {*} value The value to convert to a JSON string.
+ * @param {Replacer | Array<string | number> | null} [replacer]
+ *   A function that alters the behavior of the stringification process,
+ *   or an array of strings/numbers to indicate properties to exclude.
+ * @param {string | number} [space]
+ *   A string or number to specify indentation or pretty-printing.
+ * @returns {string} The JSON string representation.
+ */
+const JSONStringify = (value, replacer, space) => {
+  if ("rawJSON" in JSON) {
+    return originalStringify(
+      value,
+      (key, value) => {
+        if (typeof value === "bigint") return JSON.rawJSON(value.toString());
+
+        if (Array.isArray(replacer) && replacer.includes(key)) return value;
+
+        return value;
+      },
+      space,
+    );
+  }
+
+  if (!value) return originalStringify(value, replacer, space);
+
+  const convertedToCustomJSON = originalStringify(
+    value,
+    (key, value) => {
+      const isNoise = typeof value === "string" && noiseValue.test(value);
+
+      if (isNoise) return value.toString() + "n"; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
+
+      if (typeof value === "bigint") return value.toString() + "n";
+
+      if (Array.isArray(replacer) && replacer.includes(key)) return value;
+
+      return value;
+    },
+    space,
+  );
+  const processedJSON = convertedToCustomJSON.replace(
+    bigIntsStringify,
+    "$1$2$3",
+  ); // Delete one "n" off the end of every BigInt value
+  const denoisedJSON = processedJSON.replace(noiseStringify, "$1$2$3"); // Remove one "n" off the end of every noisy string
+
+  return denoisedJSON;
+};
+
+const featureCache = new Map();
+
+/**
+ * Detects if the current JSON.parse implementation supports the context.source feature.
+ *
+ * Uses toString() fingerprinting to cache results and automatically detect runtime
+ * replacements of JSON.parse (polyfills, mocks, etc.).
+ *
+ * @returns {boolean} true if context.source is supported, false otherwise.
+ */
+const isContextSourceSupported = () => {
+  const parseFingerprint = JSON.parse.toString();
+
+  if (featureCache.has(parseFingerprint)) {
+    return featureCache.get(parseFingerprint);
+  }
+
+  try {
+    const result = JSON.parse(
+      "1",
+      (_, __, context) => !!context?.source && context.source === "1",
+    );
+    featureCache.set(parseFingerprint, result);
+
+    return result;
+  } catch {
+    featureCache.set(parseFingerprint, false);
+
+    return false;
+  }
+};
+
+/**
+ * Reviver function that converts custom-format BigInt strings back to BigInt values.
+ * Also handles "noise" strings that accidentally match the BigInt format.
+ *
+ * @param {string | number | undefined} key The object key.
+ * @param {*} value The value being parsed.
+ * @param {object} [context] Parse context (if supported by JSON.parse).
+ * @param {Reviver} [userReviver] User's custom reviver function.
+ * @returns {any} The transformed value.
+ */
+const convertMarkedBigIntsReviver = (key, value, context, userReviver) => {
+  const isCustomFormatBigInt =
+    typeof value === "string" && customFormat.test(value);
+  if (isCustomFormatBigInt) return BigInt(value.slice(0, -1));
+
+  const isNoiseValue = typeof value === "string" && noiseValue.test(value);
+  if (isNoiseValue) return value.slice(0, -1);
+
+  return value;
+};
+
+/**
+ * Fast JSON.parse implementation (~2x faster than classic fallback).
+ * Uses JSON.parse's context.source feature to detect integers and convert
+ * large numbers directly to BigInt without string manipulation.
+ *
+ * Does not support legacy custom format from v1 of this library.
+ *
+ * @param {string} text JSON string to parse.
+ * @param {Reviver} [reviver] Transform function to apply to each value.
+ * @returns {any} Parsed JavaScript value.
+ */
+const JSONParseV2 = (text, reviver) => {
+  return JSON.parse(text, (key, value, context) => {
+    const isBigNumber =
+      typeof value === "number" &&
+      (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER);
+    const isInt = context && intRegex.test(context.source);
+    const isBigInt = isBigNumber && isInt;
+
+    if (isBigInt) return BigInt(context.source);
+
+    return value;
+  });
+};
+
+const MAX_INT = Number.MAX_SAFE_INTEGER.toString();
+const MAX_DIGITS = MAX_INT.length;
+const stringsOrLargeNumbers =
+  /"(?:\\.|[^"])*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
+const noiseValueWithQuotes = /^"-?\d+n+"$/; // Noise - strings that match the custom format before being converted to it
+
+/**
+ * Converts a JSON string into a JavaScript value.
+ *
+ * Supports parsing of large integers using two strategies:
+ * 1. Classic fallback: Marks large numbers with "123n" format, then converts to BigInt
+ * 2. Fast path (JSONParseV2): Uses context.source feature (~2x faster) when available
+ *
+ * All other JSON values are parsed exactly like native JSON.parse().
+ *
+ * @param {string} text A valid JSON string.
+ * @param {Reviver} [reviver]
+ *   A function that transforms the results. This function is called for each member
+ *   of the object. If a member contains nested objects, the nested objects are
+ *   transformed before the parent object is.
+ * @returns {any} The parsed JavaScript value.
+ * @throws {SyntaxError} If text is not valid JSON.
+ */
+const JSONParse = (text, reviver) => {
+  if (!text) return originalParse(text, reviver);
+
+  if (isContextSourceSupported()) return JSONParseV2(text); // Shortcut to a faster (2x) and simpler version
+
+  // Find and mark big numbers with "n"
+  const serializedData = text.replace(
+    stringsOrLargeNumbers,
+    (text, digits, fractional, exponential) => {
+      const isString = text[0] === '"';
+      const isNoise = isString && noiseValueWithQuotes.test(text);
+
+      if (isNoise) return text.substring(0, text.length - 1) + 'n"'; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
+
+      const isFractionalOrExponential = fractional || exponential;
+      const isLessThanMaxSafeInt =
+        digits &&
+        (digits.length < MAX_DIGITS ||
+          (digits.length === MAX_DIGITS && digits <= MAX_INT)); // With a fixed number of digits, we can correctly use lexicographical comparison to do a numeric comparison
+
+      if (isString || isFractionalOrExponential || isLessThanMaxSafeInt)
+        return text;
+
+      return '"' + text + 'n"';
+    },
+  );
+
+  return originalParse(serializedData, (key, value, context) =>
+    convertMarkedBigIntsReviver(key, value),
+  );
+};
+
 class RequestError extends Error {
   name;
   /**
@@ -29673,12 +30039,12 @@ class RequestError extends Error {
 // pkg/dist-src/index.js
 
 // pkg/dist-src/version.js
-var VERSION$7 = "10.0.7";
+var VERSION$8 = "10.0.8";
 
 // pkg/dist-src/defaults.js
 var defaults_default = {
   headers: {
-    "user-agent": `octokit-request.js/${VERSION$7} ${getUserAgent()}`
+    "user-agent": `octokit-request.js/${VERSION$8} ${getUserAgent()}`
   }
 };
 
@@ -29701,7 +30067,7 @@ async function fetchWrapper(requestOptions) {
   }
   const log = requestOptions.request?.log || console;
   const parseSuccessResponseBody = requestOptions.request?.parseSuccessResponseBody !== false;
-  const body = isPlainObject$1(requestOptions.body) || Array.isArray(requestOptions.body) ? JSON.stringify(requestOptions.body) : requestOptions.body;
+  const body = isPlainObject$1(requestOptions.body) || Array.isArray(requestOptions.body) ? JSONStringify(requestOptions.body) : requestOptions.body;
   const requestHeaders = Object.fromEntries(
     Object.entries(requestOptions.headers).map(([name, value]) => [
       name,
@@ -29800,7 +30166,7 @@ async function getResponseData(response) {
     let text = "";
     try {
       text = await response.text();
-      return JSON.parse(text);
+      return JSONParse(text);
     } catch (err) {
       return text;
     }
@@ -29863,7 +30229,7 @@ var request = withDefaults$1(endpoint, defaults_default);
 // pkg/dist-src/index.js
 
 // pkg/dist-src/version.js
-var VERSION$6 = "0.0.0-development";
+var VERSION$7 = "0.0.0-development";
 
 // pkg/dist-src/error.js
 function _buildMessageForResponseErrors(data) {
@@ -29965,7 +30331,7 @@ function withDefaults(request2, newDefaults) {
 // pkg/dist-src/index.js
 withDefaults(request, {
   headers: {
-    "user-agent": `octokit-graphql.js/${VERSION$6} ${getUserAgent()}`
+    "user-agent": `octokit-graphql.js/${VERSION$7} ${getUserAgent()}`
   },
   method: "POST",
   url: "/graphql"
@@ -30030,7 +30396,7 @@ var createTokenAuth = function createTokenAuth2(token) {
   });
 };
 
-const VERSION$5 = "7.0.6";
+const VERSION$6 = "7.0.6";
 
 const noop = () => {
 };
@@ -30051,9 +30417,9 @@ function createLogger(logger = {}) {
   }
   return logger;
 }
-const userAgentTrail = `octokit-core.js/${VERSION$5} ${getUserAgent()}`;
+const userAgentTrail = `octokit-core.js/${VERSION$6} ${getUserAgent()}`;
 class Octokit {
-  static VERSION = VERSION$5;
+  static VERSION = VERSION$6;
   static defaults(defaults) {
     const OctokitWithDefaults = class extends this {
       constructor(...args) {
@@ -30165,7 +30531,7 @@ class Octokit {
   auth;
 }
 
-const VERSION$4 = "17.0.0";
+const VERSION$5 = "17.0.0";
 
 const Endpoints = {
   actions: {
@@ -32586,10 +32952,10 @@ function restEndpointMethods(octokit) {
     rest: api
   };
 }
-restEndpointMethods.VERSION = VERSION$4;
+restEndpointMethods.VERSION = VERSION$5;
 
 // pkg/dist-src/version.js
-var VERSION$3 = "0.0.0-development";
+var VERSION$4 = "0.0.0-development";
 
 // pkg/dist-src/normalize-paginated-list-response.js
 function normalizePaginatedListResponse(response) {
@@ -32712,7 +33078,7 @@ function paginateRest(octokit) {
     })
   };
 }
-paginateRest.VERSION = VERSION$3;
+paginateRest.VERSION = VERSION$4;
 
 new Context();
 const baseUrl = getApiBaseUrl();
@@ -32736,6 +33102,11 @@ function getOctokitOptions(token, options) {
     const auth = getAuthString(token, opts);
     if (auth) {
         opts.auth = auth;
+    }
+    // Orchestration ID
+    const userAgent = getUserAgentWithOrchestrationId(opts.userAgent);
+    if (userAgent) {
+        opts.userAgent = userAgent;
     }
     return opts;
 }
@@ -34154,6 +34525,7 @@ function createStringifyContext(doc, options) {
         nullStr: 'null',
         simpleKeys: false,
         singleQuote: null,
+        trailingComma: false,
         trueStr: 'true',
         verifyAliasOrder: true
     }, doc.schema.toStringOptions, options);
@@ -34655,12 +35027,22 @@ function stringifyFlowCollection({ items }, ctx, { flowChars, itemIndent }) {
         if (comment)
             reqNewline = true;
         let str = stringify(item, itemCtx, () => (comment = null));
-        if (i < items.length - 1)
+        reqNewline || (reqNewline = lines.length > linesAtValue || str.includes('\n'));
+        if (i < items.length - 1) {
             str += ',';
+        }
+        else if (ctx.options.trailingComma) {
+            if (ctx.options.lineWidth > 0) {
+                reqNewline || (reqNewline = lines.reduce((sum, line) => sum + line.length + 2, 2) +
+                    (str.length + 2) >
+                    ctx.options.lineWidth);
+            }
+            if (reqNewline) {
+                str += ',';
+            }
+        }
         if (comment)
             str += lineComment(str, itemIndent, commentString(comment));
-        if (!reqNewline && (lines.length > linesAtValue || str.includes('\n')))
-            reqNewline = true;
         lines.push(str);
         linesAtValue = lines.length;
     }
@@ -37474,19 +37856,26 @@ function composeNode(ctx, token, props, onError) {
         case 'block-map':
         case 'block-seq':
         case 'flow-collection':
-            node = composeCollection(CN, ctx, token, props, onError);
-            if (anchor)
-                node.anchor = anchor.source.substring(1);
+            try {
+                node = composeCollection(CN, ctx, token, props, onError);
+                if (anchor)
+                    node.anchor = anchor.source.substring(1);
+            }
+            catch (error) {
+                // Almost certainly here due to a stack overflow
+                const message = error instanceof Error ? error.message : String(error);
+                onError(token, 'RESOURCE_EXHAUSTION', message);
+            }
             break;
         default: {
             const message = token.type === 'error'
                 ? token.message
                 : `Unsupported token (type: ${token.type})`;
             onError(token, 'UNEXPECTED_TOKEN', message);
-            node = composeEmptyNode(ctx, token.offset, undefined, null, props, onError);
             isSrcToken = false;
         }
     }
+    node ?? (node = composeEmptyNode(ctx, token.offset, undefined, null, props, onError));
     if (anchor && node.anchor === '')
         onError(anchor, 'BAD_ALIAS', 'Anchor cannot be an empty string');
     if (atKey &&
@@ -39617,31 +40006,20 @@ function parse(src, reviver, options) {
 }
 
 function findCurrentJob(jobs, currentJobName) {
+    // RUNNER_NAME uniquely identifies the current job regardless of how GitHub
+    // formats the display name (reusable workflows, matrix expansions, etc.).
+    const runnerName = process.env.RUNNER_NAME;
+    if (runnerName) {
+        const byRunner = jobs.find((j) => j.runner_name === runnerName);
+        if (byRunner)
+            return byRunner;
+    }
     const exactMatch = jobs.find((job) => job.name === currentJobName);
     if (exactMatch)
         return exactMatch;
-    // For matrix jobs, GITHUB_JOB is the base name without matrix values
-    const matrixJobs = jobs.filter((job) => job.name.startsWith(currentJobName + ' ('));
-    if (matrixJobs.length === 1) {
-        return matrixJobs[0];
-    }
-    else if (matrixJobs.length > 1) {
-        const runnerName = process.env.RUNNER_NAME;
-        if (runnerName) {
-            const jobByRunner = matrixJobs.find((j) => j.runner_name === runnerName);
-            if (jobByRunner)
-                return jobByRunner;
-        }
-        const inProgress = matrixJobs.find((j) => j.status === 'in_progress');
-        if (inProgress)
-            return inProgress;
-        return matrixJobs.sort((a, b) => {
-            const aTime = a.started_at ? new Date(a.started_at).getTime() : 0;
-            const bTime = b.started_at ? new Date(b.started_at).getTime() : 0;
-            return bTime - aTime;
-        })[0];
-    }
-    // Fallback — may pick the wrong job in multi-job workflows
+    const matrixMatch = jobs.find((job) => job.name.startsWith(currentJobName + ' ('));
+    if (matrixMatch)
+        return matrixMatch;
     const job = jobs[0];
     if (!job)
         throw new Error('No jobs found for this workflow run');
@@ -42602,18 +42980,7 @@ function dumpCollectorLogs(logPath) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * AggregationTemporality indicates the way additive quantities are expressed.
@@ -42626,18 +42993,7 @@ var AggregationTemporality;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Supported types of metric instruments.
@@ -42683,57 +43039,16 @@ var DataPointType;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-/** only globals that common to node and browsers are allowed */
-// eslint-disable-next-line node/no-unsupported-features/es-builtins
-var _globalThis = typeof globalThis === 'object' ? globalThis : global;
-
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-var VERSION$2 = '1.9.0';
+const VERSION$3 = '1.9.1';
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var re = /^(\d+)\.(\d+)\.(\d+)(-(.+))?$/;
+const re = /^(\d+)\.(\d+)\.(\d+)(-(.+))?$/;
 /**
  * Create a function to test an API version to see if it is compatible with the provided ownVersion.
  *
@@ -42751,14 +43066,14 @@ var re = /^(\d+)\.(\d+)\.(\d+)(-(.+))?$/;
  * @param ownVersion version which should be checked against
  */
 function _makeCompatibilityCheck(ownVersion) {
-    var acceptedVersions = new Set([ownVersion]);
-    var rejectedVersions = new Set();
-    var myVersionMatch = ownVersion.match(re);
+    const acceptedVersions = new Set([ownVersion]);
+    const rejectedVersions = new Set();
+    const myVersionMatch = ownVersion.match(re);
     if (!myVersionMatch) {
         // we cannot guarantee compatibility so we always return noop
-        return function () { return false; };
+        return () => false;
     }
-    var ownVersionParsed = {
+    const ownVersionParsed = {
         major: +myVersionMatch[1],
         minor: +myVersionMatch[2],
         patch: +myVersionMatch[3],
@@ -42785,13 +43100,13 @@ function _makeCompatibilityCheck(ownVersion) {
         if (rejectedVersions.has(globalVersion)) {
             return false;
         }
-        var globalVersionMatch = globalVersion.match(re);
+        const globalVersionMatch = globalVersion.match(re);
         if (!globalVersionMatch) {
             // cannot parse other version
             // we cannot guarantee compatibility so we always noop
             return _reject(globalVersion);
         }
-        var globalVersionParsed = {
+        const globalVersionParsed = {
             major: +globalVersionMatch[1],
             minor: +globalVersionMatch[2],
             patch: +globalVersionMatch[3],
@@ -42833,59 +43148,55 @@ function _makeCompatibilityCheck(ownVersion) {
  *
  * @param version version of the API requesting an instance of the global API
  */
-var isCompatible = _makeCompatibilityCheck(VERSION$2);
+const isCompatible = _makeCompatibilityCheck(VERSION$3);
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var major = VERSION$2.split('.')[0];
-var GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for("opentelemetry.js.api." + major);
-var _global = _globalThis;
-function registerGlobal(type, instance, diag, allowOverride) {
+const major = VERSION$3.split('.')[0];
+const GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for(`opentelemetry.js.api.${major}`);
+const _global = (typeof globalThis === 'object'
+    ? globalThis
+    : typeof self === 'object'
+        ? self
+        : typeof window === 'object'
+            ? window
+            : typeof global === 'object'
+                ? global
+                : {});
+function registerGlobal(type, instance, diag, allowOverride = false) {
     var _a;
-    if (allowOverride === void 0) { allowOverride = false; }
-    var api = (_global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a !== void 0 ? _a : {
-        version: VERSION$2,
+    const api = (_global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a !== void 0 ? _a : {
+        version: VERSION$3,
     });
     if (!allowOverride && api[type]) {
         // already registered an API of this type
-        var err = new Error("@opentelemetry/api: Attempted duplicate registration of API: " + type);
+        const err = new Error(`@opentelemetry/api: Attempted duplicate registration of API: ${type}`);
         diag.error(err.stack || err.message);
         return false;
     }
-    if (api.version !== VERSION$2) {
+    if (api.version !== VERSION$3) {
         // All registered APIs must be of the same version exactly
-        var err = new Error("@opentelemetry/api: Registration of version v" + api.version + " for " + type + " does not match previously registered API v" + VERSION$2);
+        const err = new Error(`@opentelemetry/api: Registration of version v${api.version} for ${type} does not match previously registered API v${VERSION$3}`);
         diag.error(err.stack || err.message);
         return false;
     }
     api[type] = instance;
-    diag.debug("@opentelemetry/api: Registered a global for " + type + " v" + VERSION$2 + ".");
+    diag.debug(`@opentelemetry/api: Registered a global for ${type} v${VERSION$3}.`);
     return true;
 }
 function getGlobal(type) {
     var _a, _b;
-    var globalVersion = (_a = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _a === void 0 ? void 0 : _a.version;
+    const globalVersion = (_a = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _a === void 0 ? void 0 : _a.version;
     if (!globalVersion || !isCompatible(globalVersion)) {
         return;
     }
     return (_b = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b === void 0 ? void 0 : _b[type];
 }
 function unregisterGlobal(type, diag) {
-    diag.debug("@opentelemetry/api: Unregistering a global for " + type + " v" + VERSION$2 + ".");
-    var api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
+    diag.debug(`@opentelemetry/api: Unregistering a global for ${type} v${VERSION$3}.`);
+    const api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
     if (api) {
         delete api[type];
     }
@@ -42893,44 +43204,8 @@ function unregisterGlobal(type, diag) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __read$4 = (undefined && undefined.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __spreadArray$3 = (undefined && undefined.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 /**
  * Component Logger which is meant to be used as part of any component which
  * will add automatically additional namespace in front of the log message.
@@ -42940,71 +43215,38 @@ var __spreadArray$3 = (undefined && undefined.__spreadArray) || function (to, fr
  * cLogger.debug('test');
  * // @opentelemetry/instrumentation-http test
  */
-var DiagComponentLogger = /** @class */ (function () {
-    function DiagComponentLogger(props) {
+class DiagComponentLogger {
+    constructor(props) {
         this._namespace = props.namespace || 'DiagComponentLogger';
     }
-    DiagComponentLogger.prototype.debug = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-        }
+    debug(...args) {
         return logProxy('debug', this._namespace, args);
-    };
-    DiagComponentLogger.prototype.error = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-        }
+    }
+    error(...args) {
         return logProxy('error', this._namespace, args);
-    };
-    DiagComponentLogger.prototype.info = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-        }
+    }
+    info(...args) {
         return logProxy('info', this._namespace, args);
-    };
-    DiagComponentLogger.prototype.warn = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-        }
+    }
+    warn(...args) {
         return logProxy('warn', this._namespace, args);
-    };
-    DiagComponentLogger.prototype.verbose = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-        }
+    }
+    verbose(...args) {
         return logProxy('verbose', this._namespace, args);
-    };
-    return DiagComponentLogger;
-}());
+    }
+}
 function logProxy(funcName, namespace, args) {
-    var logger = getGlobal('diag');
+    const logger = getGlobal('diag');
     // shortcut if logger not set
     if (!logger) {
         return;
     }
-    args.unshift(namespace);
-    return logger[funcName].apply(logger, __spreadArray$3([], __read$4(args), false));
+    return logger[funcName](namespace, ...args);
 }
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Defines the available internal logging levels for the diagnostic logger, the numeric values
@@ -43034,18 +43276,7 @@ var DiagLogLevel;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function createLogLevelDiagLogger(maxLevel, logger) {
     if (maxLevel < DiagLogLevel.NONE) {
@@ -43057,7 +43288,7 @@ function createLogLevelDiagLogger(maxLevel, logger) {
     // In case the logger is null or undefined
     logger = logger || {};
     function _filterFunc(funcName, theLevel) {
-        var theFunc = logger[funcName];
+        const theFunc = logger[funcName];
         if (typeof theFunc === 'function' && maxLevel >= theLevel) {
             return theFunc.bind(logger);
         }
@@ -43074,79 +43305,47 @@ function createLogLevelDiagLogger(maxLevel, logger) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __read$3 = (undefined && undefined.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __spreadArray$2 = (undefined && undefined.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-var API_NAME$2 = 'diag';
+const API_NAME$2 = 'diag';
 /**
  * Singleton object which represents the entry point to the OpenTelemetry internal
  * diagnostic API
+ *
+ * @since 1.0.0
  */
-var DiagAPI = /** @class */ (function () {
+class DiagAPI {
+    /** Get the singleton instance of the DiagAPI API */
+    static instance() {
+        if (!this._instance) {
+            this._instance = new DiagAPI();
+        }
+        return this._instance;
+    }
     /**
      * Private internal constructor
      * @private
      */
-    function DiagAPI() {
+    constructor() {
         function _logProxy(funcName) {
-            return function () {
-                var args = [];
-                for (var _i = 0; _i < arguments.length; _i++) {
-                    args[_i] = arguments[_i];
-                }
-                var logger = getGlobal('diag');
+            return function (...args) {
+                const logger = getGlobal('diag');
                 // shortcut if logger not set
                 if (!logger)
                     return;
-                return logger[funcName].apply(logger, __spreadArray$2([], __read$3(args), false));
+                return logger[funcName](...args);
             };
         }
         // Using self local variable for minification purposes as 'this' cannot be minified
-        var self = this;
+        const self = this;
         // DiagAPI specific functions
-        var setLogger = function (logger, optionsOrLogLevel) {
+        const setLogger = (logger, optionsOrLogLevel = { logLevel: DiagLogLevel.INFO }) => {
             var _a, _b, _c;
-            if (optionsOrLogLevel === void 0) { optionsOrLogLevel = { logLevel: DiagLogLevel.INFO }; }
             if (logger === self) {
                 // There isn't much we can do here.
                 // Logging to the console might break the user application.
                 // Try to log to self. If a logger was previously registered it will receive the log.
-                var err = new Error('Cannot use diag as the logger for itself. Please use a DiagLogger implementation like ConsoleDiagLogger or a custom implementation');
+                const err = new Error('Cannot use diag as the logger for itself. Please use a DiagLogger implementation like ConsoleDiagLogger or a custom implementation');
                 self.error((_a = err.stack) !== null && _a !== void 0 ? _a : err.message);
                 return false;
             }
@@ -43155,21 +43354,21 @@ var DiagAPI = /** @class */ (function () {
                     logLevel: optionsOrLogLevel,
                 };
             }
-            var oldLogger = getGlobal('diag');
-            var newLogger = createLogLevelDiagLogger((_b = optionsOrLogLevel.logLevel) !== null && _b !== void 0 ? _b : DiagLogLevel.INFO, logger);
+            const oldLogger = getGlobal('diag');
+            const newLogger = createLogLevelDiagLogger((_b = optionsOrLogLevel.logLevel) !== null && _b !== void 0 ? _b : DiagLogLevel.INFO, logger);
             // There already is an logger registered. We'll let it know before overwriting it.
             if (oldLogger && !optionsOrLogLevel.suppressOverrideMessage) {
-                var stack = (_c = new Error().stack) !== null && _c !== void 0 ? _c : '<failed to generate stacktrace>';
-                oldLogger.warn("Current logger will be overwritten from " + stack);
-                newLogger.warn("Current logger will overwrite one already registered from " + stack);
+                const stack = (_c = new Error().stack) !== null && _c !== void 0 ? _c : '<failed to generate stacktrace>';
+                oldLogger.warn(`Current logger will be overwritten from ${stack}`);
+                newLogger.warn(`Current logger will overwrite one already registered from ${stack}`);
             }
             return registerGlobal('diag', newLogger, self, true);
         };
         self.setLogger = setLogger;
-        self.disable = function () {
+        self.disable = () => {
             unregisterGlobal(API_NAME$2, self);
         };
-        self.createComponentLogger = function (options) {
+        self.createComponentLogger = (options) => {
             return new DiagComponentLogger(options);
         };
         self.verbose = _logProxy('verbose');
@@ -43178,156 +43377,68 @@ var DiagAPI = /** @class */ (function () {
         self.warn = _logProxy('warn');
         self.error = _logProxy('error');
     }
-    /** Get the singleton instance of the DiagAPI API */
-    DiagAPI.instance = function () {
-        if (!this._instance) {
-            this._instance = new DiagAPI();
-        }
-        return this._instance;
-    };
-    return DiagAPI;
-}());
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __read$2 = (undefined && undefined.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __values = (undefined && undefined.__values) || function(o) {
-    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
-    if (m) return m.call(o);
-    if (o && typeof o.length === "number") return {
-        next: function () {
-            if (o && i >= o.length) o = void 0;
-            return { value: o && o[i++], done: !o };
-        }
-    };
-    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
-};
-var BaggageImpl = /** @class */ (function () {
-    function BaggageImpl(entries) {
+class BaggageImpl {
+    constructor(entries) {
         this._entries = entries ? new Map(entries) : new Map();
     }
-    BaggageImpl.prototype.getEntry = function (key) {
-        var entry = this._entries.get(key);
+    getEntry(key) {
+        const entry = this._entries.get(key);
         if (!entry) {
             return undefined;
         }
         return Object.assign({}, entry);
-    };
-    BaggageImpl.prototype.getAllEntries = function () {
-        return Array.from(this._entries.entries()).map(function (_a) {
-            var _b = __read$2(_a, 2), k = _b[0], v = _b[1];
-            return [k, v];
-        });
-    };
-    BaggageImpl.prototype.setEntry = function (key, entry) {
-        var newBaggage = new BaggageImpl(this._entries);
+    }
+    getAllEntries() {
+        return Array.from(this._entries.entries());
+    }
+    setEntry(key, entry) {
+        const newBaggage = new BaggageImpl(this._entries);
         newBaggage._entries.set(key, entry);
         return newBaggage;
-    };
-    BaggageImpl.prototype.removeEntry = function (key) {
-        var newBaggage = new BaggageImpl(this._entries);
+    }
+    removeEntry(key) {
+        const newBaggage = new BaggageImpl(this._entries);
         newBaggage._entries.delete(key);
         return newBaggage;
-    };
-    BaggageImpl.prototype.removeEntries = function () {
-        var e_1, _a;
-        var keys = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            keys[_i] = arguments[_i];
-        }
-        var newBaggage = new BaggageImpl(this._entries);
-        try {
-            for (var keys_1 = __values(keys), keys_1_1 = keys_1.next(); !keys_1_1.done; keys_1_1 = keys_1.next()) {
-                var key = keys_1_1.value;
-                newBaggage._entries.delete(key);
-            }
-        }
-        catch (e_1_1) { e_1 = { error: e_1_1 }; }
-        finally {
-            try {
-                if (keys_1_1 && !keys_1_1.done && (_a = keys_1.return)) _a.call(keys_1);
-            }
-            finally { if (e_1) throw e_1.error; }
+    }
+    removeEntries(...keys) {
+        const newBaggage = new BaggageImpl(this._entries);
+        for (const key of keys) {
+            newBaggage._entries.delete(key);
         }
         return newBaggage;
-    };
-    BaggageImpl.prototype.clear = function () {
+    }
+    clear() {
         return new BaggageImpl();
-    };
-    return BaggageImpl;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Symbol used to make BaggageEntryMetadata an opaque type
  */
-var baggageEntryMetadataSymbol = Symbol('BaggageEntryMetadata');
+const baggageEntryMetadataSymbol = Symbol('BaggageEntryMetadata');
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var diag$1 = DiagAPI.instance();
+const diag$1 = DiagAPI.instance();
 /**
  * Create a new Baggage with optional entries
  *
  * @param entries An array of baggage entries the new baggage should contain
  */
-function createBaggage(entries) {
-    if (entries === void 0) { entries = {}; }
+function createBaggage(entries = {}) {
     return new BaggageImpl(new Map(Object.entries(entries)));
 }
 /**
@@ -43335,15 +43446,16 @@ function createBaggage(entries) {
  *
  * @param str string metadata. Format is currently not defined by the spec and has no special meaning.
  *
+ * @since 1.0.0
  */
 function baggageEntryMetadataFromString(str) {
     if (typeof str !== 'string') {
-        diag$1.error("Cannot create baggage metadata from unknown type: " + typeof str);
+        diag$1.error(`Cannot create baggage metadata from unknown type: ${typeof str}`);
         str = '';
     }
     return {
         __TYPE__: baggageEntryMetadataSymbol,
-        toString: function () {
+        toString() {
             return str;
         },
     };
@@ -43351,20 +43463,13 @@ function baggageEntryMetadataFromString(str) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-/** Get a key to uniquely identify a context value */
+/**
+ * Get a key to uniquely identify a context value
+ *
+ * @since 1.0.0
+ */
 function createContextKey(description) {
     // The specification states that for the same input, multiple calls should
     // return different keys. Due to the nature of the JS dependency management
@@ -43374,199 +43479,135 @@ function createContextKey(description) {
     // Therefore, we use Symbol.for which returns the same key for the same input.
     return Symbol.for(description);
 }
-var BaseContext = /** @class */ (function () {
+class BaseContext {
     /**
      * Construct a new context which inherits values from an optional parent context.
      *
      * @param parentContext a context from which to inherit values
      */
-    function BaseContext(parentContext) {
+    constructor(parentContext) {
         // for minification
-        var self = this;
+        const self = this;
         self._currentContext = parentContext ? new Map(parentContext) : new Map();
-        self.getValue = function (key) { return self._currentContext.get(key); };
-        self.setValue = function (key, value) {
-            var context = new BaseContext(self._currentContext);
+        self.getValue = (key) => self._currentContext.get(key);
+        self.setValue = (key, value) => {
+            const context = new BaseContext(self._currentContext);
             context._currentContext.set(key, value);
             return context;
         };
-        self.deleteValue = function (key) {
-            var context = new BaseContext(self._currentContext);
+        self.deleteValue = (key) => {
+            const context = new BaseContext(self._currentContext);
             context._currentContext.delete(key);
             return context;
         };
     }
-    return BaseContext;
-}());
-/** The root context is used as the default parent context when there is no active context */
-var ROOT_CONTEXT = new BaseContext();
+}
+/**
+ * The root context is used as the default parent context when there is no active context
+ *
+ * @since 1.0.0
+ */
+const ROOT_CONTEXT = new BaseContext();
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __extends = (undefined && undefined.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 /**
  * NoopMeter is a noop implementation of the {@link Meter} interface. It reuses
  * constant NoopMetrics for all of its methods.
  */
-var NoopMeter = /** @class */ (function () {
-    function NoopMeter() {
-    }
+class NoopMeter {
+    constructor() { }
     /**
      * @see {@link Meter.createGauge}
      */
-    NoopMeter.prototype.createGauge = function (_name, _options) {
+    createGauge(_name, _options) {
         return NOOP_GAUGE_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createHistogram}
      */
-    NoopMeter.prototype.createHistogram = function (_name, _options) {
+    createHistogram(_name, _options) {
         return NOOP_HISTOGRAM_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createCounter}
      */
-    NoopMeter.prototype.createCounter = function (_name, _options) {
+    createCounter(_name, _options) {
         return NOOP_COUNTER_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createUpDownCounter}
      */
-    NoopMeter.prototype.createUpDownCounter = function (_name, _options) {
+    createUpDownCounter(_name, _options) {
         return NOOP_UP_DOWN_COUNTER_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createObservableGauge}
      */
-    NoopMeter.prototype.createObservableGauge = function (_name, _options) {
+    createObservableGauge(_name, _options) {
         return NOOP_OBSERVABLE_GAUGE_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createObservableCounter}
      */
-    NoopMeter.prototype.createObservableCounter = function (_name, _options) {
+    createObservableCounter(_name, _options) {
         return NOOP_OBSERVABLE_COUNTER_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.createObservableUpDownCounter}
      */
-    NoopMeter.prototype.createObservableUpDownCounter = function (_name, _options) {
+    createObservableUpDownCounter(_name, _options) {
         return NOOP_OBSERVABLE_UP_DOWN_COUNTER_METRIC;
-    };
+    }
     /**
      * @see {@link Meter.addBatchObservableCallback}
      */
-    NoopMeter.prototype.addBatchObservableCallback = function (_callback, _observables) { };
+    addBatchObservableCallback(_callback, _observables) { }
     /**
      * @see {@link Meter.removeBatchObservableCallback}
      */
-    NoopMeter.prototype.removeBatchObservableCallback = function (_callback) { };
-    return NoopMeter;
-}());
-var NoopMetric = /** @class */ (function () {
-    function NoopMetric() {
-    }
-    return NoopMetric;
-}());
-var NoopCounterMetric = /** @class */ (function (_super) {
-    __extends(NoopCounterMetric, _super);
-    function NoopCounterMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    NoopCounterMetric.prototype.add = function (_value, _attributes) { };
-    return NoopCounterMetric;
-}(NoopMetric));
-var NoopUpDownCounterMetric = /** @class */ (function (_super) {
-    __extends(NoopUpDownCounterMetric, _super);
-    function NoopUpDownCounterMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    NoopUpDownCounterMetric.prototype.add = function (_value, _attributes) { };
-    return NoopUpDownCounterMetric;
-}(NoopMetric));
-var NoopGaugeMetric = /** @class */ (function (_super) {
-    __extends(NoopGaugeMetric, _super);
-    function NoopGaugeMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    NoopGaugeMetric.prototype.record = function (_value, _attributes) { };
-    return NoopGaugeMetric;
-}(NoopMetric));
-var NoopHistogramMetric = /** @class */ (function (_super) {
-    __extends(NoopHistogramMetric, _super);
-    function NoopHistogramMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    NoopHistogramMetric.prototype.record = function (_value, _attributes) { };
-    return NoopHistogramMetric;
-}(NoopMetric));
-var NoopObservableMetric = /** @class */ (function () {
-    function NoopObservableMetric() {
-    }
-    NoopObservableMetric.prototype.addCallback = function (_callback) { };
-    NoopObservableMetric.prototype.removeCallback = function (_callback) { };
-    return NoopObservableMetric;
-}());
-var NoopObservableCounterMetric = /** @class */ (function (_super) {
-    __extends(NoopObservableCounterMetric, _super);
-    function NoopObservableCounterMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    return NoopObservableCounterMetric;
-}(NoopObservableMetric));
-var NoopObservableGaugeMetric = /** @class */ (function (_super) {
-    __extends(NoopObservableGaugeMetric, _super);
-    function NoopObservableGaugeMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    return NoopObservableGaugeMetric;
-}(NoopObservableMetric));
-var NoopObservableUpDownCounterMetric = /** @class */ (function (_super) {
-    __extends(NoopObservableUpDownCounterMetric, _super);
-    function NoopObservableUpDownCounterMetric() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    return NoopObservableUpDownCounterMetric;
-}(NoopObservableMetric));
-var NOOP_METER = new NoopMeter();
+    removeBatchObservableCallback(_callback) { }
+}
+class NoopMetric {
+}
+class NoopCounterMetric extends NoopMetric {
+    add(_value, _attributes) { }
+}
+class NoopUpDownCounterMetric extends NoopMetric {
+    add(_value, _attributes) { }
+}
+class NoopGaugeMetric extends NoopMetric {
+    record(_value, _attributes) { }
+}
+class NoopHistogramMetric extends NoopMetric {
+    record(_value, _attributes) { }
+}
+class NoopObservableMetric {
+    addCallback(_callback) { }
+    removeCallback(_callback) { }
+}
+class NoopObservableCounterMetric extends NoopObservableMetric {
+}
+class NoopObservableGaugeMetric extends NoopObservableMetric {
+}
+class NoopObservableUpDownCounterMetric extends NoopObservableMetric {
+}
+const NOOP_METER = new NoopMeter();
 // Synchronous instruments
-var NOOP_COUNTER_METRIC = new NoopCounterMetric();
-var NOOP_GAUGE_METRIC = new NoopGaugeMetric();
-var NOOP_HISTOGRAM_METRIC = new NoopHistogramMetric();
-var NOOP_UP_DOWN_COUNTER_METRIC = new NoopUpDownCounterMetric();
+const NOOP_COUNTER_METRIC = new NoopCounterMetric();
+const NOOP_GAUGE_METRIC = new NoopGaugeMetric();
+const NOOP_HISTOGRAM_METRIC = new NoopHistogramMetric();
+const NOOP_UP_DOWN_COUNTER_METRIC = new NoopUpDownCounterMetric();
 // Asynchronous instruments
-var NOOP_OBSERVABLE_COUNTER_METRIC = new NoopObservableCounterMetric();
-var NOOP_OBSERVABLE_GAUGE_METRIC = new NoopObservableGaugeMetric();
-var NOOP_OBSERVABLE_UP_DOWN_COUNTER_METRIC = new NoopObservableUpDownCounterMetric();
+const NOOP_OBSERVABLE_COUNTER_METRIC = new NoopObservableCounterMetric();
+const NOOP_OBSERVABLE_GAUGE_METRIC = new NoopObservableGaugeMetric();
+const NOOP_OBSERVABLE_UP_DOWN_COUNTER_METRIC = new NoopObservableUpDownCounterMetric();
 /**
  * Create a no-op Meter
+ *
+ * @since 1.3.0
  */
 function createNoopMeter() {
     return NOOP_METER;
@@ -43574,20 +43615,13 @@ function createNoopMeter() {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-/** The Type of value. It describes how the data is reported. */
+/**
+ * The Type of value. It describes how the data is reported.
+ *
+ * @since 1.3.0
+ */
 var ValueType;
 (function (ValueType) {
     ValueType[ValueType["INT"] = 0] = "INT";
@@ -43596,139 +43630,61 @@ var ValueType;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __read$1 = (undefined && undefined.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __spreadArray$1 = (undefined && undefined.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-var NoopContextManager = /** @class */ (function () {
-    function NoopContextManager() {
-    }
-    NoopContextManager.prototype.active = function () {
+class NoopContextManager {
+    active() {
         return ROOT_CONTEXT;
-    };
-    NoopContextManager.prototype.with = function (_context, fn, thisArg) {
-        var args = [];
-        for (var _i = 3; _i < arguments.length; _i++) {
-            args[_i - 3] = arguments[_i];
-        }
-        return fn.call.apply(fn, __spreadArray$1([thisArg], __read$1(args), false));
-    };
-    NoopContextManager.prototype.bind = function (_context, target) {
+    }
+    with(_context, fn, thisArg, ...args) {
+        return fn.call(thisArg, ...args);
+    }
+    bind(_context, target) {
         return target;
-    };
-    NoopContextManager.prototype.enable = function () {
+    }
+    enable() {
         return this;
-    };
-    NoopContextManager.prototype.disable = function () {
+    }
+    disable() {
         return this;
-    };
-    return NoopContextManager;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var __read = (undefined && undefined.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __spreadArray = (undefined && undefined.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-var API_NAME$1 = 'context';
-var NOOP_CONTEXT_MANAGER = new NoopContextManager();
+const API_NAME$1 = 'context';
+const NOOP_CONTEXT_MANAGER = new NoopContextManager();
 /**
  * Singleton object which represents the entry point to the OpenTelemetry Context API
+ *
+ * @since 1.0.0
  */
-var ContextAPI = /** @class */ (function () {
+class ContextAPI {
     /** Empty private constructor prevents end users from constructing a new instance of the API */
-    function ContextAPI() {
-    }
+    constructor() { }
     /** Get the singleton instance of the Context API */
-    ContextAPI.getInstance = function () {
+    static getInstance() {
         if (!this._instance) {
             this._instance = new ContextAPI();
         }
         return this._instance;
-    };
+    }
     /**
      * Set the current context manager.
      *
      * @returns true if the context manager was successfully registered, else false
      */
-    ContextAPI.prototype.setGlobalContextManager = function (contextManager) {
+    setGlobalContextManager(contextManager) {
         return registerGlobal(API_NAME$1, contextManager, DiagAPI.instance());
-    };
+    }
     /**
      * Get the currently active context
      */
-    ContextAPI.prototype.active = function () {
+    active() {
         return this._getContextManager().active();
-    };
+    }
     /**
      * Execute a function with an active context
      *
@@ -43737,48 +43693,34 @@ var ContextAPI = /** @class */ (function () {
      * @param thisArg optional receiver to be used for calling fn
      * @param args optional arguments forwarded to fn
      */
-    ContextAPI.prototype.with = function (context, fn, thisArg) {
-        var _a;
-        var args = [];
-        for (var _i = 3; _i < arguments.length; _i++) {
-            args[_i - 3] = arguments[_i];
-        }
-        return (_a = this._getContextManager()).with.apply(_a, __spreadArray([context, fn, thisArg], __read(args), false));
-    };
+    with(context, fn, thisArg, ...args) {
+        return this._getContextManager().with(context, fn, thisArg, ...args);
+    }
     /**
      * Bind a context to a target function or event emitter
      *
      * @param context context to bind to the event emitter or function. Defaults to the currently active context
      * @param target function or event emitter to bind
      */
-    ContextAPI.prototype.bind = function (context, target) {
+    bind(context, target) {
         return this._getContextManager().bind(context, target);
-    };
-    ContextAPI.prototype._getContextManager = function () {
+    }
+    _getContextManager() {
         return getGlobal(API_NAME$1) || NOOP_CONTEXT_MANAGER;
-    };
+    }
     /** Disable and remove the global context manager */
-    ContextAPI.prototype.disable = function () {
+    disable() {
         this._getContextManager().disable();
         unregisterGlobal(API_NAME$1, DiagAPI.instance());
-    };
-    return ContextAPI;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * @since 1.0.0
  */
 var TraceFlags;
 (function (TraceFlags) {
@@ -43790,22 +43732,20 @@ var TraceFlags;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var INVALID_SPANID = '0000000000000000';
-var INVALID_TRACEID = '00000000000000000000000000000000';
-var INVALID_SPAN_CONTEXT = {
+/**
+ * @since 1.0.0
+ */
+const INVALID_SPANID = '0000000000000000';
+/**
+ * @since 1.0.0
+ */
+const INVALID_TRACEID = '00000000000000000000000000000000';
+/**
+ * @since 1.0.0
+ */
+const INVALID_SPAN_CONTEXT = {
     traceId: INVALID_TRACEID,
     spanId: INVALID_SPANID,
     traceFlags: TraceFlags.NONE,
@@ -43813,89 +43753,65 @@ var INVALID_SPAN_CONTEXT = {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * The NonRecordingSpan is the default {@link Span} that is used when no Span
  * implementation is available. All operations are no-op including context
  * propagation.
  */
-var NonRecordingSpan = /** @class */ (function () {
-    function NonRecordingSpan(_spanContext) {
-        if (_spanContext === void 0) { _spanContext = INVALID_SPAN_CONTEXT; }
-        this._spanContext = _spanContext;
+class NonRecordingSpan {
+    constructor(spanContext = INVALID_SPAN_CONTEXT) {
+        this._spanContext = spanContext;
     }
     // Returns a SpanContext.
-    NonRecordingSpan.prototype.spanContext = function () {
+    spanContext() {
         return this._spanContext;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.setAttribute = function (_key, _value) {
+    setAttribute(_key, _value) {
         return this;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.setAttributes = function (_attributes) {
+    setAttributes(_attributes) {
         return this;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.addEvent = function (_name, _attributes) {
+    addEvent(_name, _attributes) {
         return this;
-    };
-    NonRecordingSpan.prototype.addLink = function (_link) {
+    }
+    addLink(_link) {
         return this;
-    };
-    NonRecordingSpan.prototype.addLinks = function (_links) {
+    }
+    addLinks(_links) {
         return this;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.setStatus = function (_status) {
+    setStatus(_status) {
         return this;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.updateName = function (_name) {
+    updateName(_name) {
         return this;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.end = function (_endTime) { };
+    end(_endTime) { }
     // isRecording always returns false for NonRecordingSpan.
-    NonRecordingSpan.prototype.isRecording = function () {
+    isRecording() {
         return false;
-    };
+    }
     // By default does nothing
-    NonRecordingSpan.prototype.recordException = function (_exception, _time) { };
-    return NonRecordingSpan;
-}());
+    recordException(_exception, _time) { }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * span key
  */
-var SPAN_KEY = createContextKey('OpenTelemetry Context Key SPAN');
+const SPAN_KEY = createContextKey('OpenTelemetry Context Key SPAN');
 /**
  * Return the span if one exists
  *
@@ -43949,30 +43865,47 @@ function getSpanContext(context) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var VALID_TRACEID_REGEX = /^([0-9a-f]{32})$/i;
-var VALID_SPANID_REGEX = /^[0-9a-f]{16}$/i;
-function isValidTraceId(traceId) {
-    return VALID_TRACEID_REGEX.test(traceId) && traceId !== INVALID_TRACEID;
+// Valid characters (0-9, a-f, A-F) are marked as 1.
+const isHex = new Uint8Array([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+]);
+function isValidHex(id, length) {
+    // As of 1.9.0 the id was allowed to be a non-string value,
+    // even though it was not possible in the types.
+    if (typeof id !== 'string' || id.length !== length)
+        return false;
+    let r = 0;
+    for (let i = 0; i < id.length; i += 4) {
+        r +=
+            (isHex[id.charCodeAt(i)] | 0) +
+                (isHex[id.charCodeAt(i + 1)] | 0) +
+                (isHex[id.charCodeAt(i + 2)] | 0) +
+                (isHex[id.charCodeAt(i + 3)] | 0);
+    }
+    return r === length;
 }
+/**
+ * @since 1.0.0
+ */
+function isValidTraceId(traceId) {
+    return isValidHex(traceId, 32) && traceId !== INVALID_TRACEID;
+}
+/**
+ * @since 1.0.0
+ */
 function isValidSpanId(spanId) {
-    return VALID_SPANID_REGEX.test(spanId) && spanId !== INVALID_SPANID;
+    return isValidHex(spanId, 16) && spanId !== INVALID_SPANID;
 }
 /**
  * Returns true if this {@link SpanContext} is valid.
  * @return true if this {@link SpanContext} is valid.
+ *
+ * @since 1.0.0
  */
 function isSpanContextValid(spanContext) {
     return (isValidTraceId(spanContext.traceId) && isValidSpanId(spanContext.spanId));
@@ -43989,34 +43922,20 @@ function wrapSpanContext(spanContext) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var contextApi = ContextAPI.getInstance();
+const contextApi = ContextAPI.getInstance();
 /**
  * No-op implementations of {@link Tracer}.
  */
-var NoopTracer = /** @class */ (function () {
-    function NoopTracer() {
-    }
+class NoopTracer {
     // startSpan starts a noop span.
-    NoopTracer.prototype.startSpan = function (name, options, context) {
-        if (context === void 0) { context = contextApi.active(); }
-        var root = Boolean(options === null || options === void 0 ? void 0 : options.root);
+    startSpan(name, options, context = contextApi.active()) {
+        const root = Boolean(options === null || options === void 0 ? void 0 : options.root);
         if (root) {
             return new NonRecordingSpan();
         }
-        var parentFromContext = context && getSpanContext(context);
+        const parentFromContext = context && getSpanContext(context);
         if (isSpanContext(parentFromContext) &&
             isSpanContextValid(parentFromContext)) {
             return new NonRecordingSpan(parentFromContext);
@@ -44024,11 +43943,11 @@ var NoopTracer = /** @class */ (function () {
         else {
             return new NonRecordingSpan();
         }
-    };
-    NoopTracer.prototype.startActiveSpan = function (name, arg2, arg3, arg4) {
-        var opts;
-        var ctx;
-        var fn;
+    }
+    startActiveSpan(name, arg2, arg3, arg4) {
+        let opts;
+        let ctx;
+        let fn;
         if (arguments.length < 2) {
             return;
         }
@@ -44044,85 +43963,67 @@ var NoopTracer = /** @class */ (function () {
             ctx = arg3;
             fn = arg4;
         }
-        var parentContext = ctx !== null && ctx !== void 0 ? ctx : contextApi.active();
-        var span = this.startSpan(name, opts, parentContext);
-        var contextWithSpanSet = setSpan(parentContext, span);
+        const parentContext = ctx !== null && ctx !== void 0 ? ctx : contextApi.active();
+        const span = this.startSpan(name, opts, parentContext);
+        const contextWithSpanSet = setSpan(parentContext, span);
         return contextApi.with(contextWithSpanSet, fn, undefined, span);
-    };
-    return NoopTracer;
-}());
+    }
+}
 function isSpanContext(spanContext) {
-    return (typeof spanContext === 'object' &&
+    return (spanContext !== null &&
+        typeof spanContext === 'object' &&
+        'spanId' in spanContext &&
         typeof spanContext['spanId'] === 'string' &&
+        'traceId' in spanContext &&
         typeof spanContext['traceId'] === 'string' &&
+        'traceFlags' in spanContext &&
         typeof spanContext['traceFlags'] === 'number');
 }
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var NOOP_TRACER = new NoopTracer();
+const NOOP_TRACER = new NoopTracer();
 /**
  * Proxy tracer provided by the proxy tracer provider
+ *
+ * @since 1.0.0
  */
-var ProxyTracer = /** @class */ (function () {
-    function ProxyTracer(_provider, name, version, options) {
-        this._provider = _provider;
+class ProxyTracer {
+    constructor(provider, name, version, options) {
+        this._provider = provider;
         this.name = name;
         this.version = version;
         this.options = options;
     }
-    ProxyTracer.prototype.startSpan = function (name, options, context) {
+    startSpan(name, options, context) {
         return this._getTracer().startSpan(name, options, context);
-    };
-    ProxyTracer.prototype.startActiveSpan = function (_name, _options, _context, _fn) {
-        var tracer = this._getTracer();
+    }
+    startActiveSpan(_name, _options, _context, _fn) {
+        const tracer = this._getTracer();
         return Reflect.apply(tracer.startActiveSpan, tracer, arguments);
-    };
+    }
     /**
      * Try to get a tracer from the proxy tracer provider.
      * If the proxy tracer provider has no delegate, return a noop tracer.
      */
-    ProxyTracer.prototype._getTracer = function () {
+    _getTracer() {
         if (this._delegate) {
             return this._delegate;
         }
-        var tracer = this._provider.getDelegateTracer(this.name, this.version, this.options);
+        const tracer = this._provider.getDelegateTracer(this.name, this.version, this.options);
         if (!tracer) {
             return NOOP_TRACER;
         }
         this._delegate = tracer;
         return this._delegate;
-    };
-    return ProxyTracer;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * An implementation of the {@link TracerProvider} which returns an impotent
@@ -44130,31 +44031,17 @@ var ProxyTracer = /** @class */ (function () {
  *
  * All operations are no-op.
  */
-var NoopTracerProvider = /** @class */ (function () {
-    function NoopTracerProvider() {
-    }
-    NoopTracerProvider.prototype.getTracer = function (_name, _version, _options) {
+class NoopTracerProvider {
+    getTracer(_name, _version, _options) {
         return new NoopTracer();
-    };
-    return NoopTracerProvider;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var NOOP_TRACER_PROVIDER = new NoopTracerProvider();
+const NOOP_TRACER_PROVIDER = new NoopTracerProvider();
 /**
  * Tracer provider which provides {@link ProxyTracer}s.
  *
@@ -44162,53 +44049,44 @@ var NOOP_TRACER_PROVIDER = new NoopTracerProvider();
  *   When a delegate is set, traces are provided from the delegate.
  *   When a delegate is set after tracers have already been provided,
  *   all tracers already provided will use the provided delegate implementation.
+ *
+ * @deprecated This will be removed in the next major version.
+ * @since 1.0.0
  */
-var ProxyTracerProvider = /** @class */ (function () {
-    function ProxyTracerProvider() {
-    }
+class ProxyTracerProvider {
     /**
      * Get a {@link ProxyTracer}
      */
-    ProxyTracerProvider.prototype.getTracer = function (name, version, options) {
+    getTracer(name, version, options) {
         var _a;
         return ((_a = this.getDelegateTracer(name, version, options)) !== null && _a !== void 0 ? _a : new ProxyTracer(this, name, version, options));
-    };
-    ProxyTracerProvider.prototype.getDelegate = function () {
+    }
+    getDelegate() {
         var _a;
         return (_a = this._delegate) !== null && _a !== void 0 ? _a : NOOP_TRACER_PROVIDER;
-    };
+    }
     /**
      * Set the delegate tracer provider
      */
-    ProxyTracerProvider.prototype.setDelegate = function (delegate) {
+    setDelegate(delegate) {
         this._delegate = delegate;
-    };
-    ProxyTracerProvider.prototype.getDelegateTracer = function (name, version, options) {
+    }
+    getDelegateTracer(name, version, options) {
         var _a;
         return (_a = this._delegate) === null || _a === void 0 ? void 0 : _a.getTracer(name, version, options);
-    };
-    return ProxyTracerProvider;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * @deprecated use the one declared in @opentelemetry/sdk-trace-base instead.
  * A sampling decision that determines how a {@link Span} will be recorded
  * and collected.
+ *
+ * @since 1.0.0
  */
 var SamplingDecision$1;
 (function (SamplingDecision) {
@@ -44231,18 +44109,10 @@ var SamplingDecision$1;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * @since 1.0.0
  */
 var SpanKind;
 (function (SpanKind) {
@@ -44272,8 +44142,14 @@ var SpanKind;
     SpanKind[SpanKind["CONSUMER"] = 4] = "CONSUMER";
 })(SpanKind || (SpanKind = {}));
 
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /**
  * An enumeration of status codes.
+ *
+ * @since 1.0.0
  */
 var SpanStatusCode;
 (function (SpanStatusCode) {
@@ -44294,38 +44170,19 @@ var SpanStatusCode;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // Split module-level variable definition into separate files to allow
 // tree-shaking on each api instance.
-/** Entrypoint for context API */
-var context = ContextAPI.getInstance();
+/**
+ * Entrypoint for context API
+ * @since 1.0.0
+ */
+const context = ContextAPI.getInstance();
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // Split module-level variable definition into separate files to allow
 // tree-shaking on each api instance.
@@ -44334,31 +44191,24 @@ var context = ContextAPI.getInstance();
  * Defines Diagnostic handler used for internal diagnostic logging operations.
  * The default provides a Noop DiagLogger implementation which may be changed via the
  * diag.setLogger(logger: DiagLogger) function.
+ *
+ * @since 1.0.0
  */
-var diag = DiagAPI.instance();
+const diag = DiagAPI.instance();
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
-var API_NAME = 'trace';
+const API_NAME = 'trace';
 /**
  * Singleton object which represents the entry point to the OpenTelemetry Tracing API
+ *
+ * @since 1.0.0
  */
-var TraceAPI = /** @class */ (function () {
+class TraceAPI {
     /** Empty private constructor prevents end users from constructing a new instance of the API */
-    function TraceAPI() {
+    constructor() {
         this._proxyTracerProvider = new ProxyTracerProvider();
         this.wrapSpanContext = wrapSpanContext;
         this.isSpanContextValid = isSpanContextValid;
@@ -44370,78 +44220,59 @@ var TraceAPI = /** @class */ (function () {
         this.setSpanContext = setSpanContext;
     }
     /** Get the singleton instance of the Trace API */
-    TraceAPI.getInstance = function () {
+    static getInstance() {
         if (!this._instance) {
             this._instance = new TraceAPI();
         }
         return this._instance;
-    };
+    }
     /**
      * Set the current global tracer.
      *
      * @returns true if the tracer provider was successfully registered, else false
      */
-    TraceAPI.prototype.setGlobalTracerProvider = function (provider) {
-        var success = registerGlobal(API_NAME, this._proxyTracerProvider, DiagAPI.instance());
+    setGlobalTracerProvider(provider) {
+        const success = registerGlobal(API_NAME, this._proxyTracerProvider, DiagAPI.instance());
         if (success) {
             this._proxyTracerProvider.setDelegate(provider);
         }
         return success;
-    };
+    }
     /**
      * Returns the global tracer provider.
      */
-    TraceAPI.prototype.getTracerProvider = function () {
+    getTracerProvider() {
         return getGlobal(API_NAME) || this._proxyTracerProvider;
-    };
+    }
     /**
      * Returns a tracer from the global tracer provider.
      */
-    TraceAPI.prototype.getTracer = function (name, version) {
+    getTracer(name, version) {
         return this.getTracerProvider().getTracer(name, version);
-    };
+    }
     /** Remove the global tracer provider */
-    TraceAPI.prototype.disable = function () {
+    disable() {
         unregisterGlobal(API_NAME, DiagAPI.instance());
         this._proxyTracerProvider = new ProxyTracerProvider();
-    };
-    return TraceAPI;
-}());
+    }
+}
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // Split module-level variable definition into separate files to allow
 // tree-shaking on each api instance.
-/** Entrypoint for trace API */
-var trace = TraceAPI.getInstance();
+/**
+ * Entrypoint for trace API
+ *
+ * @since 1.0.0
+ */
+const trace = TraceAPI.getInstance();
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Converting the unordered attributes into unique identifier string.
@@ -44536,18 +44367,7 @@ function equalsCaseInsensitive(lhs, rhs) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** The kind of aggregator. */
 var AggregatorKind;
@@ -44561,18 +44381,7 @@ var AggregatorKind;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** Basic aggregator for None which keeps no recorded value. */
 class DropAggregator {
@@ -44593,18 +44402,7 @@ class DropAggregator {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function createNewEmptyCheckpoint(boundaries) {
     const counts = boundaries.map(() => 0);
@@ -44772,18 +44570,7 @@ class HistogramAggregator {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class Buckets {
     backing;
@@ -45045,18 +44832,7 @@ class BucketsBacking {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * The functions and constants in this file allow us to interact
@@ -45134,18 +44910,7 @@ function getSignificand(value) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Note: other languages provide this as a built in function. This is
@@ -45192,36 +44957,14 @@ function nextGreaterSquare(v) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class MappingError extends Error {
 }
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * ExponentMapping implements exponential mapping functions for
@@ -45293,18 +45036,7 @@ class ExponentMapping {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * LogarithmMapping implements exponential mapping functions for scale > 0.
@@ -45384,18 +45116,7 @@ class LogarithmMapping {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const MIN_SCALE = -10;
 const MAX_SCALE$1 = 20;
@@ -45422,18 +45143,7 @@ function getMapping(scale) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // HighLow is a utility class used for computing a common scale for
 // two exponential histogram accumulations
@@ -45891,18 +45601,7 @@ class ExponentialHistogramAggregator {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const SUPPRESS_TRACING_KEY = createContextKey('OpenTelemetry SDK Context Key SUPPRESS_TRACING');
 function suppressTracing(context) {
@@ -45914,38 +45613,12 @@ function isTracingSuppressed(context) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const BAGGAGE_KEY_PAIR_SEPARATOR = '=';
 const BAGGAGE_PROPERTIES_SEPARATOR = ';';
 const BAGGAGE_ITEMS_SEPARATOR = ',';
 
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 function parsePairKeyValue(entry) {
     if (!entry)
         return;
@@ -45996,18 +45669,7 @@ function parseKeyPairsIntoRecord(value) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function sanitizeAttributes(attributes) {
     const out = {};
@@ -46082,18 +45744,7 @@ function isValidPrimitiveAttributeValueType(valType) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Returns a function that logs an error using the provided logger, or a
@@ -46140,18 +45791,7 @@ function flattenException(ex) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** The global error handler delegate */
 let delegateHandler = loggingErrorHandler();
@@ -46168,18 +45808,7 @@ function globalErrorHandler(ex) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Retrieves a number from an environment variable.
@@ -46218,21 +45847,10 @@ function getStringFromEnv(key) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$1 = '2.5.0';
+const VERSION$2 = '2.7.0';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -46263,6 +45881,10 @@ const VERSION$1 = '2.5.0';
  *
  * @example Division by zero
  * @example Can't convert 'int' object to str implicitly
+ *
+ * @note > [!WARNING]
+ *
+ * > This attribute may contain sensitive information.
  */
 const ATTR_EXCEPTION_MESSAGE = 'exception.message';
 /**
@@ -46316,18 +45938,7 @@ const ATTR_TELEMETRY_SDK_VERSION = 'telemetry.sdk.version';
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /*
  * This file contains a copy of unstable semantic convention definitions
@@ -46345,41 +45956,19 @@ const ATTR_PROCESS_RUNTIME_NAME = 'process.runtime.name';
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** Constants describing the SDK in use */
 const SDK_INFO = {
     [ATTR_TELEMETRY_SDK_NAME]: 'opentelemetry',
     [ATTR_PROCESS_RUNTIME_NAME]: 'node',
     [ATTR_TELEMETRY_SDK_LANGUAGE]: TELEMETRY_SDK_LANGUAGE_VALUE_NODEJS,
-    [ATTR_TELEMETRY_SDK_VERSION]: VERSION$1,
+    [ATTR_TELEMETRY_SDK_VERSION]: VERSION$2,
 };
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * @deprecated Use performance directly.
@@ -46388,18 +45977,7 @@ const otperformance = performance;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const NANOSECOND_DIGITS = 9;
 const NANOSECOND_DIGITS_IN_MILLIS = 6;
@@ -46490,18 +46068,7 @@ function addHrTimes(time1, time2) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 var ExportResultCode;
 (function (ExportResultCode) {
@@ -46511,18 +46078,7 @@ var ExportResultCode;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
@@ -46664,18 +46220,7 @@ function objectToString(value) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const MAX_LEVEL = 20;
@@ -46725,6 +46270,11 @@ function mergeTwoObjects(one, two, level = 0, objects) {
             const keys = Object.keys(two);
             for (let i = 0, j = keys.length; i < j; i++) {
                 const key = keys[i];
+                if (key === '__proto__' ||
+                    key === 'constructor' ||
+                    key === 'prototype') {
+                    continue;
+                }
                 result[key] = takeValue(two[key]);
             }
         }
@@ -46738,6 +46288,11 @@ function mergeTwoObjects(one, two, level = 0, objects) {
             const keys = Object.keys(two);
             for (let i = 0, j = keys.length; i < j; i++) {
                 const key = keys[i];
+                if (key === '__proto__' ||
+                    key === 'constructor' ||
+                    key === 'prototype') {
+                    continue;
+                }
                 const twoValue = two[key];
                 if (isPrimitive(twoValue)) {
                     if (typeof twoValue === 'undefined') {
@@ -46821,18 +46376,7 @@ function shouldMerge(one, two) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class Deferred {
     _promise;
@@ -46857,18 +46401,7 @@ class Deferred {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Bind the callback and only invoke the callback once regardless how many times `BindOnceFuture.call` is invoked.
@@ -46904,18 +46437,7 @@ class BindOnceFuture {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * @internal
@@ -46925,27 +46447,14 @@ function _export(exporter, arg) {
     return new Promise(resolve => {
         // prevent downstream exporter calls from generating spans
         context.with(suppressTracing(context.active()), () => {
-            exporter.export(arg, (result) => {
-                resolve(result);
-            });
+            exporter.export(arg, resolve);
         });
     });
 }
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const internal = {
     _export,
@@ -46953,18 +46462,7 @@ const internal = {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class LastValueAccumulation {
     startTime;
@@ -47038,18 +46536,7 @@ class LastValueAggregator {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class SumAccumulation {
     startTime;
@@ -47132,18 +46619,7 @@ class SumAggregator {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * The default drop aggregation.
@@ -47272,21 +46748,6 @@ const LAST_VALUE_AGGREGATION = new LastValueAggregation();
 const HISTOGRAM_AGGREGATION = new HistogramAggregation();
 const DEFAULT_AGGREGATION$1 = new DefaultAggregation();
 
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 var AggregationType;
 (function (AggregationType) {
     AggregationType[AggregationType["DEFAULT"] = 0] = "DEFAULT";
@@ -47326,18 +46787,7 @@ function toAggregation(option) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const DEFAULT_AGGREGATION_SELECTOR = _instrumentType => {
     return {
@@ -47348,18 +46798,7 @@ const DEFAULT_AGGREGATION_TEMPORALITY_SELECTOR = _instrumentType => AggregationT
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * A registered reader of metrics that, when linked to a {@link MetricProducer}, offers global
@@ -47387,6 +46826,13 @@ class MetricReader {
     }
     setMetricProducer(metricProducer) {
         if (this._sdkMetricProducer) {
+            // This check ensures the following requirement from the spec
+            // (https://opentelemetry.io/docs/specs/otel/metrics/sdk/#metricreader):
+            // > The SDK MUST NOT allow a `MetricReader` instance to be registered
+            // > on more than one `MeterProvider` instance.
+            //
+            // So while the argument is a `MetricProducer`, the relevant user-level
+            // error message is about the **MeterProvider**.
             throw new Error('MetricReader can not be bound to a MeterProvider again.');
         }
         this._sdkMetricProducer = metricProducer;
@@ -47469,18 +46915,7 @@ class MetricReader {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * {@link MetricReader} which collects metrics based on a user-configurable time interval, and passes the metrics to
@@ -47492,12 +46927,36 @@ class PeriodicExportingMetricReader extends MetricReader {
     _exportInterval;
     _exportTimeout;
     constructor(options) {
-        const { exporter, exportIntervalMillis = 60000, metricProducers } = options;
+        const { exporter, exportIntervalMillis = 60000, metricProducers, cardinalityLimits, } = options;
         let { exportTimeoutMillis = 30000 } = options;
         super({
             aggregationSelector: exporter.selectAggregation?.bind(exporter),
             aggregationTemporalitySelector: exporter.selectAggregationTemporality?.bind(exporter),
             metricProducers,
+            cardinalitySelector: (instrumentType) => {
+                const limits = {
+                    default: 2000,
+                    ...cardinalityLimits,
+                };
+                switch (instrumentType) {
+                    case InstrumentType.COUNTER:
+                        return limits.counter ?? limits.default;
+                    case InstrumentType.GAUGE:
+                        return limits.gauge ?? limits.default;
+                    case InstrumentType.HISTOGRAM:
+                        return limits.histogram ?? limits.default;
+                    case InstrumentType.OBSERVABLE_COUNTER:
+                        return limits.observableCounter ?? limits.default;
+                    case InstrumentType.OBSERVABLE_UP_DOWN_COUNTER:
+                        return limits.observableUpDownCounter ?? limits.default;
+                    case InstrumentType.OBSERVABLE_GAUGE:
+                        return limits.observableGauge ?? limits.default;
+                    case InstrumentType.UP_DOWN_COUNTER:
+                        return limits.upDownCounter ?? limits.default;
+                    default:
+                        return limits.default;
+                }
+            },
         });
         if (exportIntervalMillis <= 0) {
             throw Error('exportIntervalMillis must be greater than 0');
@@ -47583,18 +47042,7 @@ class PeriodicExportingMetricReader extends MetricReader {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 let serviceName;
 /**
@@ -47617,18 +47065,7 @@ function defaultServiceName() {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const isPromiseLike = (val) => {
     return (val !== null &&
@@ -47638,18 +47075,7 @@ const isPromiseLike = (val) => {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class ResourceImpl {
     _rawAttributes;
@@ -47787,18 +47213,7 @@ function mergeSchemaUrl(old, updating) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class ViewRegistry {
     _registeredViews = [];
@@ -47829,18 +47244,7 @@ class ViewRegistry {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function createInstrumentDescriptor(name, type, options) {
     if (!isValidName(name)) {
@@ -47881,18 +47285,7 @@ function isValidName(name) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class SyncInstrument {
     _writableMetricStorage;
@@ -48006,18 +47399,7 @@ function isObservableInstrument(it) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * This class implements the {@link IMeter} interface.
@@ -48099,18 +47481,7 @@ class Meter {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48137,18 +47508,7 @@ class MetricStorage {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class HashMap {
     _valueMap = new Map();
@@ -48214,18 +47574,7 @@ class AttributeHashMap extends HashMap {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48311,18 +47660,7 @@ class DeltaMetricProcessor {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48461,18 +47799,7 @@ function AttributesMapToAccumulationRecords(map) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48513,18 +47840,7 @@ class AsyncMetricStorage extends MetricStorage {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function getIncompatibilityDetails(existing, otherDescriptor) {
     let incompatibility = '';
@@ -48589,18 +47905,7 @@ function getConflictResolutionRecipe(existing, otherDescriptor) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal class for storing {@link MetricStorage}
@@ -48694,18 +47999,7 @@ class MetricStorageRegistry {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48724,18 +48018,7 @@ class MultiMetricStorage {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * The class implements {@link ObservableResult} interface.
@@ -48809,18 +48092,7 @@ class BatchObservableResultImpl {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * An internal interface for managing ObservableCallbacks.
@@ -48929,18 +48201,7 @@ class ObservableRegistry {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Internal interface.
@@ -48977,18 +48238,7 @@ class SyncMetricStorage extends MetricStorage {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class NoopAttributesProcessor {
     process(incoming, _context) {
@@ -49030,18 +48280,7 @@ const NOOP = new NoopAttributesProcessor();
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * An internal record for shared meter provider states.
@@ -49139,18 +48378,7 @@ class MeterSharedState {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * An internal record for shared meter provider states.
@@ -49186,18 +48414,7 @@ class MeterProviderSharedState {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * An internal opaque interface that the MetricReader receives as
@@ -49264,18 +48481,7 @@ class MetricCollector {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // https://tc39.es/proposal-regex-escaping
 // escape ^ $ \ .  + ? ( ) [ ] { } |
@@ -49330,18 +48536,7 @@ class ExactPredicate {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class InstrumentSelector {
     _nameFilter;
@@ -49365,18 +48560,7 @@ class InstrumentSelector {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class MeterSelector {
     _nameFilter;
@@ -49403,18 +48587,7 @@ class MeterSelector {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function isSelectorNotProvided(options) {
     return (options.instrumentName == null &&
@@ -49533,18 +48706,7 @@ class View {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * This class implements the {@link MeterProvider} interface.
@@ -49617,18 +48779,7 @@ class MeterProvider {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 var AggregationTemporalityPreference;
 (function (AggregationTemporalityPreference) {
@@ -49639,18 +48790,7 @@ var AggregationTemporalityPreference;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class OTLPExporterBase {
     _delegate;
@@ -49675,18 +48815,7 @@ class OTLPExporterBase {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Interface for handling error
@@ -49704,18 +48833,7 @@ class OTLPExporterError extends Error {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function validateTimeoutMillis(timeoutMillis) {
     if (Number.isFinite(timeoutMillis) && timeoutMillis > 0) {
@@ -49757,18 +48875,7 @@ function getSharedConfigurationDefaults() {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class BoundedQueueExportPromiseHandler {
     _concurrencyLimit;
@@ -49807,18 +48914,7 @@ function createBoundedQueueExportPromiseHandler(options) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function isPartialSuccessResponse(response) {
     return Object.prototype.hasOwnProperty.call(response, 'partialSuccess');
@@ -49844,18 +48940,7 @@ function createLoggingPartialSuccessResponseHandler() {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class OTLPExportDelegate {
     _diagLogger;
@@ -49952,18 +49037,7 @@ function createOtlpExportDelegate(components, settings) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const CumulativeTemporalitySelector = () => AggregationTemporality.CUMULATIVE;
 const DeltaTemporalitySelector = (instrumentType) => {
@@ -50042,152 +49116,6 @@ class OTLPMetricExporterBase extends OTLPExporterBase {
     }
 }
 
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-function intValue(charCode) {
-    // 0-9
-    if (charCode >= 48 && charCode <= 57) {
-        return charCode - 48;
-    }
-    // a-f
-    if (charCode >= 97 && charCode <= 102) {
-        return charCode - 87;
-    }
-    // A-F
-    return charCode - 55;
-}
-function hexToBinary(hexStr) {
-    const buf = new Uint8Array(hexStr.length / 2);
-    let offset = 0;
-    for (let i = 0; i < hexStr.length; i += 2) {
-        const hi = intValue(hexStr.charCodeAt(i));
-        const lo = intValue(hexStr.charCodeAt(i + 1));
-        buf[offset++] = (hi << 4) | lo;
-    }
-    return buf;
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-function hrTimeToNanos(hrTime) {
-    const NANOSECONDS = BigInt(1000000000);
-    return (BigInt(Math.trunc(hrTime[0])) * NANOSECONDS + BigInt(Math.trunc(hrTime[1])));
-}
-function toLongBits(value) {
-    const low = Number(BigInt.asUintN(32, value));
-    const high = Number(BigInt.asUintN(32, value >> BigInt(32)));
-    return { low, high };
-}
-function encodeAsLongBits(hrTime) {
-    const nanos = hrTimeToNanos(hrTime);
-    return toLongBits(nanos);
-}
-function encodeAsString(hrTime) {
-    const nanos = hrTimeToNanos(hrTime);
-    return nanos.toString();
-}
-const encodeTimestamp = typeof BigInt !== 'undefined' ? encodeAsString : hrTimeToNanoseconds;
-function identity(value) {
-    return value;
-}
-function optionalHexToBinary(str) {
-    if (str === undefined)
-        return undefined;
-    return hexToBinary(str);
-}
-const DEFAULT_ENCODER = {
-    encodeHrTime: encodeAsLongBits,
-    encodeSpanContext: hexToBinary,
-    encodeOptionalSpanContext: optionalHexToBinary,
-};
-function getOtlpEncoder(options) {
-    if (options === undefined) {
-        return DEFAULT_ENCODER;
-    }
-    const useLongBits = options.useLongBits ?? true;
-    const useHex = options.useHex ?? false;
-    return {
-        encodeHrTime: useLongBits ? encodeAsLongBits : encodeTimestamp,
-        encodeSpanContext: useHex ? identity : hexToBinary,
-        encodeOptionalSpanContext: useHex ? identity : optionalHexToBinary,
-    };
-}
-
-function createResource(resource) {
-    const result = {
-        attributes: toAttributes(resource.attributes),
-        droppedAttributesCount: 0,
-    };
-    const schemaUrl = resource.schemaUrl;
-    if (schemaUrl && schemaUrl !== '')
-        result.schemaUrl = schemaUrl;
-    return result;
-}
-function createInstrumentationScope(scope) {
-    return {
-        name: scope.name,
-        version: scope.version,
-    };
-}
-function toAttributes(attributes) {
-    return Object.keys(attributes).map(key => toKeyValue(key, attributes[key]));
-}
-function toKeyValue(key, value) {
-    return {
-        key: key,
-        value: toAnyValue(value),
-    };
-}
-function toAnyValue(value) {
-    const t = typeof value;
-    if (t === 'string')
-        return { stringValue: value };
-    if (t === 'number') {
-        if (!Number.isInteger(value))
-            return { doubleValue: value };
-        return { intValue: value };
-    }
-    if (t === 'boolean')
-        return { boolValue: value };
-    if (value instanceof Uint8Array)
-        return { bytesValue: value };
-    if (Array.isArray(value))
-        return { arrayValue: { values: value.map(toAnyValue) } };
-    if (t === 'object' && value != null)
-        return {
-            kvlistValue: {
-                values: Object.entries(value).map(([k, v]) => toKeyValue(k, v)),
-            },
-        };
-    return {};
-}
-
 /**
  * AggregationTemporality defines how a metric aggregator reports aggregated
  * values. It describes how those values relate to the time interval over
@@ -50260,9 +49188,71 @@ var EAggregationTemporality;
     EAggregationTemporality[EAggregationTemporality["AGGREGATION_TEMPORALITY_CUMULATIVE"] = 2] = "AGGREGATION_TEMPORALITY_CUMULATIVE";
 })(EAggregationTemporality || (EAggregationTemporality = {}));
 
-function toResourceMetrics(resourceMetrics, options) {
-    const encoder = getOtlpEncoder(options);
-    const processedResource = createResource(resourceMetrics.resource);
+function createResource(resource, encoder) {
+    const result = {
+        attributes: toAttributes(resource.attributes, encoder),
+        droppedAttributesCount: 0,
+    };
+    const schemaUrl = resource.schemaUrl;
+    if (schemaUrl && schemaUrl !== '')
+        result.schemaUrl = schemaUrl;
+    return result;
+}
+function createInstrumentationScope(scope) {
+    return {
+        name: scope.name,
+        version: scope.version,
+    };
+}
+function toAttributes(attributes, encoder) {
+    return Object.keys(attributes).map(key => toKeyValue(key, attributes[key], encoder));
+}
+function toKeyValue(key, value, encoder) {
+    return {
+        key: key,
+        value: toAnyValue(value, encoder),
+    };
+}
+function toAnyValue(value, encoder) {
+    const t = typeof value;
+    if (t === 'string')
+        return { stringValue: value };
+    if (t === 'number') {
+        if (!Number.isInteger(value))
+            return { doubleValue: value };
+        return { intValue: value };
+    }
+    if (t === 'boolean')
+        return { boolValue: value };
+    if (value instanceof Uint8Array)
+        return { bytesValue: encoder.encodeUint8Array(value) };
+    if (Array.isArray(value)) {
+        const values = new Array(value.length);
+        for (let i = 0; i < value.length; i++) {
+            values[i] = toAnyValue(value[i], encoder);
+        }
+        return { arrayValue: { values } };
+    }
+    if (t === 'object' && value != null) {
+        const keys = Object.keys(value);
+        const values = new Array(keys.length);
+        for (let i = 0; i < keys.length; i++) {
+            values[i] = {
+                key: keys[i],
+                value: toAnyValue(value[keys[i]], encoder),
+            };
+        }
+        return { kvlistValue: { values } };
+    }
+    return {};
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+function toResourceMetrics(resourceMetrics, encoder) {
+    const processedResource = createResource(resourceMetrics.resource, encoder);
     return {
         resource: processedResource,
         schemaUrl: processedResource.schemaUrl,
@@ -50313,7 +49303,7 @@ function toMetric(metricData, encoder) {
 }
 function toSingularDataPoint(dataPoint, valueType, encoder) {
     const out = {
-        attributes: toAttributes(dataPoint.attributes),
+        attributes: toAttributes(dataPoint.attributes, encoder),
         startTimeUnixNano: encoder.encodeHrTime(dataPoint.startTime),
         timeUnixNano: encoder.encodeHrTime(dataPoint.endTime),
     };
@@ -50336,7 +49326,7 @@ function toHistogramDataPoints(metricData, encoder) {
     return metricData.dataPoints.map(dataPoint => {
         const histogram = dataPoint.value;
         return {
-            attributes: toAttributes(dataPoint.attributes),
+            attributes: toAttributes(dataPoint.attributes, encoder),
             bucketCounts: histogram.buckets.counts,
             explicitBounds: histogram.buckets.boundaries,
             count: histogram.count,
@@ -50352,7 +49342,7 @@ function toExponentialHistogramDataPoints(metricData, encoder) {
     return metricData.dataPoints.map(dataPoint => {
         const histogram = dataPoint.value;
         return {
-            attributes: toAttributes(dataPoint.attributes),
+            attributes: toAttributes(dataPoint.attributes, encoder),
             count: histogram.count,
             min: histogram.min,
             max: histogram.max,
@@ -50380,11 +49370,49 @@ function toAggregationTemporality(temporality) {
             return EAggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE;
     }
 }
-function createExportMetricsServiceRequest(resourceMetrics, options) {
+function createExportMetricsServiceRequest(resourceMetrics, encoder) {
     return {
-        resourceMetrics: resourceMetrics.map(metrics => toResourceMetrics(metrics, options)),
+        resourceMetrics: resourceMetrics.map(metrics => toResourceMetrics(metrics, encoder)),
     };
 }
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+function hrTimeToNanos(hrTime) {
+    const NANOSECONDS = BigInt(1000000000);
+    return (BigInt(Math.trunc(hrTime[0])) * NANOSECONDS + BigInt(Math.trunc(hrTime[1])));
+}
+function encodeAsString(hrTime) {
+    const nanos = hrTimeToNanos(hrTime);
+    return nanos.toString();
+}
+const encodeTimestamp = typeof BigInt !== 'undefined' ? encodeAsString : hrTimeToNanoseconds;
+function identity(value) {
+    return value;
+}
+/**
+ * Encoder for JSON format.
+ * Uses string timestamps, hex for span/trace IDs, and base64 for Uint8Array.
+ */
+const JSON_ENCODER = {
+    encodeHrTime: encodeTimestamp,
+    encodeSpanContext: identity,
+    encodeOptionalSpanContext: identity,
+    encodeUint8Array: (bytes) => {
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(bytes).toString('base64');
+        }
+        // implementation note: not using spread operator and passing to
+        // btoa to avoid stack overflow on large Uint8Arrays
+        const chars = new Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) {
+            chars[i] = String.fromCharCode(bytes[i]);
+        }
+        return btoa(chars.join(''));
+    },
+};
 
 // Span flags constants matching the OTLP specification
 const SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE_MASK = 0x100;
@@ -50417,7 +49445,7 @@ function sdkSpanToOtlpSpan(span, encoder) {
         kind: span.kind == null ? 0 : span.kind + 1,
         startTimeUnixNano: encoder.encodeHrTime(span.startTime),
         endTimeUnixNano: encoder.encodeHrTime(span.endTime),
-        attributes: toAttributes(span.attributes),
+        attributes: toAttributes(span.attributes, encoder),
         droppedAttributesCount: span.droppedAttributesCount,
         events: span.events.map(event => toOtlpSpanEvent(event, encoder)),
         droppedEventsCount: span.droppedEventsCount,
@@ -50433,7 +49461,7 @@ function sdkSpanToOtlpSpan(span, encoder) {
 }
 function toOtlpLink(link, encoder) {
     return {
-        attributes: link.attributes ? toAttributes(link.attributes) : [],
+        attributes: link.attributes ? toAttributes(link.attributes, encoder) : [],
         spanId: encoder.encodeSpanContext(link.context.spanId),
         traceId: encoder.encodeSpanContext(link.context.traceId),
         traceState: link.context.traceState?.serialize(),
@@ -50444,15 +49472,14 @@ function toOtlpLink(link, encoder) {
 function toOtlpSpanEvent(timedEvent, encoder) {
     return {
         attributes: timedEvent.attributes
-            ? toAttributes(timedEvent.attributes)
+            ? toAttributes(timedEvent.attributes, encoder)
             : [],
         name: timedEvent.name,
         timeUnixNano: encoder.encodeHrTime(timedEvent.time),
         droppedAttributesCount: timedEvent.droppedAttributesCount || 0,
     };
 }
-function createExportTraceServiceRequest(spans, options) {
-    const encoder = getOtlpEncoder(options);
+function createExportTraceServiceRequest(spans, encoder) {
     return {
         resourceSpans: spanRecordsToResourceSpans(spans, encoder),
     };
@@ -50498,7 +49525,7 @@ function spanRecordsToResourceSpans(readableSpans, encoder) {
             }
             ilmEntry = ilmIterator.next();
         }
-        const processedResource = createResource(resource);
+        const processedResource = createResource(resource, encoder);
         const transformedSpans = {
             resource: processedResource,
             scopeSpans: scopeResourceSpans,
@@ -50512,9 +49539,7 @@ function spanRecordsToResourceSpans(readableSpans, encoder) {
 
 const JsonMetricsSerializer = {
     serializeRequest: (arg) => {
-        const request = createExportMetricsServiceRequest([arg], {
-            useLongBits: false,
-        });
+        const request = createExportMetricsServiceRequest([arg], JSON_ENCODER);
         const encoder = new TextEncoder();
         return encoder.encode(JSON.stringify(request));
     },
@@ -50523,16 +49548,19 @@ const JsonMetricsSerializer = {
             return {};
         }
         const decoder = new TextDecoder();
-        return JSON.parse(decoder.decode(arg));
+        try {
+            return JSON.parse(decoder.decode(arg));
+        }
+        catch (err) {
+            diag.warn(`Failed to parse metrics export response: ${err.message}. Returning empty response`);
+            return {};
+        }
     },
 };
 
 const JsonTraceSerializer = {
     serializeRequest: (arg) => {
-        const request = createExportTraceServiceRequest(arg, {
-            useHex: true,
-            useLongBits: false,
-        });
+        const request = createExportTraceServiceRequest(arg, JSON_ENCODER);
         const encoder = new TextEncoder();
         return encoder.encode(JSON.stringify(request));
     },
@@ -50541,24 +49569,19 @@ const JsonTraceSerializer = {
             return {};
         }
         const decoder = new TextDecoder();
-        return JSON.parse(decoder.decode(arg));
+        try {
+            return JSON.parse(decoder.decode(arg));
+        }
+        catch (err) {
+            diag.warn(`Failed to parse trace export response: ${err.message}. Returning empty response`);
+            return {};
+        }
     },
 };
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Parses headers from config leaving only those that have defined values
@@ -50579,18 +49602,7 @@ function validateAndNormalizeHeaders(partialHeaders) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function mergeHeaders(userProvidedHeaders, fallbackHeaders, defaultHeaders) {
     return async () => {
@@ -50645,21 +49657,6 @@ function getHttpConfigurationDefaults(requiredHeaders, signalResourcePath) {
     };
 }
 
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 function httpAgentFactoryFromOptions(options) {
     return async (protocol) => {
         const isInsecure = protocol === 'http:';
@@ -50696,18 +49693,7 @@ function getNodeHttpConfigurationDefaults(requiredHeaders, signalResourcePath) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function isExportHTTPErrorRetryable(statusCode) {
     return (statusCode === 429 ||
@@ -50733,98 +49719,139 @@ function parseRetryAfterToMills(retryAfter) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION = '0.211.0';
+const VERSION$1 = '0.215.0';
 
-const DEFAULT_USER_AGENT = `OTel-OTLP-Exporter-JavaScript/${VERSION}`;
+const DEFAULT_USER_AGENT = `OTel-OTLP-Exporter-JavaScript/${VERSION$1}`;
+/**
+ * Maximum response body size (4 MB) that the HTTP transport will read.
+ * If the server sends more data the connection is destroyed and the export
+ * is treated as a non-retryable error regardless of status code.
+ */
+const MAX_RESPONSE_BODY_SIZE = 4 * 1024 * 1024;
 /**
  * Sends data using http
  * @param request
- * @param params
+ * @param url
+ * @param headers
+ * @param compression
+ * @param userAgent
  * @param agent
  * @param data
- * @param onDone
  * @param timeoutMillis
  */
-function sendWithHttp(request, url, headers, compression, userAgent, agent, data, onDone, timeoutMillis) {
-    const parsedUrl = new URL(url);
-    if (userAgent) {
-        headers['User-Agent'] = `${userAgent} ${DEFAULT_USER_AGENT}`;
-    }
-    else {
-        headers['User-Agent'] = DEFAULT_USER_AGENT;
-    }
-    const options = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port,
-        path: parsedUrl.pathname,
-        method: 'POST',
-        headers,
-        agent,
-    };
-    const req = request(options, (res) => {
-        const responseData = [];
-        res.on('data', chunk => responseData.push(chunk));
-        res.on('end', () => {
-            if (res.statusCode && res.statusCode < 299) {
-                onDone({
-                    status: 'success',
-                    data: Buffer.concat(responseData),
-                });
-            }
-            else if (res.statusCode && isExportHTTPErrorRetryable(res.statusCode)) {
-                onDone({
+function sendWithHttp(request, url, headers, compression, userAgent, agent, data, timeoutMillis) {
+    return new Promise(resolve => {
+        const parsedUrl = new URL(url);
+        if (userAgent) {
+            headers['User-Agent'] = `${userAgent} ${DEFAULT_USER_AGENT}`;
+        }
+        else {
+            headers['User-Agent'] = DEFAULT_USER_AGENT;
+        }
+        const options = {
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port,
+            path: parsedUrl.pathname,
+            method: 'POST',
+            headers,
+            agent,
+        };
+        const req = request(options, (res) => {
+            const responseData = [];
+            let responseSize = 0;
+            res.on('data', (chunk) => {
+                responseSize += chunk.length;
+                if (responseSize > MAX_RESPONSE_BODY_SIZE) {
+                    const sizeError = new Error(`OTLP export response body exceeded size limit of ${MAX_RESPONSE_BODY_SIZE} bytes`);
+                    // Oversized responses are treated as non-retryable errors
+                    // regardless of status code.
+                    // Resolve before destroying: res.destroy() tears down the socket which
+                    // triggers ECONNRESET on req.on('error'), so, resolving first makes that
+                    // a no-op. res.on('error') does not fire because destroy() is called
+                    // without an error argument.
+                    resolve({ status: 'failure', error: sizeError });
+                    res.destroy();
+                    return;
+                }
+                responseData.push(chunk);
+            });
+            res.on('end', () => {
+                if (res.statusCode && res.statusCode <= 299) {
+                    resolve({
+                        status: 'success',
+                        data: Buffer.concat(responseData),
+                    });
+                }
+                else if (res.statusCode &&
+                    isExportHTTPErrorRetryable(res.statusCode)) {
+                    resolve({
+                        status: 'retryable',
+                        retryInMillis: parseRetryAfterToMills(res.headers['retry-after']),
+                    });
+                }
+                else {
+                    const error = new OTLPExporterError(res.statusMessage, res.statusCode, Buffer.concat(responseData).toString());
+                    resolve({
+                        status: 'failure',
+                        error,
+                    });
+                }
+            });
+            res.on('error', (error) => {
+                // Note: 'end' may still be emitted after 'error' on the same response object, since we're resolving a promise,
+                // the first call to resolve() will determine the final state.
+                if (res.statusCode && res.statusCode <= 299) {
+                    // If the response is successful but an error occurs while reading the response,
+                    // we consider it a success since the data has been sent successfully.
+                    resolve({
+                        status: 'success',
+                    });
+                }
+                else if (res.statusCode &&
+                    isExportHTTPErrorRetryable(res.statusCode)) {
+                    resolve({
+                        status: 'retryable',
+                        error: error,
+                        retryInMillis: parseRetryAfterToMills(res.headers['retry-after']),
+                    });
+                }
+                else {
+                    resolve({
+                        status: 'failure',
+                        error,
+                    });
+                }
+            });
+        });
+        req.setTimeout(timeoutMillis, () => {
+            req.destroy();
+            resolve({
+                status: 'retryable',
+                error: new Error('Request timed out'),
+            });
+        });
+        req.on('error', (error) => {
+            if (isHttpTransportNetworkErrorRetryable(error)) {
+                resolve({
                     status: 'retryable',
-                    retryInMillis: parseRetryAfterToMills(res.headers['retry-after']),
+                    error,
                 });
             }
             else {
-                const error = new OTLPExporterError(res.statusMessage, res.statusCode, Buffer.concat(responseData).toString());
-                onDone({
+                resolve({
                     status: 'failure',
                     error,
                 });
             }
         });
-    });
-    req.setTimeout(timeoutMillis, () => {
-        req.destroy();
-        onDone({
-            status: 'retryable',
-            error: new Error('Request timed out'),
-        });
-    });
-    req.on('error', (error) => {
-        if (isHttpTransportNetworkErrorRetryable(error)) {
-            onDone({
-                status: 'retryable',
-                error,
-            });
-        }
-        else {
-            onDone({
+        compressAndSend(req, compression, data, (error) => {
+            resolve({
                 status: 'failure',
                 error,
             });
-        }
-    });
-    compressAndSend(req, compression, data, (error) => {
-        onDone({
-            status: 'failure',
-            error,
         });
     });
 }
@@ -50864,18 +49891,7 @@ function isHttpTransportNetworkErrorRetryable(error) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class HttpExporterTransport {
     _utils = null;
@@ -50886,11 +49902,7 @@ class HttpExporterTransport {
     async send(data, timeoutMillis) {
         const { agent, request } = await this._loadUtils();
         const headers = await this._parameters.headers();
-        return new Promise(resolve => {
-            sendWithHttp(request, this._parameters.url, headers, this._parameters.compression, this._parameters.userAgent, agent, data, result => {
-                resolve(result);
-            }, timeoutMillis);
-        });
+        return sendWithHttp(request, this._parameters.url, headers, this._parameters.compression, this._parameters.userAgent, agent, data, timeoutMillis);
     }
     shutdown() {
         // intentionally left empty, nothing to do.
@@ -50919,18 +49931,7 @@ function createHttpExporterTransport(parameters) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const MAX_ATTEMPTS = 5;
 const INITIAL_BACKOFF = 1000;
@@ -50997,21 +49998,6 @@ function createRetryingTransport(options) {
     return new RetryingTransport(options.transport);
 }
 
-/*
- * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 function createOtlpHttpExportDelegate(options, serializer) {
     return createOtlpExportDelegate({
         transport: createRetryingTransport({
@@ -51024,18 +50010,7 @@ function createOtlpHttpExportDelegate(options, serializer) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function parseAndValidateTimeoutFromEnv(timeoutEnvVar) {
     const envTimeout = getNumberFromEnv(timeoutEnvVar);
@@ -51074,18 +50049,7 @@ function getSharedConfigurationFromEnvironment(signalIdentifier) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function getStaticHeadersFromEnv(signalIdentifier) {
     const signalSpecificRawHeaders = getStringFromEnv(`OTEL_EXPORTER_OTLP_${signalIdentifier}_HEADERS`);
@@ -51197,18 +50161,7 @@ function getNodeHttpConfigurationFromEnvironment(signalIdentifier, signalResourc
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 function convertLegacyHeaders(config) {
     if (typeof config.headers === 'function') {
@@ -51257,18 +50210,7 @@ function convertLegacyHttpOptions(config, signalIdentifier, signalResourcePath, 
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * OTLP Metric Exporter for Node.js
@@ -51283,18 +50225,7 @@ class OTLPMetricExporter extends OTLPMetricExporterBase {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Collector Trace Exporter for Node
@@ -51309,36 +50240,14 @@ class OTLPTraceExporter extends OTLPExporterBase {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 // Event name definitions
 const ExceptionEventName = 'exception';
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * This class represents a span.
@@ -51358,6 +50267,7 @@ class SpanImpl {
     _droppedAttributesCount = 0;
     _droppedEventsCount = 0;
     _droppedLinksCount = 0;
+    _attributesCount = 0;
     name;
     status = {
         code: SpanStatusCode.UNSET,
@@ -51368,6 +50278,7 @@ class SpanImpl {
     _spanProcessor;
     _spanLimits;
     _attributeValueLengthLimit;
+    _recordEndMetrics;
     _performanceStartTime;
     _performanceOffset;
     _startTimeProvided;
@@ -51383,15 +50294,20 @@ class SpanImpl {
         this._startTimeProvided = opts.startTime != null;
         this._spanLimits = opts.spanLimits;
         this._attributeValueLengthLimit =
-            this._spanLimits.attributeValueLengthLimit || 0;
+            this._spanLimits.attributeValueLengthLimit ?? 0;
         this._spanProcessor = opts.spanProcessor;
         this.name = opts.name;
         this.parentSpanContext = opts.parentSpanContext;
         this.kind = opts.kind;
-        this.links = opts.links || [];
+        if (opts.links) {
+            for (const link of opts.links) {
+                this.addLink(link);
+            }
+        }
         this.startTime = this._getTime(opts.startTime ?? now);
         this.resource = opts.resource;
         this.instrumentationScope = opts.scope;
+        this._recordEndMetrics = opts.recordEndMetrics;
         if (opts.attributes != null) {
             this.setAttributes(opts.attributes);
         }
@@ -51412,18 +50328,24 @@ class SpanImpl {
             return this;
         }
         const { attributeCountLimit } = this._spanLimits;
+        const isNewKey = !Object.prototype.hasOwnProperty.call(this.attributes, key);
         if (attributeCountLimit !== undefined &&
-            Object.keys(this.attributes).length >= attributeCountLimit &&
-            !Object.prototype.hasOwnProperty.call(this.attributes, key)) {
+            this._attributesCount >= attributeCountLimit &&
+            isNewKey) {
             this._droppedAttributesCount++;
             return this;
         }
         this.attributes[key] = this._truncateToSize(value);
+        if (isNewKey) {
+            this._attributesCount++;
+        }
         return this;
     }
     setAttributes(attributes) {
-        for (const [k, v] of Object.entries(attributes)) {
-            this.setAttribute(k, v);
+        for (const key in attributes) {
+            if (Object.prototype.hasOwnProperty.call(attributes, key)) {
+                this.setAttribute(key, attributes[key]);
+            }
         }
         return this;
     }
@@ -51457,35 +50379,102 @@ class SpanImpl {
             }
             attributesOrStartTime = undefined;
         }
-        const attributes = sanitizeAttributes(attributesOrStartTime);
+        const sanitized = sanitizeAttributes(attributesOrStartTime);
+        const { attributePerEventCountLimit } = this._spanLimits;
+        const attributes = {};
+        let droppedAttributesCount = 0;
+        let eventAttributesCount = 0;
+        for (const attr in sanitized) {
+            if (!Object.prototype.hasOwnProperty.call(sanitized, attr)) {
+                continue;
+            }
+            const attrVal = sanitized[attr];
+            if (attributePerEventCountLimit !== undefined &&
+                eventAttributesCount >= attributePerEventCountLimit) {
+                droppedAttributesCount++;
+                continue;
+            }
+            attributes[attr] = this._truncateToSize(attrVal);
+            eventAttributesCount++;
+        }
         this.events.push({
             name,
             attributes,
             time: this._getTime(timeStamp),
-            droppedAttributesCount: 0,
+            droppedAttributesCount,
         });
         return this;
     }
     addLink(link) {
-        this.links.push(link);
+        if (this._isSpanEnded())
+            return this;
+        const { linkCountLimit } = this._spanLimits;
+        if (linkCountLimit === 0) {
+            this._droppedLinksCount++;
+            return this;
+        }
+        if (linkCountLimit !== undefined && this.links.length >= linkCountLimit) {
+            if (this._droppedLinksCount === 0) {
+                diag.debug('Dropping extra links.');
+            }
+            this.links.shift();
+            this._droppedLinksCount++;
+        }
+        const { attributePerLinkCountLimit } = this._spanLimits;
+        const sanitized = sanitizeAttributes(link.attributes);
+        const attributes = {};
+        let droppedAttributesCount = 0;
+        let linkAttributesCount = 0;
+        for (const attr in sanitized) {
+            if (!Object.prototype.hasOwnProperty.call(sanitized, attr)) {
+                continue;
+            }
+            const attrVal = sanitized[attr];
+            if (attributePerLinkCountLimit !== undefined &&
+                linkAttributesCount >= attributePerLinkCountLimit) {
+                droppedAttributesCount++;
+                continue;
+            }
+            attributes[attr] = this._truncateToSize(attrVal);
+            linkAttributesCount++;
+        }
+        const processedLink = { context: link.context };
+        if (linkAttributesCount > 0) {
+            processedLink.attributes = attributes;
+        }
+        if (droppedAttributesCount > 0) {
+            processedLink.droppedAttributesCount = droppedAttributesCount;
+        }
+        this.links.push(processedLink);
         return this;
     }
     addLinks(links) {
-        this.links.push(...links);
+        for (const link of links) {
+            this.addLink(link);
+        }
         return this;
     }
     setStatus(status) {
         if (this._isSpanEnded())
             return this;
-        this.status = { ...status };
+        if (status.code === SpanStatusCode.UNSET)
+            return this;
+        if (this.status.code === SpanStatusCode.OK)
+            return this;
+        const newStatus = { code: status.code };
         // When using try-catch, the caught "error" is of type `any`. When then assigning `any` to `status.message`,
         // TypeScript will not error. While this can happen during use of any API, it is more common on Span#setStatus()
         // as it's likely used in a catch-block. Therefore, we validate if `status.message` is actually a string, null, or
         // undefined to avoid an incorrect type causing issues downstream.
-        if (this.status.message != null && typeof status.message !== 'string') {
-            diag.warn(`Dropping invalid status.message of type '${typeof status.message}', expected 'string'`);
-            delete this.status.message;
+        if (status.code === SpanStatusCode.ERROR) {
+            if (typeof status.message === 'string') {
+                newStatus.message = status.message;
+            }
+            else if (status.message != null) {
+                diag.warn(`Dropping invalid status.message of type '${typeof status.message}', expected 'string'`);
+            }
         }
+        this.status = newStatus;
         return this;
     }
     updateName(name) {
@@ -51509,9 +50498,13 @@ class SpanImpl {
         if (this._droppedEventsCount > 0) {
             diag.warn(`Dropped ${this._droppedEventsCount} events because eventCountLimit reached`);
         }
+        if (this._droppedLinksCount > 0) {
+            diag.warn(`Dropped ${this._droppedLinksCount} links because linkCountLimit reached`);
+        }
         if (this._spanProcessor.onEnding) {
             this._spanProcessor.onEnding(this);
         }
+        this._recordEndMetrics?.();
         this._ended = true;
         this._spanProcessor.onEnd(this);
     }
@@ -51634,18 +50627,7 @@ class SpanImpl {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * A sampling decision that determines how a {@link Span} will be recorded
@@ -51672,18 +50654,7 @@ var SamplingDecision;
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** Sampler that samples no traces. */
 class AlwaysOffSampler {
@@ -51699,18 +50670,7 @@ class AlwaysOffSampler {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** Sampler that samples all traces. */
 class AlwaysOnSampler {
@@ -51726,18 +50686,7 @@ class AlwaysOnSampler {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * A composite sampler that either respects the parent span's sampling decision
@@ -51787,18 +50736,7 @@ class ParentBasedSampler {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /** Sampler that samples a given fraction of traces based of trace id deterministically. */
 class TraceIdRatioBasedSampler {
@@ -51836,18 +50774,7 @@ class TraceIdRatioBasedSampler {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 var TracesSamplerValues;
 (function (TracesSamplerValues) {
@@ -51932,18 +50859,7 @@ function getSamplerProbabilityFromEnv() {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const DEFAULT_ATTRIBUTE_COUNT_LIMIT = 128;
 const DEFAULT_ATTRIBUTE_VALUE_LENGTH_LIMIT = Infinity;
@@ -51991,18 +50907,7 @@ function reconfigureLimits(userConfig) {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Implementation of the {@link SpanProcessor} that batches spans exported by
@@ -52208,18 +51113,7 @@ class BatchSpanProcessorBase {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 class BatchSpanProcessor extends BatchSpanProcessorBase {
     onShutdown() { }
@@ -52227,18 +51121,7 @@ class BatchSpanProcessor extends BatchSpanProcessorBase {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 const SPAN_ID_BYTES = 8;
 const TRACE_ID_BYTES = 16;
@@ -52277,18 +51160,105 @@ function getIdGenerator(bytes) {
 
 /*
  * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * Determines whether the span has a parent span, and if so, [whether it is a remote parent](https://opentelemetry.io/docs/specs/otel/trace/api/#isremote)
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_SPAN_PARENT_ORIGIN = 'otel.span.parent.origin';
+/**
+ * The result value of the sampler for this span
  *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_SPAN_SAMPLING_RESULT = 'otel.span.sampling_result';
+/**
+ * The number of created spans with `recording=true` for which the end operation has not been called yet.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_SPAN_LIVE = 'otel.sdk.span.live';
+/**
+ * The number of created spans.
+ *
+ * @note Implementations **MUST** record this metric for all spans, even for non-recording ones.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_SPAN_STARTED = 'otel.sdk.span.started';
+
+/**
+ * Generates `otel.sdk.span.*` metrics.
+ * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/#span-metrics
+ */
+class TracerMetrics {
+    startedSpans;
+    liveSpans;
+    constructor(meter) {
+        this.startedSpans = meter.createCounter(METRIC_OTEL_SDK_SPAN_STARTED, {
+            unit: '{span}',
+            description: 'The number of created spans.',
+        });
+        this.liveSpans = meter.createUpDownCounter(METRIC_OTEL_SDK_SPAN_LIVE, {
+            unit: '{span}',
+            description: 'The number of currently live spans.',
+        });
+    }
+    startSpan(parentSpanCtx, samplingDecision) {
+        const samplingDecisionStr = samplingDecisionToString(samplingDecision);
+        this.startedSpans.add(1, {
+            [ATTR_OTEL_SPAN_PARENT_ORIGIN]: parentOrigin(parentSpanCtx),
+            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
+        });
+        if (samplingDecision === SamplingDecision.NOT_RECORD) {
+            return () => { };
+        }
+        const liveSpanAttributes = {
+            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
+        };
+        this.liveSpans.add(1, liveSpanAttributes);
+        return () => {
+            this.liveSpans.add(-1, liveSpanAttributes);
+        };
+    }
+}
+function parentOrigin(parentSpanContext) {
+    if (!parentSpanContext) {
+        return 'none';
+    }
+    if (parentSpanContext.isRemote) {
+        return 'remote';
+    }
+    return 'local';
+}
+function samplingDecisionToString(decision) {
+    switch (decision) {
+        case SamplingDecision.RECORD_AND_SAMPLED:
+            return 'RECORD_AND_SAMPLE';
+        case SamplingDecision.RECORD:
+            return 'RECORD_ONLY';
+        case SamplingDecision.NOT_RECORD:
+            return 'DROP';
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// this is autogenerated file, see scripts/version-update.js
+const VERSION = '2.7.0';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * This class represents a basic tracer.
@@ -52301,6 +51271,7 @@ class Tracer {
     instrumentationScope;
     _resource;
     _spanProcessor;
+    _tracerMetrics;
     /**
      * Constructs a new Tracer instance.
      */
@@ -52313,6 +51284,10 @@ class Tracer {
         this._resource = resource;
         this._spanProcessor = spanProcessor;
         this.instrumentationScope = instrumentationScope;
+        const meter = localConfig.meterProvider
+            ? localConfig.meterProvider.getMeter('@opentelemetry/sdk-trace', VERSION)
+            : createNoopMeter();
+        this._tracerMetrics = new TracerMetrics(meter);
     }
     /**
      * Starts a new Span or returns the default NoopSpan based on the sampling
@@ -52355,6 +51330,7 @@ class Tracer {
         const attributes = sanitizeAttributes(options.attributes);
         // make sampling decision
         const samplingResult = this._sampler.shouldSample(context$1, traceId, name, spanKind, attributes, links);
+        const recordEndMetrics = this._tracerMetrics.startSpan(parentSpanContext, samplingResult.decision);
         traceState = samplingResult.traceState ?? traceState;
         const traceFlags = samplingResult.decision === SamplingDecision$1.RECORD_AND_SAMPLED
             ? TraceFlags.SAMPLED
@@ -52381,6 +51357,7 @@ class Tracer {
             startTime: options.startTime,
             spanProcessor: this._spanProcessor,
             spanLimits: this._spanLimits,
+            recordEndMetrics,
         });
         return span;
     }
@@ -52420,18 +51397,7 @@ class Tracer {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * Implementation of the {@link SpanProcessor} that simply forwards all
@@ -52490,18 +51456,7 @@ class MultiSpanProcessor {
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 var ForceFlushState;
 (function (ForceFlushState) {

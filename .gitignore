@@ -80,3 +80,4 @@ $RECYCLE.BIN/
 ### Node ###
 node_modules/
 package-lock.json
+!otel-export/package-lock.json
