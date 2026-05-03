@@ -44,26 +44,30 @@ jobs:
           dry-run: 'true'
 
       - name: Verify outputs
+        env:
+          OLD_VERSION: ${{ steps.test-dry-run.outputs.old-version }}
+          NEW_VERSION: ${{ steps.test-dry-run.outputs.new-version }}
         run: |
-          echo "Old version: ${{ steps.test-dry-run.outputs.old-version }}"
-          echo "New version: ${{ steps.test-dry-run.outputs.new-version }}"
-          if [ -z "${{ steps.test-dry-run.outputs.old-version }}" ]; then
+          echo "Old version: $OLD_VERSION"
+          echo "New version: $NEW_VERSION"
+          if [ -z "$OLD_VERSION" ]; then
             echo "Error: old-version output is empty"
             exit 1
           fi
-          if [ -z "${{ steps.test-dry-run.outputs.new-version }}" ]; then
+          if [ -z "$NEW_VERSION" ]; then
             echo "Error: new-version output is empty"
             exit 1
           fi
           echo "✅ Outputs are valid"
 
       - name: Check file was updated
+        env:
+          EXPECTED_NEW_VERSION: ${{ steps.test-dry-run.outputs.new-version }}
         run: |
           CURRENT=$(cat .go-version | tr -d '[:space:]')
-          NEW_VERSION="${{ steps.test-dry-run.outputs.new-version }}"
           echo "Current version in file: $CURRENT"
-          echo "Expected new version: $NEW_VERSION"
-          if [ "$CURRENT" != "$NEW_VERSION" ]; then
+          echo "Expected new version: $EXPECTED_NEW_VERSION"
+          if [ "$CURRENT" != "$EXPECTED_NEW_VERSION" ]; then
             echo "Error: File was not updated correctly"
             exit 1
           fi
@@ -98,8 +102,10 @@ jobs:
           echo "Latest Go version: $LATEST"
 
       - name: Create up-to-date .go-version file
+        env:
+          LATEST_VERSION: ${{ steps.get-latest.outputs.latest }}
         run: |
-          echo "${{ steps.get-latest.outputs.latest }}" > .go-version
+          echo "$LATEST_VERSION" > .go-version
           cat .go-version
 
       - name: Test action with up-to-date version
@@ -111,10 +117,13 @@ jobs:
           dry-run: 'true'
 
       - name: Verify no PR would be created
+        env:
+          OLD_VERSION: ${{ steps.test-uptodate.outputs.old-version }}
+          NEW_VERSION: ${{ steps.test-uptodate.outputs.new-version }}
         run: |
-          echo "Old version: ${{ steps.test-uptodate.outputs.old-version }}"
-          echo "New version: ${{ steps.test-uptodate.outputs.new-version }}"
-          if [ "${{ steps.test-uptodate.outputs.old-version }}" != "${{ steps.test-uptodate.outputs.new-version }}" ]; then
+          echo "Old version: $OLD_VERSION"
+          echo "New version: $NEW_VERSION"
+          if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
             echo "Error: Versions should be the same"
             exit 1
           fi
@@ -156,12 +165,13 @@ jobs:
           dry-run: 'true'
 
       - name: Verify custom file was updated
+        env:
+          EXPECTED_NEW_VERSION: ${{ steps.test-custom.outputs.new-version }}
         run: |
           CURRENT=$(cat .github/go-version | tr -d '[:space:]')
-          NEW_VERSION="${{ steps.test-custom.outputs.new-version }}"
           echo "Current version in custom file: $CURRENT"
-          echo "Expected new version: $NEW_VERSION"
-          if [ "$CURRENT" != "$NEW_VERSION" ]; then
+          echo "Expected new version: $EXPECTED_NEW_VERSION"
+          if [ "$CURRENT" != "$EXPECTED_NEW_VERSION" ]; then
             echo "Error: Custom file was not updated correctly"
             exit 1
           fi
@@ -198,8 +208,10 @@ jobs:
           dry-run: 'true'
 
       - name: Verify failure
+        env:
+          OUTCOME: ${{ steps.test-missing.outcome }}
         run: |
-          if [ "${{ steps.test-missing.outcome }}" != "failure" ]; then
+          if [ "$OUTCOME" != "failure" ]; then
             echo "Error: Action should have failed with missing file"
             exit 1
           fi

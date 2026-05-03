@@ -116,8 +116,10 @@ jobs:
         kubectl wait --for=condition=ready pod/nginx-local --timeout=60s
 
     - name: check domain
+      env:
+        CLUSTER_SUFFIX: ${{ matrix.cluster-suffix }}
       run: |
-        expected_value="${{ matrix.cluster-suffix }}"
+        expected_value="$CLUSTER_SUFFIX"
         dnsDomain=$(docker exec kind-control-plane cat /kind/kubeadm.conf | { grep dnsDomain || true; } | awk '{ print $2 }')
 
         if [[ "${expected_value}" == "cluster.local" ]]; then
