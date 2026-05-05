@@ -64,7 +64,7 @@ jobs:
         env:
           EXPECTED_NEW_VERSION: ${{ steps.test-dry-run.outputs.new-version }}
         run: |
-          CURRENT=$(cat .go-version | tr -d '[:space:]')
+          CURRENT=$(tr -d '[:space:]' < .go-version)
           echo "Current version in file: $CURRENT"
           echo "Expected new version: $EXPECTED_NEW_VERSION"
           if [ "$CURRENT" != "$EXPECTED_NEW_VERSION" ]; then
@@ -168,7 +168,7 @@ jobs:
         env:
           EXPECTED_NEW_VERSION: ${{ steps.test-custom.outputs.new-version }}
         run: |
-          CURRENT=$(cat .github/go-version | tr -d '[:space:]')
+          CURRENT=$(tr -d '[:space:]' < .github/go-version)
           echo "Current version in custom file: $CURRENT"
           echo "Expected new version: $EXPECTED_NEW_VERSION"
           if [ "$CURRENT" != "$EXPECTED_NEW_VERSION" ]; then

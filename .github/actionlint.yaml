@@ -1,0 +1,6 @@
+paths:
+  '.github/workflows/test-shellcheck.yaml':
+    ignore:
+      # 'type: boolean' is valid in composite action inputs per the GH Actions schema,
+      # but actionlint does not recognize it and fails to parse the local action reference.
+      - 'could not parse action metadata in ".*/shellcheck"'
