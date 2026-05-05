@@ -69,11 +69,12 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all tags and branches
           token: ${{ steps.octo-sts.outputs.token }}
+          persist-credentials: false
 
       - name: Check if any changes since last tag
         id: check
         run: |
-          git fetch --tags
+          git fetch --tags  # no creds needed: repo is public; if this ever goes private, pass token explicitly here
           if [ -z "$(git tag --points-at HEAD)" ]; then
             echo "Nothing points at HEAD, bump a new tag"
             echo "bump=yes" >> "$GITHUB_OUTPUT"
