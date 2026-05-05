@@ -57,8 +57,10 @@ runs:
         set -x
         # The release-notes tool access ENV vars as options
         # https://github.com/kubernetes/release/tree/master/cmd/release-notes#options
-        export ORG=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $1}')
-        export REPO=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $2}')
+        ORG=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $1}')
+        export ORG
+        REPO=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $2}')
+        export REPO
         export BRANCH="${INPUTS_BRANCH_NAME}"
         export START_REV="${INPUTS_START_REV}"
         export END_REV="${INPUTS_END_REV}"
@@ -78,7 +80,8 @@ runs:
             # '-A 1' - prints the line after the match which we can parse
             LAST_BRANCH="$(grep -A 1 "$BRANCH" "$BRANCHES" | tail -n1)"
           fi
-          export START_SHA=$(git merge-base $LAST_BRANCH origin/$BRANCH)
+          START_SHA=$(git merge-base "$LAST_BRANCH" "origin/$BRANCH")
+          export START_SHA
         fi
         release-notes \
           --required-author="" \
@@ -114,7 +117,7 @@ runs:
       shell: bash
       run: |
         if [[ $(git diff --stat) != '' ]]; then
-          echo "create_pr=true" >> $GITHUB_OUTPUT
+          echo "create_pr=true" >> "$GITHUB_OUTPUT"
         fi
 
     # Configure signed commits

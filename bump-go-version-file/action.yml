@@ -117,19 +117,19 @@ runs:
         STEP_CREATE_PR_UPDATE_DIFF: ${{ steps.create_pr_update.outputs.diff }}
       shell: bash
       run: |
-        echo "## 🧪 Dry-run mode enabled" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**No PR will be created.**" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Version Update" >> $GITHUB_STEP_SUMMARY
-        echo "- Old version: \`${STEP_BUMP_OLD_VERSION}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- New version: \`${STEP_BUMP_NEW_VERSION}\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Changes that would be made:" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo '```diff' >> $GITHUB_STEP_SUMMARY
-        echo "${STEP_CREATE_PR_UPDATE_DIFF}" >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "## 🧪 Dry-run mode enabled" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "**No PR will be created.**" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "### Version Update" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Old version: \`${STEP_BUMP_OLD_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- New version: \`${STEP_BUMP_NEW_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "### Changes that would be made:" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo '```diff' >> "$GITHUB_STEP_SUMMARY"
+        echo "${STEP_CREATE_PR_UPDATE_DIFF}" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8

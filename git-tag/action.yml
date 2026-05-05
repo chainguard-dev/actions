@@ -115,7 +115,7 @@ runs:
           fi
 
           # Remove the prefix if it exists
-          latest_version="${latest_tag#$git_tag_prefix}"
+          latest_version="${latest_tag#"$git_tag_prefix"}"
           echo "ℹ️ Version extracted: $latest_version"
 
           # Use YYYYMMDDHHMM format as build metadata.

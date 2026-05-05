@@ -18,15 +18,15 @@ runs:
         fi
         set -e
 
-        mkdir -p $HOME/.gitsign
+        mkdir -p "$HOME/.gitsign"
 
         shaprog() {
           case "${RUNNER_OS}" in
             Linux)
-              sha256sum $1 | cut -d' ' -f1
+              sha256sum "$1" | cut -d' ' -f1
               ;;
             macOS)
-              shasum -a256 $1 | cut -d' ' -f1
+              shasum -a256 "$1" | cut -d' ' -f1
               ;;
             Windows)
               powershell -command "(Get-FileHash $1 -Algorithm SHA256 | Select-Object -ExpandProperty Hash).ToLower()"
@@ -49,7 +49,7 @@ runs:
 
         trap "popd >/dev/null" EXIT
 
-        pushd $HOME/.gitsign > /dev/null
+        pushd "$HOME/.gitsign" > /dev/null
 
         case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
@@ -93,8 +93,8 @@ runs:
         expected_gitsign_version_digest=${gitsign_sha}
         log_info "Downloading gitsign version 'v${gitsign_version}' from https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename}"
         curl -sL https://github.com/sigstore/gitsign/releases/download/v${gitsign_version}/${gitsign_filename} -o ${gitsign_executable_name}
-        shaDownloaded=$(shaprog ${gitsign_executable_name});
-        if [[ ${shaDownloaded} != ${expected_gitsign_version_digest} ]]; then
+        shaDownloaded=$(shaprog "${gitsign_executable_name}");
+        if [[ ${shaDownloaded} != "${expected_gitsign_version_digest}" ]]; then
           log_error "Unable to validate gitsign version: 'v${gitsign_version}': want ${expected_gitsign_version_digest}, got ${shaDownloaded}"
           exit 1
         fi

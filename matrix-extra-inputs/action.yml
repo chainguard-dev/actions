@@ -37,11 +37,11 @@ runs:
         for kv in `env | grep '^EXTRA_INPUT_' | sed 's/^EXTRA_INPUT_//'`; do
           k="$(echo "${kv}" | cut -d "=" -f1 | tr '[:upper:]' '[:lower:]' | sed -r 's/(.)_+(.)/\1\U\2/g;s/^[a-z]/\U&/' | sed 's/.*/\l&/')"
           v="$(echo "${kv}" | cut -d "=" -f2)"
-          cat inputs.json | jq -c '. + {'${k}': "'${v}'"}' > inputs.json.tmp
+          cat inputs.json | jq -c '. + {'"${k}"': "'"${v}"'"}' > inputs.json.tmp
           mv inputs.json.tmp inputs.json
         done
         updated_matrix="$(cat inputs.json | tr -d '\n')"
-        echo "matrix-json=${updated_matrix}" >> $GITHUB_OUTPUT
+        echo "matrix-json=${updated_matrix}" >> "$GITHUB_OUTPUT"
         echo "Updated matrix:"
         echo "----------------"
         echo "${updated_matrix}" | jq

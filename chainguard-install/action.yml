@@ -142,6 +142,8 @@ runs:
           echo "::group::Install packages"
           # Convert commas and newlines to spaces for flexible input formats
           PACKAGES=$(echo "$PACKAGES" | tr ',\n' '  ')
+          # Word splitting is intentional: PACKAGES is a space-separated list of package names.
+          # shellcheck disable=SC2086
           run_apk --no-scripts --force-overwrite add $PACKAGES
 
           # Create wrappers/symlinks for binaries in usr/bin

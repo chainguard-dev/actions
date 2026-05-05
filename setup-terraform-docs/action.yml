@@ -18,15 +18,15 @@ runs:
         fi
         set -e
 
-        mkdir -p $HOME/.terraform-docs
+        mkdir -p "$HOME/.terraform-docs"
 
         shaprog() {
           case "${RUNNER_OS}" in
             Linux)
-              sha256sum $1 | cut -d' ' -f1
+              sha256sum "$1" | cut -d' ' -f1
               ;;
             macOS)
-              shasum -a256 $1 | cut -d' ' -f1
+              shasum -a256 "$1" | cut -d' ' -f1
               ;;
             *)
               log_error "unsupported OS ${RUNNER_OS}"
@@ -44,7 +44,7 @@ runs:
 
         trap "popd >/dev/null" EXIT
 
-        pushd $HOME/.terraform-docs > /dev/null
+        pushd "$HOME/.terraform-docs" > /dev/null
 
         case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
@@ -76,8 +76,8 @@ runs:
         expected_tf_docs_version_digest=${terraform_docs_sha}
         log_info "Downloading terraform-docs version '${terraform_docs_version}' from https://github.com/terraform-docs/terraform-docs/releases/download/${terraform_docs_version}/${terraform_docs_filename}"
         curl -sL https://github.com/terraform-docs/terraform-docs/releases/download/${terraform_docs_version}/${terraform_docs_filename} -o ${terraform_docs_filename}
-        shaDownloaded=$(shaprog ${terraform_docs_filename});
-        if [[ ${shaDownloaded} != ${expected_tf_docs_version_digest} ]]; then
+        shaDownloaded=$(shaprog "${terraform_docs_filename}");
+        if [[ ${shaDownloaded} != "${expected_tf_docs_version_digest}" ]]; then
           log_error "Unable to validate terraform-docs version: '${terraform_docs_version}': want ${expected_tf_docs_version_digest}, got ${shaDownloaded}"
           exit 1
         fi
