@@ -112,7 +112,7 @@ runs:
         sudo ln -sf "$APK_ROOT/usr/bin/chainctl" "$WRAPPER_DIR/chainctl"
 
         # Add wrapper directory first in PATH so Wolfi binaries take precedence
-        echo "$WRAPPER_DIR" >> "$GITHUB_PATH"
+        printf '%s\n' "$WRAPPER_DIR" >> "$GITHUB_PATH"
         echo "::endgroup::"
 
         # =============================================================================
@@ -125,9 +125,9 @@ runs:
 
           if [ -n "$ORG" ]; then
             echo "Configuring private APK repository for org: $ORG"
-            APK_TOKEN=$("$WRAPPER_DIR/chainctl" auth token --audience apk.cgr.dev)
+            APK_TOKEN=$("$WRAPPER_DIR/chainctl" auth token --audience apk.cgr.dev | tr -d '\n')
             export HTTP_AUTH="basic:apk.cgr.dev:user:${APK_TOKEN}"
-            echo "HTTP_AUTH=${HTTP_AUTH}" >> "$GITHUB_ENV"
+            printf 'HTTP_AUTH=%s\n' "${HTTP_AUTH}" >> "$GITHUB_ENV"
             echo "https://apk.cgr.dev/${ORG}" | sudo tee -a "$APK_ROOT/etc/apk/repositories" > /dev/null
             run_apk update
           fi

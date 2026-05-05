@@ -146,8 +146,10 @@ runs:
         INPUTS_REGISTRY_AUTHORITY: ${{ inputs.registry-authority }}
       shell: bash
       run: |
-        echo "REGISTRY_NAME=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 1)" >> $GITHUB_ENV
-        echo "REGISTRY_PORT=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 2)" >> $GITHUB_ENV
+        REGISTRY_NAME=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 1 | tr -d '\n')
+        REGISTRY_PORT=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 2 | tr -d '\n')
+        echo "REGISTRY_NAME=${REGISTRY_NAME}" >> "$GITHUB_ENV"
+        echo "REGISTRY_PORT=${REGISTRY_PORT}" >> "$GITHUB_ENV"
 
     - name: Create KinD Cluster
       env:

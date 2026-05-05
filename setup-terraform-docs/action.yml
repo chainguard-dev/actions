@@ -85,7 +85,7 @@ runs:
         chmod +x ${terraform_docs_executable_name}
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: echo "$HOME/.terraform-docs" >> $GITHUB_PATH
+      run: printf '%s\n' "$HOME/.terraform-docs" >> "$GITHUB_PATH"
       shell: bash
 
     - if: ${{ runner.os == 'Windows' }}

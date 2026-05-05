@@ -38,7 +38,7 @@ runs:
         go build -o bin/hugo2confluence .
 
         # Add bin to the PATH so we can just run "hugo2confluence"
-        echo "${PWD}/bin" >> $GITHUB_PATH
+        printf '%s\n' "${PWD}/bin" >> "$GITHUB_PATH"
 
     - name: Run hugo2confluence
       shell: bash

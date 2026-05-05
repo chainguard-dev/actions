@@ -109,5 +109,5 @@ runs:
         chmod +x argo
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: echo "$HOME/.argo-cli" >> $GITHUB_PATH
+      run: printf '%s\n' "$HOME/.argo-cli" >> "$GITHUB_PATH"
       shell: bash

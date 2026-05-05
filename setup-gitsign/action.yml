@@ -112,7 +112,7 @@ runs:
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: echo "$HOME/.gitsign" >> $GITHUB_PATH
+      run: printf '%s\n' "$HOME/.gitsign" >> "$GITHUB_PATH"
       shell: bash
 
     - if: ${{ runner.os == 'Windows' }}
