@@ -85,6 +85,12 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
+        INPUTS_BUMP_LEVEL: ${{ inputs.bump_level }}
+        INPUTS_FORCED_VERSION: ${{ inputs.forced_version }}
+        INPUTS_GIT_TAG_PREFIX: ${{ inputs.git_tag_prefix }}
+        INPUTS_DRY_RUN: ${{ inputs.dry_run }}
+        INPUTS_COMMITTER: ${{ inputs.committer }}
+        INPUTS_AUTHOR: ${{ inputs.author }}
       run: |
         set -e
 
@@ -92,10 +98,10 @@ runs:
         bumped_version=""
         git_tag=""
 
-        bump_level="${{ inputs.bump_level }}"
-        forced_version="${{ inputs.forced_version }}"
-        git_tag_prefix="${{ inputs.git_tag_prefix }}"
-        dry_run="${{ inputs.dry_run }}"
+        bump_level="${INPUTS_BUMP_LEVEL}"
+        forced_version="${INPUTS_FORCED_VERSION}"
+        git_tag_prefix="${INPUTS_GIT_TAG_PREFIX}"
+        dry_run="${INPUTS_DRY_RUN}"
 
         # Get latest tag and bump version level
         if [[ -z "$forced_version" ]]; then
@@ -140,8 +146,8 @@ runs:
           echo "ℹ️ dry-run mode is enabled. No git tags pushed."
         else
           # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
-          git config --global user.email "${{ inputs.committer }}"
-          git config --global user.name "${{ inputs.author }}"
+          git config --global user.email "${INPUTS_COMMITTER}"
+          git config --global user.name "${INPUTS_AUTHOR}"
 
           # check if the Git tag already exists
           if git show-ref --tags --verify --quiet -- "refs/tags/$git_tag"; then

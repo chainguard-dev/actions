@@ -32,9 +32,11 @@ runs:
   using: 'composite'
 
   steps:
-    - shell: bash
+    - env:
+        INPUTS_PACKAGE_NAME: ${{ inputs.package-name }}
+      shell: bash
       run: |
-        mkdir -p ${{ github.workspace }}/${{ inputs.package-name }}
+        mkdir -p "$GITHUB_WORKSPACE/${INPUTS_PACKAGE_NAME}"
     - uses: chainguard-dev/actions/melange-build-pkg@c69a264ec2a5934c3186c618f368fc1c86f16cff # v1.6.19
       with:
         config: ${{ inputs.package-name }}.yaml

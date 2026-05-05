@@ -45,9 +45,11 @@ runs:
   using: "composite"
   steps:
     - name: Collect cluster diagnostics
+      env:
+        INPUTS_CLUSTER_RESOURCES: ${{ inputs.cluster-resources }}
       shell: bash
       run: |
-        for resource in $(echo "${{ inputs.cluster-resources }}" | sed 's/,/ /g'); do
+        for resource in $(echo "${INPUTS_CLUSTER_RESOURCES}" | sed 's/,/ /g'); do
           for x in $(kubectl get $resource -oname || true); do
             echo "::group:: describe $resource $x"
             kubectl describe $x || true
@@ -56,10 +58,12 @@ runs:
         done
 
     - name: Collect namespace diagnostics
+      env:
+        INPUTS_NAMESPACE_RESOURCES: ${{ inputs.namespace-resources }}
       shell: bash
       run: |
         for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
-          for resource in $(echo "${{ inputs.namespace-resources }}" | sed 's/,/ /g'); do
+          for resource in $(echo "${INPUTS_NAMESPACE_RESOURCES}" | sed 's/,/ /g'); do
             echo --- $ns $resource ---
             kubectl get $resource -n${ns}
             for x in $(kubectl get $resource -n${ns} -oname || true); do
@@ -93,18 +97,22 @@ runs:
 
     - name: Collect kind specific logs
       if: ${{ inputs.cluster-type == 'kind' }}
+      env:
+        INPUTS_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       shell: bash
       run: |
-        mkdir -p /tmp/${{ inputs.artifact-name }}
-        kind export logs /tmp/${{ inputs.artifact-name }}
+        mkdir -p "/tmp/${INPUTS_ARTIFACT_NAME}"
+        kind export logs "/tmp/${INPUTS_ARTIFACT_NAME}"
 
     # This mimics what kind export logs is doing, which is basically a dump of each nodes /var/log/ + kind metadata
     # ref: https://github.com/kubernetes-sigs/kind/blob/main/pkg/cluster/internal/providers/common/logs.go#L14
     - name: Collect k3d specifc logs
       if: ${{ inputs.cluster-type == 'k3d' }}
+      env:
+        INPUTS_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       shell: bash
       run: |
-        out="/tmp/${{ inputs.artifact-name }}"
+        out="/tmp/${INPUTS_ARTIFACT_NAME}"
         mkdir -p "$out/k3d"
 
         docker ps --format '{{.Names}} {{.ID}}' | grep -i "^k3d-" | while read -r name id; do

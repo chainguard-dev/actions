@@ -68,9 +68,11 @@ runs:
   using: "composite"
   steps:
     - name: Collect cluster diagnostics
+      env:
+        INPUTS_CLUSTER_RESOURCES: ${{ inputs.cluster-resources }}
       shell: bash
       run: |
-        for resource in $(echo "${{ inputs.cluster-resources }}" | sed 's/,/ /g'); do
+        for resource in $(echo "${INPUTS_CLUSTER_RESOURCES}" | sed 's/,/ /g'); do
           for x in $(kubectl get $resource -oname || true); do
             echo "::group:: describe $resource $x"
             kubectl describe $x || true
@@ -79,10 +81,12 @@ runs:
         done
 
     - name: Collect namespace diagnostics
+      env:
+        INPUTS_NAMESPACE_RESOURCES: ${{ inputs.namespace-resources }}
       shell: bash
       run: |
         for ns in $(kubectl get ns -oname | cut -d'/' -f 2); do
-          for resource in $(echo "${{ inputs.namespace-resources }}" | sed 's/,/ /g'); do
+          for resource in $(echo "${INPUTS_NAMESPACE_RESOURCES}" | sed 's/,/ /g'); do
             echo --- $ns $resource ---
             kubectl get $resource -n${ns}
             for x in $(kubectl get $resource -n${ns} -oname || true); do
@@ -95,16 +99,25 @@ runs:
         done
 
     - name: Collect logs
+      env:
+        INPUTS_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       shell: bash
       run: |
-        mkdir -p /tmp/${{ inputs.artifact-name }}
-        kind export logs /tmp/${{ inputs.artifact-name }}
+        mkdir -p "/tmp/${INPUTS_ARTIFACT_NAME}"
+        kind export logs "/tmp/${INPUTS_ARTIFACT_NAME}"
 
     - name: Collect grafana dashboards
+      env:
+        INPUTS_GRAFANA_NAMESPACE: ${{ inputs.grafana-namespace }}
+        INPUTS_GRAFANA_SVC: ${{ inputs.grafana-svc }}
+        INPUTS_GRAFANA_DASHBOARDS: ${{ inputs.grafana-dashboards }}
+        INPUTS_GRAFANA_USERNAME: ${{ inputs.grafana-username }}
+        INPUTS_GRAFANA_PASSWORD: ${{ inputs.grafana-password }}
+        INPUTS_START_TIME: ${{ inputs.start-time }}
       shell: bash
       if: ${{ inputs.grafana-dashboards != '' }}
       run: |
-        kubectl port-forward -n ${{ inputs.grafana-namespace }} ${{ inputs.grafana-svc }} 3000:80 &
+        kubectl port-forward -n "${INPUTS_GRAFANA_NAMESPACE}" "${INPUTS_GRAFANA_SVC}" 3000:80 &
         sleep 5
         status=0
         curl --max-time 5 --retry-max-time 20 --retry 20 --retry-connrefused http://localhost:3000 || status=1
@@ -114,20 +127,22 @@ runs:
         fi
 
         mkdir -p /tmp/graphs
-        IFS=',' read -r -a grafs <<< ${{ inputs.grafana-dashboards }}
+        IFS=',' read -r -a grafs <<< "${INPUTS_GRAFANA_DASHBOARDS}"
         for graf in "${grafs[@]}"
         do
-          curl "http://${{ inputs.grafana-username }}:${{ inputs.grafana-password }}@localhost:3000/render/d/"$graf"?width=2000&height=2000&from=${{ inputs.start-time }}&to=now" > /tmp/graphs/"${graf#*/}".png
+          curl "http://${INPUTS_GRAFANA_USERNAME}:${INPUTS_GRAFANA_PASSWORD}@localhost:3000/render/d/${graf}?width=2000&height=2000&from=${INPUTS_START_TIME}&to=now" > "/tmp/graphs/${graf#*/}.png"
         done
 
     - name: Package logs
+      env:
+        INPUTS_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       shell: bash
       run: |
-        tar -cvf /tmp/temp.tar -C /tmp ${{ inputs.artifact-name }}
+        tar -cvf /tmp/temp.tar -C /tmp "${INPUTS_ARTIFACT_NAME}"
         if [ -d "/tmp/graphs" ]; then
           tar -rvkf /tmp/temp.tar -C /tmp graphs
         fi
-        tar -zvcf /tmp/${{ inputs.artifact-name }}.tar.gz -C /tmp temp.tar
+        tar -zvcf "/tmp/${INPUTS_ARTIFACT_NAME}.tar.gz" -C /tmp temp.tar
 
     - name: Upload artifacts
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

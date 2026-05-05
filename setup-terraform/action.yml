@@ -24,16 +24,19 @@ runs:
 
   steps:
     - name: Check if .terraform-version file exists
+      env:
+        INPUTS_TERRAFORM_VERSION_FILE: ${{ inputs.terraform-version-file }}
+        INPUTS_DEFAULT_TERRAFORM_VERSION: ${{ inputs.default-terraform-version }}
       shell: bash
       id: check-version-file
       run: |
-        if [ ! -f "${{ inputs.terraform-version-file }}" ]; then
-          echo "Terraform version file not found: ${{ inputs.terraform-version-file }}"
-          echo "Using default version: ${{ inputs.default-terraform-version }}"
-          echo "value=${{ inputs.default-terraform-version }}" >> "$GITHUB_OUTPUT"
+        if [ ! -f "${INPUTS_TERRAFORM_VERSION_FILE}" ]; then
+          echo "Terraform version file not found: ${INPUTS_TERRAFORM_VERSION_FILE}"
+          echo "Using default version: ${INPUTS_DEFAULT_TERRAFORM_VERSION}"
+          echo "value=${INPUTS_DEFAULT_TERRAFORM_VERSION}" >> "$GITHUB_OUTPUT"
         else
-          echo "Using version from file: ${{ inputs.terraform-version-file }}"
-          echo "value=$(cat ${{ inputs.terraform-version-file }})" >> "$GITHUB_OUTPUT"
+          echo "Using version from file: ${INPUTS_TERRAFORM_VERSION_FILE}"
+          echo "value=$(cat "${INPUTS_TERRAFORM_VERSION_FILE}")" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Setup terraform

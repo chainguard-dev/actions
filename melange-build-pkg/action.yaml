@@ -109,33 +109,54 @@ runs:
       run: |
         echo "Warning: the --template flag has been removed from melange and will be ignored."
     - name: 'Build package with Melange'
+      env:
+        INPUTS_WORKDIR: ${{ inputs.workdir }}
+        INPUTS_REPOSITORY_APPEND: ${{ inputs.repository-append }}
+        INPUTS_KEYRING_APPEND: ${{ inputs.keyring-append }}
+        INPUTS_WORKSPACE_DIR: ${{ inputs.workspace-dir }}
+        INPUTS_NAMESPACE: ${{ inputs.namespace }}
+        INPUTS_CACHE_DIR: ${{ inputs.cache-dir }}
+        INPUTS_PIPELINE_DIR: ${{ inputs.pipeline-dir }}
+        INPUTS_GIT_COMMIT: ${{ inputs.git-commit }}
+        INPUTS_GIT_REPO_URL: ${{ inputs.git-repo-url }}
+        INPUTS_EMPTY_WORKSPACE: ${{ inputs.empty-workspace }}
+        INPUTS_SOURCE_DIR: ${{ inputs.source-dir }}
+        INPUTS_SIGN_WITH_KEY: ${{ inputs.sign-with-key }}
+        INPUTS_SIGNING_KEY_PATH: ${{ inputs.signing-key-path }}
+        INPUTS_UPDATE_INDEX: ${{ inputs.update-index }}
+        INPUTS_MULTI_CONFIG: ${{ inputs.multi-config }}
+        INPUTS_CONFIG: ${{ inputs.config }}
+        INPUTS_REPOSITORY_PATH: ${{ inputs.repository-path }}
+        INPUTS_ARCHS: ${{ inputs.archs }}
       shell: bash
       run: |
-        [ -n '${{ inputs.workdir }}' ] && cd "${{ inputs.workdir }}"
-        [ -n '${{ inputs.repository-append }}' ] && repoarg="--repository-append ${{ inputs.repository-append }}"
-        [ -n '${{ inputs.keyring-append }}' ] && keyringarg="--keyring-append ${{ inputs.keyring-append }}"
-        [ -n '${{ inputs.workspace-dir }}' ] && workspacearg="--workspace-dir ${{ inputs.workspace-dir }}"
-        [ -n '${{ inputs.namespace }}' ] && nsarg="--namespace ${{ inputs.namespace }}"
-        [ -n '${{ inputs.cache-dir }}' ] && cachearg="--cache-dir=${{ inputs.cache-dir }}"
-        [ -n '${{ inputs.pipeline-dir }}' ] && pipelinedirarg="--pipeline-dir=${{ inputs.pipeline-dir }}"
-        [ -n '${{ inputs.git-commit }}' ] && gitcommitarg="--git-commit ${{ inputs.git-commit }}"
-        [ -n '${{ inputs.git-repo-url }}' ] && gitrepoarg="--git-repo-url ${{ inputs.git-repo-url }}"
-        ${{ inputs.empty-workspace }} && workspacearg="$workspacearg --empty-workspace"
-        ${{ inputs.empty-workspace }} || workspacearg="$workspacearg --source-dir ${{ inputs.source-dir }}/${{ inputs.workdir }}"
-        ${{ inputs.sign-with-key }} && signarg="--signing-key ${{ inputs.signing-key-path }}"
-        ${{ inputs.update-index }} || indexarg="--generate-index=false"
-        melangeconfigs="${{ inputs.multi-config }}"
-        [[ "${melangeconfigs}" != "" ]] || melangeconfigs="${{ inputs.config }}"
+        [ -n "${INPUTS_WORKDIR}" ] && cd "${INPUTS_WORKDIR}"
+        [ -n "${INPUTS_REPOSITORY_APPEND}" ] && repoarg="--repository-append ${INPUTS_REPOSITORY_APPEND}"
+        [ -n "${INPUTS_KEYRING_APPEND}" ] && keyringarg="--keyring-append ${INPUTS_KEYRING_APPEND}"
+        [ -n "${INPUTS_WORKSPACE_DIR}" ] && workspacearg="--workspace-dir ${INPUTS_WORKSPACE_DIR}"
+        [ -n "${INPUTS_NAMESPACE}" ] && nsarg="--namespace ${INPUTS_NAMESPACE}"
+        [ -n "${INPUTS_CACHE_DIR}" ] && cachearg="--cache-dir=${INPUTS_CACHE_DIR}"
+        [ -n "${INPUTS_PIPELINE_DIR}" ] && pipelinedirarg="--pipeline-dir=${INPUTS_PIPELINE_DIR}"
+        [ -n "${INPUTS_GIT_COMMIT}" ] && gitcommitarg="--git-commit ${INPUTS_GIT_COMMIT}"
+        [ -n "${INPUTS_GIT_REPO_URL}" ] && gitrepoarg="--git-repo-url ${INPUTS_GIT_REPO_URL}"
+        "${INPUTS_EMPTY_WORKSPACE}" && workspacearg="$workspacearg --empty-workspace"
+        "${INPUTS_EMPTY_WORKSPACE}" || workspacearg="$workspacearg --source-dir ${INPUTS_SOURCE_DIR}/${INPUTS_WORKDIR}"
+        "${INPUTS_SIGN_WITH_KEY}" && signarg="--signing-key ${INPUTS_SIGNING_KEY_PATH}"
+        "${INPUTS_UPDATE_INDEX}" || indexarg="--generate-index=false"
+        melangeconfigs="${INPUTS_MULTI_CONFIG}"
+        [[ "${melangeconfigs}" != "" ]] || melangeconfigs="${INPUTS_CONFIG}"
         for config in ${melangeconfigs//,/ }; do
           # If we have already built one melange package, and the packages/ dir exists,
           # add this as an additional local repository that other packages can depend on
-          if [[ -d "${{ inputs.repository-path }}" ]]; then
-            repoarg="${repoarg} --repository-append ${{ inputs.repository-path }}"
-            keyringarg="${keyringarg} --keyring-append ${{ inputs.signing-key-path }}.pub"
+          if [[ -d "${INPUTS_REPOSITORY_PATH}" ]]; then
+            repoarg="${repoarg} --repository-append ${INPUTS_REPOSITORY_PATH}"
+            keyringarg="${keyringarg} --keyring-append ${INPUTS_SIGNING_KEY_PATH}.pub"
           fi
-          sudo melange build $config --arch ${{ inputs.archs }} --out-dir ${{ inputs.repository-path }} $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg $cachearg $pipelinedirarg $gitcommitarg $gitrepoarg
+          sudo melange build $config --arch "${INPUTS_ARCHS}" --out-dir "${INPUTS_REPOSITORY_PATH}" $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg $cachearg $pipelinedirarg $gitcommitarg $gitrepoarg
         done
     - name: 'Fix local repository permissions'
+      env:
+        INPUTS_REPOSITORY_PATH: ${{ inputs.repository-path }}
       shell: bash
       run: |
-        sudo chown -R runner:runner ${{ inputs.repository-path }}
+        sudo chown -R runner:runner "${INPUTS_REPOSITORY_PATH}"

@@ -24,11 +24,13 @@ runs:
   steps:
     - name: Add additional matrix inputs
       id: matrix-extra-inputs
+      env:
+        INPUTS_MATRIX_JSON: ${{ inputs.matrix-json }}
       shell: bash
       run: |
         # Convert env vars beginning with "EXTRA_INPUT_"
         trap "rm -f inputs.json" EXIT
-        echo '${{ inputs.matrix-json }}' > inputs.json
+        printf '%s\n' "${INPUTS_MATRIX_JSON}" > inputs.json
         echo "Original matrix:"
         echo "----------------"
         cat inputs.json | jq

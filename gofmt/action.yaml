@@ -28,6 +28,7 @@ runs:
     working-directory: ${{ inputs.working-directory }}
     env:
       DIRS: ${{ inputs.dirs }}
+      INPUTS_ARGS: ${{ inputs.args }}
     run: |
       set -xv
 
@@ -39,7 +40,7 @@ runs:
         for dir in $(find . -type d \( -path "*/third_party" -o -path "*/testdata" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
           echo "::group:: $dir"
           pushd $dir
-          gofmt ${{ inputs.args }} -w \
+          gofmt "${INPUTS_ARGS}" -w \
             $(find . \
             -path './vendor' -prune \
             -o -path '*/third_party' -prune \

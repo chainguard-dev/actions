@@ -22,12 +22,16 @@ runs:
 
   steps:
     - name: 'Generate melange signing key'
+      env:
+        INPUTS_SIGNING_KEY_PATH: ${{ inputs.signing-key-path }}
       shell: bash
       run: |
-        sudo melange keygen ${{ inputs.signing-key-path }}
+        sudo melange keygen "${INPUTS_SIGNING_KEY_PATH}"
     - name: 'Install public key in system APK keyring'
+      env:
+        INPUTS_SIGNING_KEY_PATH: ${{ inputs.signing-key-path }}
       shell: bash
       run: |
         sudo mkdir -p /etc/apk/keys/
-        sudo cp ${{ inputs.signing-key-path }}.pub /etc/apk/keys/
+        sudo cp "${INPUTS_SIGNING_KEY_PATH}.pub" /etc/apk/keys/
       if: ${{ inputs.install-public-key }}

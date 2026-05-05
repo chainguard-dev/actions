@@ -50,15 +50,18 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
+        INPUTS_BRANCH_NAME: ${{ inputs.branch_name }}
+        INPUTS_START_REV: ${{ inputs.start_rev }}
+        INPUTS_END_REV: ${{ inputs.end_rev }}
       run: |
         set -x
         # The release-notes tool access ENV vars as options
         # https://github.com/kubernetes/release/tree/master/cmd/release-notes#options
-        export ORG=$(echo '${{ github.repository }}' | awk -F '/' '{print $1}')
-        export REPO=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')
-        export BRANCH="${{ inputs.branch_name }}"
-        export START_REV=${{ inputs.start_rev }}
-        export END_REV=${{ inputs.end_rev }}
+        export ORG=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $1}')
+        export REPO=$(echo "${GITHUB_REPOSITORY}" | awk -F '/' '{print $2}')
+        export BRANCH="${INPUTS_BRANCH_NAME}"
+        export START_REV="${INPUTS_START_REV}"
+        export END_REV="${INPUTS_END_REV}"
         if [[ -z "$END_REV" ]]; then
           END_REV="origin/$BRANCH"
         fi
@@ -95,12 +98,15 @@ runs:
         path: CHANGELOG_NEW.md
 
     - name: Append notes to the exiting file
+      env:
+        INPUTS_CHANGELOG_FILENAME: ${{ inputs.changelog_filename }}
+        INPUTS_END_REV: ${{ inputs.end_rev }}
       shell: bash
       run: |
-        echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-        cat CHANGELOG_NEW.md | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-        echo "" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
-        echo "## ${{ inputs.end_rev }}" | cat - ${{ inputs.changelog_filename }} > /tmp/out && mv /tmp/out ${{ inputs.changelog_filename }}
+        echo "" | cat - "${INPUTS_CHANGELOG_FILENAME}" > /tmp/out && mv /tmp/out "${INPUTS_CHANGELOG_FILENAME}"
+        cat CHANGELOG_NEW.md | cat - "${INPUTS_CHANGELOG_FILENAME}" > /tmp/out && mv /tmp/out "${INPUTS_CHANGELOG_FILENAME}"
+        echo "" | cat - "${INPUTS_CHANGELOG_FILENAME}" > /tmp/out && mv /tmp/out "${INPUTS_CHANGELOG_FILENAME}"
+        echo "## ${INPUTS_END_REV}" | cat - "${INPUTS_CHANGELOG_FILENAME}" > /tmp/out && mv /tmp/out "${INPUTS_CHANGELOG_FILENAME}"
         rm CHANGELOG_NEW.md
 
     - name: Check workspace

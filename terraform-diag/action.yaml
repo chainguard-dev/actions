@@ -22,19 +22,23 @@ runs:
   using: "composite"
   steps:
     - name: Extract Warnings
+      env:
+        INPUTS_JSON_FILE: ${{ inputs.json-file }}
       shell: bash
       run: |
-        jq -r 'select(.["@level"]=="warn") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
+        jq -r 'select(.["@level"]=="warn") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' "${INPUTS_JSON_FILE}" || true
         # We don't surface warnings via ::warning:: because the way we handle signing presubmit would make this to noisy.
 
     - name: Extract Errors
       id: extract-errors
+      env:
+        INPUTS_JSON_FILE: ${{ inputs.json-file }}
       shell: bash
       run: |
-        jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' '${{ inputs.json-file }}' || true
-        jq -r 'select(.["@level"]=="error") | ("::error file=" + .diagnostic.range.filename + ",line=" + (.diagnostic.range.start.line | tostring) + ",endLine=" + (.diagnostic.range.end.line | tostring) + ",title=" + .diagnostic.summary + "::" + .diagnostic.address)' '${{ inputs.json-file }}' || true
+        jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' "${INPUTS_JSON_FILE}" || true
+        jq -r 'select(.["@level"]=="error") | ("::error file=" + .diagnostic.range.filename + ",line=" + (.diagnostic.range.start.line | tostring) + ",endLine=" + (.diagnostic.range.end.line | tostring) + ",title=" + .diagnostic.summary + "::" + .diagnostic.address)' "${INPUTS_JSON_FILE}" || true
 
-        export MARKDOWN="$(jq -r 'select(.["@level"]=="error") | "`" + .diagnostic.address + "`: " + .diagnostic.summary + "\n"' '${{ inputs.json-file }}')"
+        export MARKDOWN="$(jq -r 'select(.["@level"]=="error") | "`" + .diagnostic.address + "`: " + .diagnostic.summary + "\n"' "${INPUTS_JSON_FILE}")"
 
         echo "${MARKDOWN}"
 

@@ -36,6 +36,7 @@ runs:
     working-directory: ${{ inputs.working-directory }}
     env:
       DIRS: ${{ inputs.dirs }}
+      INPUTS_LOCAL: ${{ inputs.local }}
     run: |
       set -xv
 
@@ -47,7 +48,7 @@ runs:
         for dir in $(find . -type d \( -path "*/third_party" -o -path "*/testdata" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
           echo "::group:: $dir"
           pushd $dir
-          goimports -local="${{ inputs.local }}" -w \
+          goimports -local="${INPUTS_LOCAL}" -w \
             $(find . \
             -path './vendor' -prune \
             -o -path '*/third_party' -prune \

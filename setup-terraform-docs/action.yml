@@ -21,7 +21,7 @@ runs:
         mkdir -p $HOME/.terraform-docs
 
         shaprog() {
-          case ${{ runner.os }} in
+          case "${RUNNER_OS}" in
             Linux)
               sha256sum $1 | cut -d' ' -f1
               ;;
@@ -29,7 +29,7 @@ runs:
               shasum -a256 $1 | cut -d' ' -f1
               ;;
             *)
-              log_error "unsupported OS ${{ runner.os }}"
+              log_error "unsupported OS ${RUNNER_OS}"
               exit 1
               ;;
           esac
@@ -46,7 +46,7 @@ runs:
 
         pushd $HOME/.terraform-docs > /dev/null
 
-        case "${{ runner.os }}-${{ runner.arch }}" in
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
             terraform_docs_filename=terraform-docs-${terraform_docs_version}-linux-amd64.tar.gz
             terraform_docs_sha=${terraform_docs_linux_amd64_sha}
@@ -68,7 +68,7 @@ runs:
             ;;
 
           *)
-            log_error "unsupported architecture ${{ runner.arch }}"
+            log_error "unsupported architecture ${RUNNER_ARCH}"
             exit 1
             ;;
         esac

@@ -21,7 +21,7 @@ runs:
         mkdir -p $HOME/.gitsign
 
         shaprog() {
-          case ${{ runner.os }} in
+          case "${RUNNER_OS}" in
             Linux)
               sha256sum $1 | cut -d' ' -f1
               ;;
@@ -32,7 +32,7 @@ runs:
               powershell -command "(Get-FileHash $1 -Algorithm SHA256 | Select-Object -ExpandProperty Hash).ToLower()"
               ;;
             *)
-              log_error "unsupported OS ${{ runner.os }}"
+              log_error "unsupported OS ${RUNNER_OS}"
               exit 1
               ;;
           esac
@@ -51,7 +51,7 @@ runs:
 
         pushd $HOME/.gitsign > /dev/null
 
-        case "${{ runner.os }}-${{ runner.arch }}" in
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
             gitsign_filename=gitsign_${gitsign_version}_linux_amd64
             gitsign_sha=${gitsign_linux_amd64_sha}
@@ -85,7 +85,7 @@ runs:
             ;;
 
           *)
-            log_error "unsupported architecture ${{ runner.arch }}"
+            log_error "unsupported architecture ${RUNNER_ARCH}"
             exit 1
             ;;
         esac
@@ -107,7 +107,7 @@ runs:
         git config --global gpg.format x509           # gitsign expects x509 args
 
         # Use workflow name as the username
-        git config --global user.name "${{ github.workflow }}"
+        git config --global user.name "${GITHUB_WORKFLOW}"
         # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 

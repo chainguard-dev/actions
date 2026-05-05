@@ -60,20 +60,24 @@ runs:
     shell: bash
     env:
       REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+      INPUTS_LANGUAGE: ${{ inputs.language }}
+      INPUTS_BOILERPLATE_DIRECTORY: ${{ inputs.boilerplate-directory }}
+      INPUTS_EXTENSION: ${{ inputs.extension }}
+      INPUTS_EXCLUDE: ${{ inputs.exclude }}
     run: |
       set -e
       cd "${GITHUB_WORKSPACE}" || exit 1
 
-      echo '::group:: Running github.com/mattmoor/boilerplate-check for ${{ inputs.language }} with reviewdog 🐶 ...'
+      echo "::group:: Running github.com/mattmoor/boilerplate-check for ${INPUTS_LANGUAGE} with reviewdog 🐶 ..."
       # Don't fail because of boilerplate-check
       set +o pipefail
       boilerplate-check check \
-        --boilerplate ${{ inputs.boilerplate-directory }}/boilerplate.${{ inputs.extension }}.txt \
-        --file-extension ${{ inputs.extension }} \
-        --exclude "${{ inputs.exclude }}" |
+        --boilerplate "${INPUTS_BOILERPLATE_DIRECTORY}/boilerplate.${INPUTS_EXTENSION}.txt" \
+        --file-extension "${INPUTS_EXTENSION}" \
+        --exclude "${INPUTS_EXCLUDE}" |
       reviewdog -efm="%A%f:%l: %m" \
             -efm="%C%.%#" \
-            -name="${{ inputs.language }} headers" \
+            -name="${INPUTS_LANGUAGE} headers" \
             -reporter="github-pr-check" \
             -filter-mode="diff_context" \
             -fail-level="error" \
