@@ -81,29 +81,39 @@ runs:
   steps:
     - name: Install Knative
       id: knative
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
+        INPUTS_SERVING_VERSION: ${{ inputs.serving-version }}
+        INPUTS_EVENTING_VERSION: ${{ inputs.eventing-version }}
+        INPUTS_ISTIO_VERSION: ${{ inputs.istio-version }}
+        INPUTS_KINGRESS: ${{ inputs.kingress }}
+        INPUTS_CLUSTER_DOMAIN: ${{ inputs.cluster-domain }}
+        INPUTS_SERVING_FEATURES: ${{ inputs.serving-features }}
+        INPUTS_SERVING_DEFAULTS: ${{ inputs.serving-defaults }}
+        INPUTS_SERVING_AUTOSCALER: ${{ inputs.serving-autoscaler }}
       shell: bash
       run: |
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
           local REPO="${1}"
           local FILE="${2}"
-          local REAL_KNATIVE_VERSION=${{ inputs.version }}
+          local REAL_KNATIVE_VERSION="${INPUTS_VERSION}"
 
           # If latest specified, fetch that instead. Note that this can vary
           # between versions, so have to fetch for each component.
-          if [ "${REPO}" == "serving" -a "${{ inputs.serving-version }}" != "" ]; then
-            REAL_KNATIVE_VERSION="knative-v${{ inputs.serving-version }}"
-          elif [ "${REPO}" == "eventing" -a "${{ inputs.eventing-version }}" != "" ]; then
-            REAL_KNATIVE_VERSION="knative-v${{ inputs.eventing-version }}"
-          elif [ ${{ inputs.version }} == "latest" ]; then
+          if [ "${REPO}" == "serving" -a "${INPUTS_SERVING_VERSION}" != "" ]; then
+            REAL_KNATIVE_VERSION="knative-v${INPUTS_SERVING_VERSION}"
+          elif [ "${REPO}" == "eventing" -a "${INPUTS_EVENTING_VERSION}" != "" ]; then
+            REAL_KNATIVE_VERSION="knative-v${INPUTS_EVENTING_VERSION}"
+          elif [ "${INPUTS_VERSION}" == "latest" ]; then
             REAL_KNATIVE_VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | sort -V | tail -1)
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
-          elif [[ ${{ inputs.version }} == *".x" ]]; then
-            INPUT=$(echo ${{ inputs.version }} | sed 's/.x//g')
+          elif [[ "${INPUTS_VERSION}" == *".x" ]]; then
+            INPUT=$(echo "${INPUTS_VERSION}" | sed 's/.x//g')
             VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -V | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
-            REAL_KNATIVE_VERSION="knative-v${{ inputs.version }}"
+            REAL_KNATIVE_VERSION="knative-v${INPUTS_VERSION}"
           fi
 
           # -f makes curl fail on HTTP errors instead of piping an error body
@@ -117,7 +127,7 @@ runs:
         }
 
         function download_istioctl() {
-          ISTIO_VERSION=${{ inputs.istio-version }}
+          ISTIO_VERSION="${INPUTS_ISTIO_VERSION}"
           ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
           case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
           x86|x64) ARCH=amd64;;
@@ -141,7 +151,7 @@ runs:
         }
 
         # Validate we have a valid kingress, and install its CRDs.
-        case "${{ inputs.kingress }}" in
+        case "${INPUTS_KINGRESS}" in
           "istio")
             download_istioctl
             cat > istio-profile.yaml <<EOF
@@ -158,7 +168,7 @@ runs:
                   cpu: 1m
                   memory: 10Mi
               proxy:
-                clusterDomain: ${{ inputs.cluster-domain }}
+                clusterDomain: "${INPUTS_CLUSTER_DOMAIN}"
                 resources: *defaultResources
 
           meshConfig:
@@ -176,13 +186,13 @@ runs:
             pilot:
               k8s: *defaultK8s
         EOF
-            ./istio-${ISTIO_VERSION}/bin/istioctl install --skip-confirmation -f istio-profile.yaml
+            "./istio-${INPUTS_ISTIO_VERSION}/bin/istioctl" install --skip-confirmation -f istio-profile.yaml
             ;;
           "kourier")
             # Supported, but doesn't have CRDs to install.
             ;;
           *)
-            echo Unsupported ingress ${{ inputs.kingress }} ;
+            echo Unsupported ingress "${INPUTS_KINGRESS}" ;
             exit 1 ;;
         esac
 
@@ -193,7 +203,7 @@ runs:
 
         resource_blaster serving serving-core.yaml | kubectl apply -f -
         resource_blaster eventing eventing-core.yaml | kubectl apply -f -
-        case "${{ inputs.kingress }}" in
+        case "${INPUTS_KINGRESS}" in
           "istio")
             resource_blaster net-istio net-istio.yaml | kubectl apply -f -
             ;;
@@ -204,7 +214,7 @@ runs:
         kubectl patch configmap/config-network \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":{"ingress.class":"${{ inputs.kingress }}.ingress.networking.knative.dev","autocreateClusterDomainClaims":"true"}}'
+          --patch '{"data":{"ingress.class":"'"${INPUTS_KINGRESS}"'.ingress.networking.knative.dev","autocreateClusterDomainClaims":"true"}}'
 
         resource_blaster eventing in-memory-channel.yaml | kubectl apply -f -
         resource_blaster eventing mt-channel-broker.yaml | kubectl apply -f -
@@ -247,7 +257,7 @@ runs:
         while ! kubectl patch configmap/config-features \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":${{ inputs.serving-features }}}'
+          --patch '{"data":'"${INPUTS_SERVING_FEATURES}"'}'
         do
             echo Waiting for webhook to be up.
             sleep 1
@@ -256,7 +266,7 @@ runs:
         while ! kubectl patch configmap/config-defaults \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":${{ inputs.serving-defaults }}}'
+          --patch '{"data":'"${INPUTS_SERVING_DEFAULTS}"'}'
         do
             echo Waiting for webhook to be up.
             sleep 1
@@ -265,7 +275,7 @@ runs:
         while ! kubectl patch configmap/config-autoscaler \
           --namespace knative-serving \
           --type merge \
-          --patch '{"data":${{ inputs.serving-autoscaler }}}'
+          --patch '{"data":'"${INPUTS_SERVING_AUTOSCALER}"'}'
         do
             echo Waiting for webhook to be up.
             sleep 1
@@ -278,7 +288,7 @@ runs:
         kubectl wait -n knative-serving --timeout=90s --for=condition=Complete jobs --all
 
         # Add an output for the IP of the LoadBalancer to avoid folks assuming stuff.
-        case "${{ inputs.kingress }}" in
+        case "${INPUTS_KINGRESS}" in
           "istio")
             export IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath={.status.loadBalancer.ingress[0].ip})
             ;;

@@ -25,16 +25,20 @@ runs:
 
   steps:
     - name: Install Argo Workflows
-      shell: bash
       if: ${{ inputs.install-argo-cli-only != 'true' }}
+      env:
+        INPUTS_ARGO_VERSION: ${{ inputs.argo-version }}
+      shell: bash
       run: |
         kubectl create namespace argo
-        kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/install.yaml
+        kubectl apply -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/install.yaml"
 
     - name: Install cosign to validate argo-cli binaries
       uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
 
-    - shell: bash
+    - env:
+        INPUTS_ARGO_VERSION: ${{ inputs.argo-version }}
+      shell: bash
       run: |
         shopt -s expand_aliases
         if [ -z "$NO_COLOR" ]; then
@@ -49,16 +53,16 @@ runs:
         mkdir -p $HOME/.argo-cli
 
         shaprog() {
-          case ${{ runner.os }} in
+          case "${RUNNER_OS}" in
             Linux)
               sha256sum $1 | cut -d' ' -f1
               ;;
             macOS)
-              log_error "unsupported OS ${{ runner.os }}"
+              log_error "unsupported OS ${RUNNER_OS}"
               exit 1
               ;;
             *)
-              log_error "unsupported OS ${{ runner.os }}"
+              log_error "unsupported OS ${RUNNER_OS}"
               exit 1
               ;;
           esac
@@ -68,7 +72,7 @@ runs:
 
         pushd $HOME/.argo-cli > /dev/null
 
-        case "${{ runner.os }}-${{ runner.arch }}" in
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
             argo_cli_filename=argo-linux-amd64.gz
             ;;
@@ -78,16 +82,16 @@ runs:
             ;;
 
           *)
-            log_error "unsupported architecture ${{ runner.arch }}"
+            log_error "unsupported architecture ${RUNNER_ARCH}"
             exit 1
             ;;
         esac
 
-        log_info "Downloading argo-cli version '${{ inputs.argo-version }}' from https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/${argo_cli_filename}"
-        curl -sL https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/${argo_cli_filename} -o argo.gz
-        curl -sL https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cli-checksums.txt -o checksums.txt
+        log_info "Downloading argo-cli version '${INPUTS_ARGO_VERSION}' from https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/${argo_cli_filename}"
+        curl -sL "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/${argo_cli_filename}" -o argo.gz
+        curl -sL "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cli-checksums.txt" -o checksums.txt
 
-        cosign verify-blob  --signature https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cli-checksums.sig --key=https://github.com/argoproj/argo-workflows/releases/download/v${{ inputs.argo-version }}/argo-workflows-cosign.pub checksums.txt
+        cosign verify-blob  --signature "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cli-checksums.sig" --key="https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cosign.pub" checksums.txt
 
         log_info "Validating checksum for ${argo_cli_filename}"
         expected_checksum=$(grep "${argo_cli_filename}" checksums.txt | cut -d' ' -f1)

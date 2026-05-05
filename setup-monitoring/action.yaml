@@ -35,12 +35,15 @@ runs:
         version: ${{ inputs.helm-version }}
 
     - name: Install Prometheus
+      env:
+        INPUTS_MONITORING_NAMESPACE: ${{ inputs.monitoring-namespace }}
+        INPUTS_PROMETHEUS_CHART_VERSION: ${{ inputs.prometheus-chart-version }}
       shell: bash
       run: |
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-          --create-namespace -n ${{ inputs.monitoring-namespace }} \
+          --create-namespace -n "${INPUTS_MONITORING_NAMESPACE}" \
           -f "$GITHUB_ACTION_PATH/values.yaml" \
-          --version ${{ inputs.prometheus-chart-version }} \
+          --version "${INPUTS_PROMETHEUS_CHART_VERSION}" \
           --wait

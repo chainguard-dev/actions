@@ -17,13 +17,16 @@ runs:
   using: "composite"
   steps:
     - name: Configure DockerHub mirror
+      env:
+        INPUTS_MIRROR: ${{ inputs.mirror }}
       shell: bash
       run: |
         tmp=$(mktemp)
         if [ ! -f "/etc/docker/daemon.json" ]; then
-          # Create empty config if it doesn't exist 
+          # Create empty config if it doesn't exist
           echo "{}" | sudo tee /etc/docker/daemon.json
-        fi 
-        jq '."registry-mirrors" = ["https://${{ inputs.mirror }}"]' /etc/docker/daemon.json > "$tmp"
+        fi
+        jq --arg mirror "https://${INPUTS_MIRROR}" \
+          '."registry-mirrors" = [$mirror]' /etc/docker/daemon.json > "$tmp"
         sudo mv "$tmp" /etc/docker/daemon.json
         sudo systemctl restart docker.service

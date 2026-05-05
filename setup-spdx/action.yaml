@@ -39,12 +39,18 @@ runs:
   steps:
   - name: Install SPDX Tools
     if: ${{ inputs.download == 'true' }}
+    env:
+      INPUTS_SPDX_TOOLS_VERSION: ${{ inputs.spdx-tools-version }}
     shell: bash
     run: |
-      wget --progress=dot:giga https://github.com/spdx/tools-java/releases/download/v${{ inputs.spdx-tools-version }}/tools-java-${{ inputs.spdx-tools-version }}.zip
-      unzip tools-java-${{ inputs.spdx-tools-version }}.zip
+      wget --progress=dot:giga "https://github.com/spdx/tools-java/releases/download/v${INPUTS_SPDX_TOOLS_VERSION}/tools-java-${INPUTS_SPDX_TOOLS_VERSION}.zip"
+      unzip "tools-java-${INPUTS_SPDX_TOOLS_VERSION}.zip"
   - name: Validate SBOM
     if: ${{ inputs.sbom-path != '' }}
+    env:
+      INPUTS_SPDX_TOOLS_VERSION: ${{ inputs.spdx-tools-version }}
+      INPUTS_SBOM_PATH: ${{ inputs.sbom-path }}
+      INPUTS_SBOM_FORMAT: ${{ inputs.sbom-format }}
     shell: bash
     run: |
-      java -jar ./tools-java-${{ inputs.spdx-tools-version }}-jar-with-dependencies.jar Verify ${{ inputs.sbom-path }} ${{ inputs.sbom-format }}
+      java -jar "./tools-java-${INPUTS_SPDX_TOOLS_VERSION}-jar-with-dependencies.jar" Verify "${INPUTS_SBOM_PATH}" "${INPUTS_SBOM_FORMAT}"

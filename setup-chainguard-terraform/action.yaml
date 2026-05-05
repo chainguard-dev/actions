@@ -50,11 +50,14 @@ runs:
         echo "::warning file=action.yml,line=1,col=0,endColumn=1::Action is deprecated, check the readme"
 
     - id: default-audience
+      env:
+        INPUTS_AUDIENCE: ${{ inputs.audience }}
+        INPUTS_ENVIRONMENT: ${{ inputs.environment }}
       shell: bash
       run: |
-        AUDIENCE="${{ inputs.audience }}"
+        AUDIENCE="${INPUTS_AUDIENCE}"
         if [[ -z "${AUDIENCE}" ]]; then
-          AUDIENCE=issuer.${{ inputs.environment }}
+          AUDIENCE="issuer.${INPUTS_ENVIRONMENT}"
         fi
         echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
 

@@ -19,13 +19,15 @@ runs:
   steps:
     - name: Install Knative
       id: knative
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
           local FILE="${1}"
 
-          curl -L -s "https://github.com/knative/eventing/releases/download/knative-v${{ inputs.version }}/${FILE}" \
+          curl -L -s "https://github.com/knative/eventing/releases/download/knative-v${INPUTS_VERSION}/${FILE}" \
             | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'

@@ -14,7 +14,9 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - shell: bash
+  - env:
+      INPUTS_VERSION: ${{ inputs.version }}
+    shell: bash
     run: |
       set -ex
 
@@ -22,19 +24,19 @@ runs:
       # - if version is "tip", install from tip of main.
       # - if version is "latest-release", look up latest release.
       # - otherwise, install the specified version.
-      case ${{ inputs.version }} in
+      case "${INPUTS_VERSION}" in
       tip)
         echo "Installing gcsfuse using go get"
         go install github.com/googlecloudplatform/gcsfuse@main
         ;;
       latest-release)
-        tag=$(curl -s -u "username:${{ github.token }}" https://api.github.com/repos/GoogleCloudPlatform/gcsfuse/releases/latest | jq -r '.tag_name')
+        tag=$(curl -s -u "username:${GITHUB_TOKEN}" https://api.github.com/repos/GoogleCloudPlatform/gcsfuse/releases/latest | jq -r '.tag_name')
         ;;
       *)
-        tag="${{ inputs.version }}"
+        tag="${INPUTS_VERSION}"
       esac
 
-      os=${{ runner.os }}
+      os="${RUNNER_OS}"
 
       arch=$(uname -m)
       if [[ "$arch" =~ (aarch64|arm64) ]] ; then

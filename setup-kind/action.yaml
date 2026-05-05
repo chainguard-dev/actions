@@ -84,6 +84,8 @@ runs:
 
   steps:
     - name: Install KinD
+      env:
+        INPUTS_KIND_VERSION: ${{ inputs.kind-version }}
       shell: bash
       run: |
         # Disable swap otherwise memory enforcement does not work
@@ -104,15 +106,17 @@ runs:
         esac
 
         curl -Lo ./kind --fail --retry 5 --retry-delay 3 --retry-connrefused \
-          "https://github.com/kubernetes-sigs/kind/releases/download/v${{ inputs.kind-version }}/kind-$(uname)-${ARCH}"
+          "https://github.com/kubernetes-sigs/kind/releases/download/v${INPUTS_KIND_VERSION}/kind-$(uname)-${ARCH}"
 
         chmod +x ./kind
         sudo mv kind /usr/local/bin
 
     - name: Determine KinD Image
+      env:
+        INPUTS_K8S_VERSION: ${{ inputs.k8s-version }}
       shell: bash
       run: |
-        K8SVERSION=${{ inputs.k8s-version }}
+        K8SVERSION="${INPUTS_K8S_VERSION}"
         case ${K8SVERSION//v} in
           1.31.x)
             echo "KIND_IMAGE=kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b" >> $GITHUB_ENV
@@ -134,16 +138,23 @@ runs:
             echo "KIND_IMAGE=kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f" >> $GITHUB_ENV
             ;;
 
-          *) echo "Unsupported version: ${{ inputs.k8s-version }}"; exit 1 ;;
+          *) echo "Unsupported version: ${INPUTS_K8S_VERSION}"; exit 1 ;;
         esac
 
     - name: Determine Registry Host and Port
+      env:
+        INPUTS_REGISTRY_AUTHORITY: ${{ inputs.registry-authority }}
       shell: bash
       run: |
-        echo "REGISTRY_NAME=$(echo ${{ inputs.registry-authority }} | cut -d':' -f 1)" >> $GITHUB_ENV
-        echo "REGISTRY_PORT=$(echo ${{ inputs.registry-authority }} | cut -d':' -f 2)" >> $GITHUB_ENV
+        echo "REGISTRY_NAME=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 1)" >> $GITHUB_ENV
+        echo "REGISTRY_PORT=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 2)" >> $GITHUB_ENV
 
     - name: Create KinD Cluster
+      env:
+        INPUTS_KIND_WORKER_COUNT: ${{ inputs.kind-worker-count }}
+        INPUTS_SERVICE_ACCOUNT_ISSUER: ${{ inputs.service-account-issuer }}
+        INPUTS_CLUSTER_SUFFIX: ${{ inputs.cluster-suffix }}
+        INPUTS_FEATURE_GATES: ${{ inputs.feature-gates }}
       shell: bash
       run: |
         cat > kind.yaml <<EOF
@@ -157,8 +168,8 @@ runs:
             hostPath: /tmp/etcd
         EOF
 
-        if [ ${{ inputs.kind-worker-count }} -ne 0 ]; then
-          for node in {1..${{ inputs.kind-worker-count }}}; do
+        if [ "${INPUTS_KIND_WORKER_COUNT}" -ne 0 ]; then
+          for node in $(seq 1 "${INPUTS_KIND_WORKER_COUNT}"); do
           cat >> kind.yaml <<EOF
         - role: worker
           image: "${KIND_IMAGE}"
@@ -182,22 +193,22 @@ runs:
               name: config
             apiServer:
               extraArgs:
-                "service-account-issuer": "${{ inputs.service-account-issuer }}"
+                "service-account-issuer": "${INPUTS_SERVICE_ACCOUNT_ISSUER}"
                 "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
                 "service-account-jwks-uri": "https://kubernetes.default.svc/openid/v1/jwks"
                 "service-account-key-file": "/etc/kubernetes/pki/sa.pub"
         EOF
 
-        if [[ "${{ inputs.cluster-suffix }}" != "cluster.local" ]]; then
+        if [[ "${INPUTS_CLUSTER_SUFFIX}" != "cluster.local" ]]; then
         cat >> kind.yaml <<EOF
             networking:
-              dnsDomain: "${{ inputs.cluster-suffix }}"
+              dnsDomain: "${INPUTS_CLUSTER_SUFFIX}"
         EOF
         fi
 
-        if [ "${{ inputs.feature-gates }}" != "" ]; then
+        if [ "${INPUTS_FEATURE_GATES}" != "" ]; then
           echo "featureGates:" >> kind.yaml
-          IFS=',' read -ra feature_gates <<< "${{ inputs.feature-gates }}"
+          IFS=',' read -ra feature_gates <<< "${INPUTS_FEATURE_GATES}"
           for feature_gate in "${feature_gates[@]}"; do
             echo "  $feature_gate: true" >> kind.yaml
           done
@@ -287,13 +298,17 @@ runs:
         done
 
     - name: Setup Container Registry
+      env:
+        INPUTS_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        INPUTS_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+        INPUTS_REGISTRY_VOLUME: ${{ inputs.registry-volume }}
       shell: bash
       run: |
         # If username/password provided, create an htpasswd file which
         # will be mounted into the registry container
         EXTRA_ARGS=()
-        USERNAME="${{ inputs.registry-username }}"
-        PASSWORD="${{ inputs.registry-password }}"
+        USERNAME="${INPUTS_REGISTRY_USERNAME}"
+        PASSWORD="${INPUTS_REGISTRY_PASSWORD}"
         if [[ "${USERNAME}" != "" ]] && [[ "${PASSWORD}" != "" ]]; then
           AUTH_DIR="$(mktemp -d)"
           htpasswd -Bbn "${USERNAME}" "${PASSWORD}" > "${AUTH_DIR}/htpasswd"
@@ -305,7 +320,7 @@ runs:
           )
         fi
 
-        REGISTRY_VOLUME="${{ inputs.registry-volume}}"
+        REGISTRY_VOLUME="${INPUTS_REGISTRY_VOLUME}"
         if [[ "${REGISTRY_VOLUME}" != "" ]]; then
           EXTRA_ARGS+=(
             -v "${REGISTRY_VOLUME}:/var/lib/registry"

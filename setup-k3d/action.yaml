@@ -60,6 +60,8 @@ runs:
 
   steps:
     - name: Install k3d
+      env:
+        INPUTS_K3D_VERSION: ${{ inputs.k3d-version }}
       shell: bash
       run: |
         # Disable swap otherwise memory enforcement does not work
@@ -67,28 +69,35 @@ runs:
         sudo swapoff -a
         sudo rm -f /swapfile
 
-        curl -Lo ./k3d https://github.com/k3d-io/k3d/releases/download/v${{ inputs.k3d-version }}/k3d-$(uname)-amd64
+        curl -Lo ./k3d "https://github.com/k3d-io/k3d/releases/download/v${INPUTS_K3D_VERSION}/k3d-$(uname)-amd64"
         chmod +x ./k3d
         sudo mv k3d /usr/local/bin
 
     - name: Create k3d cluster
+      env:
+        INPUTS_WORKER_COUNT: ${{ inputs.worker-count }}
+        INPUTS_K3S_IMAGE: ${{ inputs.k3s-image }}
+        INPUTS_REGISTRY_HOST: ${{ inputs.registry-host }}
+        INPUTS_REGISTRY_PORT: ${{ inputs.registry-port }}
+        INPUTS_REGISTRY_MIRROR: ${{ inputs.registry-mirror }}
+        INPUTS_MAX_PODS: ${{ inputs.max-pods }}
       shell: bash
       run: |
         cat > k3d.yaml <<EOF
         apiVersion: k3d.io/v1alpha5
         kind: Simple
-        agents: ${{ inputs.worker-count }}
-        image: "${{ inputs.k3s-image }}"
+        agents: ${INPUTS_WORKER_COUNT}
+        image: "${INPUTS_K3S_IMAGE}"
         registries:
           create:
-            name: ${{ inputs.registry-host }}
+            name: ${INPUTS_REGISTRY_HOST}
             host: "0.0.0.0"
-            hostPort: "${{ inputs.registry-port }}"
+            hostPort: "${INPUTS_REGISTRY_PORT}"
           config: |
             mirrors:
-              "${{ inputs.registry-mirror }}":
+              "${INPUTS_REGISTRY_MIRROR}":
                 endpoint:
-                - "https://${{ inputs.registry-mirror }}"
+                - "https://${INPUTS_REGISTRY_MIRROR}"
         options:
           k3s:
             extraArgs:
@@ -112,7 +121,7 @@ runs:
               - arg: --kube-apiserver-arg=service-account-issuer=https://kubernetes.default.svc
                 nodeFilters:
                   - server:*
-              - arg: --kubelet-arg=max-pods=${{ inputs.max-pods }}
+              - arg: --kubelet-arg=max-pods=${INPUTS_MAX_PODS}
                 nodeFilters:
                   - server:*
                   - agent:*
@@ -124,7 +133,7 @@ runs:
         k3d cluster create --config k3d.yaml --timeout 5m
 
         # K3d sets this up for us in the node, but we're responsible for the host
-        sudo echo "127.0.0.1 ${{ inputs.registry-host }}" | sudo tee -a /etc/hosts
+        sudo echo "127.0.0.1 ${INPUTS_REGISTRY_HOST}" | sudo tee -a /etc/hosts
 
     - name: Expose OIDC Discovery
       shell: bash

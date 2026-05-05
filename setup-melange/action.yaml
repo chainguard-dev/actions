@@ -65,6 +65,8 @@ runs:
 
     - name: 'Install melange'
       if:
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
         set -ex
@@ -73,7 +75,7 @@ runs:
         # - if version is "tip", install from tip of main.
         # - if version is "latest-release", look up latest release.
         # - otherwise, install the specified version.
-        case ${{ inputs.version }} in
+        case "${INPUTS_VERSION}" in
         tip)
           TMP_CLONE_DIR="$(mktemp -d)"
           git clone https://github.com/chainguard-dev/melange "${TMP_CLONE_DIR}"
@@ -87,7 +89,7 @@ runs:
           # fetch the latest 20 releases, we need to filter by the ones that have assets.
           tmpf=$(mktemp)
           url="https://api.github.com/repos/chainguard-dev/melange/releases/latest"
-          curl --fail -s -u "username:${{ github.token }}" "$url" > "$tmpf" ||
+          curl --fail -s -u "username:${GITHUB_TOKEN}" "$url" > "$tmpf" ||
             { echo "error in github api call for latest melange release"; exit 1; }
           tag=$(jq -r .tag_name < "$tmpf") ||
             { echo "error parsing json from $url"; exit 1; }
@@ -101,7 +103,7 @@ runs:
           echo "Found 'latest-release' for melange is '$tag'"
           ;;
         *)
-          tag="${{ inputs.version }}"
+          tag="${INPUTS_VERSION}"
           ;;
         esac
 

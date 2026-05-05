@@ -17,8 +17,10 @@ runs:
 
   steps:
     - name: Install mink CLI
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
-        curl -L https://github.com/mattmoor/mink/releases/download/v${{ inputs.version }}/mink_${{ inputs.version }}_Linux_x86_64.tar.gz | tar xzf - -O mink_${{ inputs.version }}_Linux_x86_64/mink > ./mink
+        curl -L "https://github.com/mattmoor/mink/releases/download/v${INPUTS_VERSION}/mink_${INPUTS_VERSION}_Linux_x86_64.tar.gz" | tar xzf - -O "mink_${INPUTS_VERSION}_Linux_x86_64/mink" > ./mink
         chmod +x ./mink
         sudo mv mink /usr/local/bin
