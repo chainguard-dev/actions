@@ -50,7 +50,7 @@ runs:
   - name: Install Tools
     shell: bash
     run: |
-      cd "$(mktemp -d)"
+      cd "$(mktemp -d)" || exit
 
       echo '::group:: Installing boilerplate-check ... https://github.com/mattmoor/boilerplate-check'
       go install github.com/mattmoor/boilerplate-check/cmd/boilerplate-check@latest

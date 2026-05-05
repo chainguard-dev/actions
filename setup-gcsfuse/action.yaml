@@ -36,8 +36,6 @@ runs:
         tag="${INPUTS_VERSION}"
       esac
 
-      os="${RUNNER_OS}"
-
       arch=$(uname -m)
       if [[ "$arch" =~ (aarch64|arm64) ]] ; then
         arch=arm64
@@ -47,10 +45,10 @@ runs:
 
       if [[ ! -z ${tag} ]]; then
         echo "Installing gcsfuse using curl @ ${tag}"
-        v=$(echo $tag | sed 's/^v//')
+        v=$(echo "$tag" | sed 's/^v//')
         deb="gcsfuse_${v}_${arch}.deb"
-        curl -fLO https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/${tag}/${deb}
-        sudo apt install -y ./$deb && rm -rf ./$deb
+        curl -fLO "https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/${tag}/${deb}"
+        sudo apt install -y "./${deb}" && rm -rf "./${deb}"
       fi
 
       gcsfuse -v

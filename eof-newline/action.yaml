@@ -55,10 +55,10 @@ runs:
 
       for x in $LINT_FILES; do
         # Based on https://stackoverflow.com/questions/34943632/linux-check-if-there-is-an-empty-line-at-the-end-of-a-file
-        if [[ -f $x && ! ( -s "$x" && -z "$(tail -c 1 $x)" ) ]]; then
+        if [[ -f "$x" && ! ( -s "$x" && -z "$(tail -c 1 "$x")" ) ]]; then
           # We add 1 to `wc -l` here because of this limitation (from the man page):
           # Characters beyond the final <newline> character will not be included in the line count.
-          echo $x:$((1 + $(wc -l $x | tr -s ' ' | cut -d' ' -f 1))): Missing newline
+          echo "$x":$((1 + $(wc -l "$x" | tr -s ' ' | cut -d' ' -f 1))): Missing newline
         fi
       done | tee /dev/stderr |
       reviewdog -efm="%f:%l: %m" \

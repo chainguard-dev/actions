@@ -130,7 +130,7 @@ runs:
         INPUTS_ARCHS: ${{ inputs.archs }}
       shell: bash
       run: |
-        [ -n "${INPUTS_WORKDIR}" ] && cd "${INPUTS_WORKDIR}"
+        [ -n "${INPUTS_WORKDIR}" ] && { cd "${INPUTS_WORKDIR}" || exit; }
         [ -n "${INPUTS_REPOSITORY_APPEND}" ] && repoarg="--repository-append ${INPUTS_REPOSITORY_APPEND}"
         [ -n "${INPUTS_KEYRING_APPEND}" ] && keyringarg="--keyring-append ${INPUTS_KEYRING_APPEND}"
         [ -n "${INPUTS_WORKSPACE_DIR}" ] && workspacearg="--workspace-dir ${INPUTS_WORKSPACE_DIR}"
@@ -152,6 +152,8 @@ runs:
             repoarg="${repoarg} --repository-append ${INPUTS_REPOSITORY_PATH}"
             keyringarg="${keyringarg} --keyring-append ${INPUTS_SIGNING_KEY_PATH}.pub"
           fi
+          # Flag vars ($signarg, $repoarg, etc.) intentionally word-split into separate arguments
+          # shellcheck disable=SC2086
           sudo melange build $config --arch "${INPUTS_ARCHS}" --out-dir "${INPUTS_REPOSITORY_PATH}" $signarg $repoarg $keyringarg $workspacearg $indexarg $nsarg $cachearg $pipelinedirarg $gitcommitarg $gitrepoarg
         done
     - name: 'Fix local repository permissions'

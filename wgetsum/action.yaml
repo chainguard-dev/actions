@@ -47,10 +47,14 @@ runs:
 
         if [ -n "${OUTPUT}" ]; then
           echo "Downloading ${URL} to ${OUTPUT}..."
+          # WGET_FLAGS intentionally word-splits into multiple flags
+          # shellcheck disable=SC2086
           wget ${WGET_FLAGS} -O "${OUTPUT}" "${URL}"
           FILE_PATH="${OUTPUT}"
         else
           echo "Downloading ${URL}..."
+          # WGET_FLAGS intentionally word-splits into multiple flags
+          # shellcheck disable=SC2086
           wget ${WGET_FLAGS} "${URL}"
           FILE_PATH=$(basename "${URL}")
         fi

@@ -80,24 +80,24 @@ runs:
         function download_istioctl() {
           ISTIO_VERSION="${INPUTS_ISTIO_VERSION}"
           ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
-          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          case "$(echo "$RUNNER_ARCH" | awk '{print tolower($0)}')" in
           x86|x64) ARCH=amd64;;
           arm64)   ARCH=arm64;;
           *)
-            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
-            exit -1
+            echo "Unsupported RUNNER_ARCH \"${RUNNER_ARCH}\""
+            exit 1
             ;;
           esac
-          case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
+          case "$(echo "$RUNNER_OS" | awk '{print tolower($0)}')" in
           "linux") OS=linux;;
           "macos") OS=osx;;
           *)
-            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
-            exit -1
+            echo "Unsupported RUNNER_OS \"${RUNNER_OS}\""
+            exit 1
             ;;
           esac
           ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
-          wget $ISTIO_URL -O istio.tar.gz
+          wget "$ISTIO_URL" -O istio.tar.gz
           tar xzf istio.tar.gz
         }
 
@@ -149,7 +149,7 @@ runs:
 
         # We need opt-out sidecar injector for the namespaces existing before we install Istio.
         for x in $(kubectl get namespaces -oname); do
-          kubectl label $x istio-injection=disabled --overwrite
+          kubectl label "$x" istio-injection=disabled --overwrite
         done
 
         "./istio-${INPUTS_ISTIO_VERSION}/bin/istioctl" install --skip-confirmation -f istio-profile.yaml
@@ -165,7 +165,7 @@ runs:
           local FILE="${1}"
           local DOWNLOAD_URL="https://github.com/chainguard-dev/hakn/releases/download/v${INPUTS_VERSION}/${FILE}"
 
-          curl -L -s $DOWNLOAD_URL \
+          curl -L -s "$DOWNLOAD_URL" \
             | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
@@ -178,7 +178,7 @@ runs:
 
         # Wait for Knative to be ready (or webhook will reject services)
         for x in $(kubectl get deploy --namespace knative-serving -oname); do
-          kubectl rollout status --timeout 5m --namespace knative-serving $x
+          kubectl rollout status --timeout 5m --namespace knative-serving "$x"
         done
 
         while ! kubectl patch configmap/config-features \
@@ -211,9 +211,10 @@ runs:
         # Wait for hakn pods to be up and running
         kubectl wait -n knative-serving --timeout=5m --for=condition=ready pods --all
 
-        export IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath={.status.loadBalancer.ingress[0].ip})
-        echo LB IP: ${IP}
-        echo "load-balancer-ip=${IP}" >> $GITHUB_OUTPUT
+        IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath='{.status.loadBalancer.ingress[0].ip}')
+        export IP
+        echo "LB IP: ${IP}"
+        echo "load-balancer-ip=${IP}" >> "$GITHUB_OUTPUT"
 
         # Required for minio
         kubectl patch cm config-domain -n knative-serving \

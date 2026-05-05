@@ -38,7 +38,7 @@ runs:
         resource_blaster in-memory-channel.yaml | kubectl apply -f -
         resource_blaster mt-channel-broker.yaml | kubectl apply -f -
 
-        cat | kubectl apply -f - <<EOF
+        kubectl apply -f - <<EOF
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -67,6 +67,6 @@ runs:
 
         # Wait for Knative to be ready (or webhook will reject services)
         for x in $(kubectl get deploy --namespace knative-eventing -oname); do
-          kubectl rollout status --timeout 5m --namespace knative-eventing $x
+          kubectl rollout status --timeout 5m --namespace knative-eventing "$x"
         done
 

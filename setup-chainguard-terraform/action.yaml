@@ -59,7 +59,7 @@ runs:
         if [[ -z "${AUDIENCE}" ]]; then
           AUDIENCE="issuer.${INPUTS_ENVIRONMENT}"
         fi
-        echo "audience=${AUDIENCE}" >> $GITHUB_OUTPUT
+        echo "audience=${AUDIENCE}" >> "$GITHUB_OUTPUT"
 
     - uses: chainguard-dev/setup-chainctl@2cddd35a2f120d9973e58094dc6878c93cf58c28 # v0.5.1
       with:

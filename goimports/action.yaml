@@ -28,7 +28,7 @@ runs:
     env:
       GO111MODULE: on
     run: |
-      cd $(mktemp -d)
+      cd "$(mktemp -d)" || exit
       go install golang.org/x/tools/cmd/goimports@latest
 
   - name: goimports
@@ -42,12 +42,14 @@ runs:
 
       for subdir in ${DIRS}; do
         echo "::subdir:: $subdir"
-        pushd $subdir
+        pushd "$subdir" || exit
 
         # We limit the depth to 3 mostly to avoid go.mod files that get pulled into `third_party` like some hashicorp repos.
         for dir in $(find . -type d \( -path "*/third_party" -o -path "*/testdata" -o -path "*/.terraform" \) -prune -o -name go.mod -exec dirname {} \;| sort ); do
           echo "::group:: $dir"
-          pushd $dir
+          pushd "$dir" || exit
+          # find output intentionally word-splits into separate file arguments
+          # shellcheck disable=SC2046
           goimports -local="${INPUTS_LOCAL}" -w \
             $(find . \
             -path './vendor' -prune \
@@ -57,11 +59,11 @@ runs:
             -o -name '*.pb.gw.go' -prune \
             -o -name 'wire_gen.go' -prune \
             -o -type f -name '*.go' -print)
-          popd
+          popd || exit
           echo ::endgroup::
         done
 
-        popd
+        popd || exit
         echo ::endsubdir::
       done
 

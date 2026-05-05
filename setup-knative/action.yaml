@@ -101,16 +101,16 @@ runs:
 
           # If latest specified, fetch that instead. Note that this can vary
           # between versions, so have to fetch for each component.
-          if [ "${REPO}" == "serving" -a "${INPUTS_SERVING_VERSION}" != "" ]; then
+          if [ "${REPO}" == "serving" ] && [ "${INPUTS_SERVING_VERSION}" != "" ]; then
             REAL_KNATIVE_VERSION="knative-v${INPUTS_SERVING_VERSION}"
-          elif [ "${REPO}" == "eventing" -a "${INPUTS_EVENTING_VERSION}" != "" ]; then
+          elif [ "${REPO}" == "eventing" ] && [ "${INPUTS_EVENTING_VERSION}" != "" ]; then
             REAL_KNATIVE_VERSION="knative-v${INPUTS_EVENTING_VERSION}"
           elif [ "${INPUTS_VERSION}" == "latest" ]; then
-            REAL_KNATIVE_VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | sort -V | tail -1)
+            REAL_KNATIVE_VERSION=$(git ls-remote --tags --refs "https://github.com/knative/${REPO}" | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | sort -V | tail -1)
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
           elif [[ "${INPUTS_VERSION}" == *".x" ]]; then
             INPUT=$(echo "${INPUTS_VERSION}" | sed 's/.x//g')
-            VERSION=$(git ls-remote --tags --refs https://github.com/knative/${REPO} | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep ${INPUT} | sort -V | tail -1)
+            VERSION=$(git ls-remote --tags --refs "https://github.com/knative/${REPO}" | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep "${INPUT}" | sort -V | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
             REAL_KNATIVE_VERSION="knative-v${INPUTS_VERSION}"
@@ -129,24 +129,24 @@ runs:
         function download_istioctl() {
           ISTIO_VERSION="${INPUTS_ISTIO_VERSION}"
           ISTIO_BASE_URL="https://github.com/istio/istio/releases/download"
-          case "$(echo $RUNNER_ARCH | awk '{print tolower($0)}')" in
+          case "$(echo "$RUNNER_ARCH" | awk '{print tolower($0)}')" in
           x86|x64) ARCH=amd64;;
           arm64)   ARCH=arm64;;
           *)
-            echo Unsupported RUNNER_ARCH \"$RUNNER_ARCH\"
-            exit -1
+            echo "Unsupported RUNNER_ARCH \"${RUNNER_ARCH}\""
+            exit 1
             ;;
           esac
-          case "$(echo $RUNNER_OS | awk '{print tolower($0)}')" in
+          case "$(echo "$RUNNER_OS" | awk '{print tolower($0)}')" in
           "linux") OS=linux;;
           "macos") OS=osx;;
           *)
-            echo Unsupported RUNNER_OS \"$RUNNER_OS\"
-            exit -1
+            echo "Unsupported RUNNER_OS \"${RUNNER_OS}\""
+            exit 1
             ;;
           esac
           ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
-          wget -v $ISTIO_URL -O istio.tar.gz
+          wget -v "$ISTIO_URL" -O istio.tar.gz
           tar xvzf istio.tar.gz
         }
 
@@ -219,7 +219,7 @@ runs:
         resource_blaster eventing in-memory-channel.yaml | kubectl apply -f -
         resource_blaster eventing mt-channel-broker.yaml | kubectl apply -f -
 
-        cat | kubectl apply -f - <<EOF
+        kubectl apply -f - <<EOF
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -248,10 +248,10 @@ runs:
 
         # Wait for Knative to be ready (or webhook will reject services)
         for x in $(kubectl get deploy --namespace knative-serving -oname); do
-          kubectl rollout status --timeout 5m --namespace knative-serving $x
+          kubectl rollout status --timeout 5m --namespace knative-serving "$x"
         done
         for x in $(kubectl get deploy --namespace knative-eventing -oname); do
-          kubectl rollout status --timeout 5m --namespace knative-eventing $x
+          kubectl rollout status --timeout 5m --namespace knative-eventing "$x"
         done
 
         while ! kubectl patch configmap/config-features \
@@ -290,11 +290,12 @@ runs:
         # Add an output for the IP of the LoadBalancer to avoid folks assuming stuff.
         case "${INPUTS_KINGRESS}" in
           "istio")
-            export IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath={.status.loadBalancer.ingress[0].ip})
+            IP=$(kubectl get svc -n istio-system istio-ingressgateway -ojsonpath='{.status.loadBalancer.ingress[0].ip}')
             ;;
           "kourier")
-            export IP=$(kubectl get svc -n kourier-system kourier -ojsonpath={.status.loadBalancer.ingress[0].ip})
+            IP=$(kubectl get svc -n kourier-system kourier -ojsonpath='{.status.loadBalancer.ingress[0].ip}')
             ;;
         esac
+        export IP
         echo "LB IP: ${IP}"
         echo "load-balancer-ip=${IP}" >> "$GITHUB_OUTPUT"

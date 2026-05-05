@@ -18,7 +18,7 @@ runs:
           "CONFLUENCE_ROOT"
           "CONFLUENCE_LABEL"
         )
-        for v in ${required_env_vars[@]}; do
+        for v in "${required_env_vars[@]}"; do
           if [[ "${!v}" == "" ]]; then
             echo "Error: the following environment variable is required: ${v}"
             exit 1
@@ -32,7 +32,7 @@ runs:
         set -x
 
         # Enter the directory containing the checkout of this action
-        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)"
+        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)" || exit
 
         # Build the binary
         go build -o bin/hugo2confluence .

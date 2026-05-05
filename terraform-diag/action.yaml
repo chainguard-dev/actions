@@ -38,7 +38,8 @@ runs:
         jq -r 'select(.["@level"]=="error") | ("::group::" + .diagnostic.address + ": " + .diagnostic.summary + "\n" + .diagnostic.detail + "\n::endgroup::")' "${INPUTS_JSON_FILE}" || true
         jq -r 'select(.["@level"]=="error") | ("::error file=" + .diagnostic.range.filename + ",line=" + (.diagnostic.range.start.line | tostring) + ",endLine=" + (.diagnostic.range.end.line | tostring) + ",title=" + .diagnostic.summary + "::" + .diagnostic.address)' "${INPUTS_JSON_FILE}" || true
 
-        export MARKDOWN="$(jq -r 'select(.["@level"]=="error") | "`" + .diagnostic.address + "`: " + .diagnostic.summary + "\n"' "${INPUTS_JSON_FILE}")"
+        MARKDOWN="$(jq -r 'select(.["@level"]=="error") | "`" + .diagnostic.address + "`: " + .diagnostic.summary + "\n"' "${INPUTS_JSON_FILE}")"
+        export MARKDOWN
 
         echo "${MARKDOWN}"
 

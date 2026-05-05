@@ -60,7 +60,7 @@ runs:
         # Modified files
         if [[ $(git diff-index --name-only HEAD --) ]]; then
             for x in $(git diff-index --name-only HEAD --); do
-              echo "::error file=$x::Please run ${INPUTS_FIXUP_COMMAND}.%0A$(git diff $x | urlencode)"
+              echo "::error file=$x::Please run ${INPUTS_FIXUP_COMMAND}.%0A$(git diff "$x" | urlencode)"
             done
             echo "${GITHUB_REPOSITORY} is incorrectly formatted. Please run ${INPUTS_FIXUP_COMMAND}."
             exit 1

@@ -140,4 +140,6 @@ runs:
         echo "shellscripts=$shellscripts"
         chmod u+x "$shellscripts"
 
+        # INCLUDE_PATHS intentionally word-splits paths; subcommand set via env: block (not visible to shellcheck)
+        # shellcheck disable=SC2086,SC2154
         "$shellscripts" "$subcommand" ${INCLUDE_PATHS}

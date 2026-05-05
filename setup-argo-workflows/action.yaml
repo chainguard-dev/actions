@@ -50,12 +50,12 @@ runs:
         fi
         set -e
 
-        mkdir -p $HOME/.argo-cli
+        mkdir -p "$HOME/.argo-cli"
 
         shaprog() {
           case "${RUNNER_OS}" in
             Linux)
-              sha256sum $1 | cut -d' ' -f1
+              sha256sum "$1" | cut -d' ' -f1
               ;;
             macOS)
               log_error "unsupported OS ${RUNNER_OS}"
@@ -70,7 +70,7 @@ runs:
 
         trap "popd >/dev/null" EXIT
 
-        pushd $HOME/.argo-cli > /dev/null
+        pushd "$HOME/.argo-cli" > /dev/null
 
         case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)
