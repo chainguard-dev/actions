@@ -35,11 +35,11 @@ runs:
           esac
         }
 
-        terraform_docs_version='v0.20.0'
-        terraform_docs_linux_amd64_sha='34ae01772412bb11474e6718ea62113e38ff5964ee570a98c69fafe3a6dff286'
-        terraform_docs_linux_arm64_sha='371b4ed983781d1efdd8f7de06264baac41b1d80927f7fd718c405a303d863a0'
-        terraform_docs_darwin_amd64_sha='8c7ea42429d7f5e3dae3de32f3873fde0419332932549147f40916d3f613b8f7'
-        terraform_docs_darwin_arm64_sha='8723013cfe0369c389f4e6cb6e3cfca1aebaefd67871e349e7547f2201564dad'
+        terraform_docs_version='v0.23.0'
+        terraform_docs_linux_amd64_sha='80b8cd1d08b44e1182a39177adafc6901650a22e0a7f52cfeffcdbd44e8b0938'
+        terraform_docs_linux_arm64_sha='f3be6f09fb0913c752b78480fac1eb4916e9ee50da7e3eb0bdaa356d80ed16b5'
+        terraform_docs_darwin_amd64_sha='b47e2087d558df3bd79b7ae67983b310d2e3db8c7b6dcd543249a757b48ed4c3'
+        terraform_docs_darwin_arm64_sha='2a91629a37392f545a96c63d69e2c98822cd69f284e81e7dab2e30b15d2911a4'
         terraform_docs_executable_name=terraform-docs
 
         trap "popd >/dev/null" EXIT
