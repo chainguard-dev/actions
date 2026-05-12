@@ -33,6 +33,13 @@ This action spins up a KinD cluster with a handful of useful knobs exposed.
     # For example, InPlacePodVerticalScaling,HPAScaleToZero.
     # Optional.
     feature-gates: InPlacePodVerticalScaling,HPAScaleToZero
+    # Enable KVM bind-mounts /dev/kvm into each KinD worker node
+    # container so pods scheduled there can use KVM-accelerated QEMU.
+    # The host's /dev/kvm must already be readable/writable by docker
+    # (typically via a udev rule the workflow installs before this
+    # step).
+    # Optional, defaults to false.
+    enable-kvm: false
 ```
 
 ## Scenarios

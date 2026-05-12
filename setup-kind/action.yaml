@@ -73,6 +73,23 @@ inputs:
     required: false
     default: ""
 
+  enable-kvm:
+    description: |
+      When set to "true", bind-mount /dev/kvm from the host into each
+      KinD worker node container so pods scheduled there can use it
+      (e.g. to run QEMU with KVM acceleration).
+
+      Requires that /dev/kvm exists and is accessible to the docker
+      daemon on the host (typically the workflow installs a udev rule
+      that opens the device up — see the comment in
+      https://github.blog/changelog/2023-02-23-hardware-accelerated-android-virtualization-on-actions-windows-and-linux-larger-hosted-runners/).
+      A device-plugin advertising the resource (e.g.
+      generic-device-plugin with --domain set) is what makes /dev/kvm
+      available to pods that request it — this action only handles
+      surfacing the device into the worker nodes.
+    required: false
+    default: "false"
+
 outputs:
   kind-start-time:
     description: |
@@ -157,6 +174,7 @@ runs:
         INPUTS_SERVICE_ACCOUNT_ISSUER: ${{ inputs.service-account-issuer }}
         INPUTS_CLUSTER_SUFFIX: ${{ inputs.cluster-suffix }}
         INPUTS_FEATURE_GATES: ${{ inputs.feature-gates }}
+        INPUTS_ENABLE_KVM: ${{ inputs.enable-kvm }}
       shell: bash
       run: |
         cat > kind.yaml <<EOF
@@ -172,10 +190,20 @@ runs:
 
         if [ "${INPUTS_KIND_WORKER_COUNT}" -ne 0 ]; then
           for node in $(seq 1 "${INPUTS_KIND_WORKER_COUNT}"); do
-          cat >> kind.yaml <<EOF
+            cat >> kind.yaml <<EOF
         - role: worker
           image: "${KIND_IMAGE}"
         EOF
+            # When enable-kvm=true, surface /dev/kvm from the host into
+            # the worker node container so pods scheduled here can use
+            # KVM-accelerated QEMU.
+            if [[ "${INPUTS_ENABLE_KVM}" == "true" ]]; then
+              cat >> kind.yaml <<EOF
+          extraMounts:
+          - containerPath: /dev/kvm
+            hostPath: /dev/kvm
+        EOF
+            fi
           done
         fi
 
