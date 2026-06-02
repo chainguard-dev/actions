@@ -69,7 +69,8 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all tags and branches
           token: ${{ steps.octo-sts.outputs.token }}
-          persist-credentials: false
+          # persist-credentials is required to allow git-tag action to fetch tags and push the new tag back to the repo
+          persist-credentials: true
 
       - name: Check if any changes since last tag
         id: check
