@@ -77,7 +77,7 @@ runs:
         sudo mv semver /usr/local/bin/
 
     # Configure gitsign for signed commits
-    - uses: chainguard-dev/actions/setup-gitsign@bb3c0f74c514e0b21e0e354f519d7fcee9cac864 # v1.6.20
+    - uses: chainguard-dev/actions/setup-gitsign@05fbd381f7c158bd33c9bbf3a28f67852269fdf8 # v1.6.21
       if: ${{ inputs.use-gitsign == 'true' }}
 
     - name: Bump the version or used the forced version
