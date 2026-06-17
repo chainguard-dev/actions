@@ -28,6 +28,9 @@ runs:
             macOS)
               shasum -a256 "$1" | cut -d' ' -f1
               ;;
+            Windows)
+              sha256sum "$1" | cut -d' ' -f1
+              ;;
             *)
               log_error "unsupported OS ${RUNNER_OS}"
               exit 1
@@ -35,11 +38,13 @@ runs:
           esac
         }
 
-        terraform_docs_version='v0.23.0'
-        terraform_docs_linux_amd64_sha='80b8cd1d08b44e1182a39177adafc6901650a22e0a7f52cfeffcdbd44e8b0938'
-        terraform_docs_linux_arm64_sha='f3be6f09fb0913c752b78480fac1eb4916e9ee50da7e3eb0bdaa356d80ed16b5'
-        terraform_docs_darwin_amd64_sha='b47e2087d558df3bd79b7ae67983b310d2e3db8c7b6dcd543249a757b48ed4c3'
-        terraform_docs_darwin_arm64_sha='2a91629a37392f545a96c63d69e2c98822cd69f284e81e7dab2e30b15d2911a4'
+        terraform_docs_version='v0.24.0'
+        terraform_docs_linux_amd64_sha='9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3'
+        terraform_docs_linux_arm64_sha='d12bd7b73c1fc9c64efc79f8157dd713dabd559f1ecf3cfc0f42e32279a155fd'
+        terraform_docs_darwin_amd64_sha='3c3f7f18f908457fd1209cbe341418f7f6bae78c08126cfbe8de0d1b06aa8781'
+        terraform_docs_darwin_arm64_sha='f6b114f4b032f3f9202ab6c23bfd28c3c8e68aeeb8a8f12fc118bf2073081d71'
+        terraform_docs_windows_amd64_sha='afc02cbdf63726d3e5fb26a077ca1f24acd4820d7e44c21b03a3e030f9266490'
+        terraform_docs_windows_arm64_sha='1168c12929531ac9132c97fff794ef531ebb2a5b54c41870b9e19911950b6fd4'
         terraform_docs_executable_name=terraform-docs
 
         trap "popd >/dev/null" EXIT
@@ -67,6 +72,18 @@ runs:
             terraform_docs_sha=${terraform_docs_darwin_arm64_sha}
             ;;
 
+          Windows-X64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-windows-amd64.zip
+            terraform_docs_sha=${terraform_docs_windows_amd64_sha}
+            terraform_docs_executable_name=terraform-docs.exe
+            ;;
+
+          Windows-ARM64)
+            terraform_docs_filename=terraform-docs-${terraform_docs_version}-windows-arm64.zip
+            terraform_docs_sha=${terraform_docs_windows_arm64_sha}
+            terraform_docs_executable_name=terraform-docs.exe
+            ;;
+
           *)
             log_error "unsupported architecture ${RUNNER_ARCH}"
             exit 1
@@ -81,13 +98,20 @@ runs:
           log_error "Unable to validate terraform-docs version: '${terraform_docs_version}': want ${expected_tf_docs_version_digest}, got ${shaDownloaded}"
           exit 1
         fi
-        tar -xzf ${terraform_docs_filename} --strip-components=0
+        case "${terraform_docs_filename}" in
+          *.zip)
+            unzip -o "${terraform_docs_filename}"
+            ;;
+          *)
+            tar -xzf ${terraform_docs_filename} --strip-components=0
+            ;;
+        esac
         chmod +x ${terraform_docs_executable_name}
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: printf '%s\n' "$HOME/.terraform-docs" >> "$GITHUB_PATH"
+      run: printf '%s\n' "$HOME/.terraform-docs" >> "$GITHUB_PATH" # zizmor: ignore[github-env]
       shell: bash
 
     - if: ${{ runner.os == 'Windows' }}
-      run: echo "$HOME/.terraform-docs" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      run: echo "$HOME/.terraform-docs" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append # zizmor: ignore[github-env]
       shell: pwsh
