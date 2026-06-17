@@ -12,7 +12,7 @@ inputs:
   default-terraform-version:
     description: 'The default version of terraform to use if the version file is not found.'
     required: false
-    default: '1.11.4'
+    default: '1.15.6'
   terraform-wrapper:
     description: 'Whether or not to install a wrapper to wrap subsequent calls of the `terraform` binary and expose its STDOUT, STDERR, and exit code as outputs named `stdout`, `stderr`, and `exitcode` respectively. Defaults to `true`.'
     required: false
