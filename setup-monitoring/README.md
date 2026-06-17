@@ -26,6 +26,6 @@ You need a running KinD cluster before using this action
 steps:
 - uses: chainguard-dev/actions/setup-kind@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
   with:
-    k8s-version: 1.22.x
+    k8s-version: 1.36.x
 - uses: chainguard-dev/actions/setup-monitoring@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
 ```
