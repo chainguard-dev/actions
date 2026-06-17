@@ -17,6 +17,7 @@ permissions: {}
 jobs:
   test_setup_monitoring:
     runs-on: 'ubuntu-latest'
+    timeout-minutes: 25
 
     permissions:
       contents: read
@@ -44,6 +45,18 @@ jobs:
           kubectl get pods -n monitoring-system
           kubectl wait --for=condition=ready pod \
             --all -n monitoring-system --timeout=5m
+
+      - name: Dump monitoring namespace on failure
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -n monitoring-system -o wide || true
+          kubectl get events -n monitoring-system --sort-by=.lastTimestamp | tail -40 || true
+          for p in $(kubectl get pods -n monitoring-system \
+            --field-selector=status.phase!=Running -o name 2>/dev/null); do
+            echo "::group:: describe $p"
+            kubectl describe -n monitoring-system "$p" || true
+            echo "::endgroup::"
+          done
 
       - name: Collect diagnostics
         if: ${{ failure() }}
