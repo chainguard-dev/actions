@@ -10,9 +10,9 @@ inputs:
 
   argo-version:
     description: |
-      The version of Argo Workflows to use in the form: 3.6.10
+      The version of Argo Workflows to use in the form: 4.0.6
     required: true
-    default: 3.6.10
+    default: 4.0.6
   install-argo-cli-only:
     description: |
       If true, only the Argo CLI will be installed, and the Argo Workflows
