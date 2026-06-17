@@ -9,15 +9,15 @@ description: |
 inputs:
   helm-version:
     description: |
-      Helm version to install (default v3.19.0)
+      Helm version to install (default v4.2.1)
     required: false
-    default: v3.19.0
+    default: v4.2.1
 
   prometheus-chart-version:
     description: |
-      kube-prometheus-stack helm chart version to be installed (default 34.5.1)
+      kube-prometheus-stack helm chart version to be installed (default 86.2.3)
     required: false
-    default: 34.5.1
+    default: 86.2.3
 
   monitoring-namespace:
     description: |
