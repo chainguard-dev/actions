@@ -17,7 +17,7 @@ inputs:
     description: |
       The exact version of k3d to use in the form: x.y.z
     required: false
-    default: 5.5.1
+    default: 5.9.0
 
   worker-count:
     description: |
