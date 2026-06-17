@@ -1,0 +1,50 @@
+name: test-setup-monitoring
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'setup-monitoring/**'
+      - '.github/workflows/test-setup-monitoring.yaml'
+
+concurrency:
+  group: test-setup-monitoring-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test_setup_monitoring:
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: read
+
+    name: Install monitoring stack and verify it comes up
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit # TODO(harden-runner): switch to block once IPv6 multicast (ff02::1) is supported (kind uses Docker container networking)
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: setup-kind
+        uses: ./setup-kind
+
+      - name: setup-monitoring
+        uses: ./setup-monitoring
+
+      - name: Check install!
+        run: |
+          helm status prometheus -n monitoring-system
+          kubectl get pods -n monitoring-system
+          kubectl wait --for=condition=ready pod \
+            --all -n monitoring-system --timeout=5m
+
+      - name: Collect diagnostics
+        if: ${{ failure() }}
+        uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23
