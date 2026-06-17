@@ -23,7 +23,7 @@ inputs:
     description: |
       The exact version of KinD to use in the form: 0.30.0
     required: true
-    default: 0.31.0
+    default: 0.32.0
 
   kind-worker-count:
     description: |
@@ -258,7 +258,7 @@ runs:
     - name: Install metallb
       shell: bash
       run: |
-        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.5/config/manifests/metallb-native.yaml
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.16.0/config/manifests/metallb-native.yaml
         kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
 
         # Wait for metallb to be ready (or webhook will reject CRDs)
