@@ -13,7 +13,7 @@ inputs:
       Knative, the components are out of sync, so to work around that you can
       specify "latest" and it will fetch the latest ones for all the components.
     required: true
-    default: 1.15.0
+    default: 1.22.1
 
   serving-version:
     description: |
@@ -29,9 +29,9 @@ inputs:
 
   istio-version:
     description: |
-      The version of Istio to install, e.g. 1.17.5
+      The version of Istio to install, e.g. 1.30.1
     required: false
-    default: 1.17.5
+    default: 1.30.1
 
   kingress:
     description: |
