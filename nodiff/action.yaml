@@ -70,8 +70,13 @@ runs:
     - name: Generate patch
       if: failure()
       shell: bash
+      # Run git inside the checkout (honoring inputs.path), since the repo may
+      # live in a subdirectory of the workspace (e.g. a GOPATH-style layout).
+      # Write the patch to the workspace root so the upload step's relative
+      # path resolves regardless of where the repo was checked out.
+      working-directory: ${{ github.workspace }}/${{ inputs.path }}
       run: |
-        git diff HEAD > diff.patch
+        git diff HEAD > "${GITHUB_WORKSPACE}/diff.patch"
     - name: Upload patch
       if: failure()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
