@@ -46,5 +46,8 @@ runs:
           --create-namespace -n "${INPUTS_MONITORING_NAMESPACE}" \
           -f "$GITHUB_ACTION_PATH/values.yaml" \
           --version "${INPUTS_PROMETHEUS_CHART_VERSION}" \
-          --wait \
+          `# Helm 4 made --wait a WaitStrategy; bare --wait selects the new` \
+          `# "watcher" strategy which ignores --timeout, so request the` \
+          `# Helm 3-equivalent "legacy" strategy explicitly.` \
+          --wait=legacy \
           --timeout 10m
