@@ -1,0 +1,53 @@
+name: test-setup-knative-eventing
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'setup-knative-eventing/**'
+      - '.github/workflows/test-setup-knative-eventing.yaml'
+
+concurrency:
+  group: test-setup-knative-eventing-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test_setup_knative_eventing:
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: read
+
+    name: Install Knative Eventing and verify it comes up
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit # TODO(harden-runner): switch to block once IPv6 multicast (ff02::1) is supported (kind uses Docker container networking)
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: setup-kind
+        uses: ./setup-kind
+        with:
+          # Knative Eventing >= 1.22 requires Kubernetes >= 1.34.
+          k8s-version: 1.35.x
+
+      - name: setup-knative-eventing
+        uses: ./setup-knative-eventing
+
+      - name: Check install!
+        run: |
+          kubectl get pods -n knative-eventing
+          for x in $(kubectl get deploy --namespace knative-eventing -oname); do
+            kubectl rollout status --timeout 5m --namespace knative-eventing "$x"
+          done
+
+      - name: Collect diagnostics
+        if: ${{ failure() }}
+        uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23

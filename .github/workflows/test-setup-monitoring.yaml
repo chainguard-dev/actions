@@ -1,0 +1,66 @@
+name: test-setup-monitoring
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'setup-monitoring/**'
+      - '.github/workflows/test-setup-monitoring.yaml'
+
+concurrency:
+  group: test-setup-monitoring-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test_setup_monitoring:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+
+    name: Install monitoring stack and verify it comes up
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit # TODO(harden-runner): switch to block once IPv6 multicast (ff02::1) is supported (kind uses Docker container networking)
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: setup-kind
+        uses: ./setup-kind
+
+      - name: setup-monitoring
+        uses: ./setup-monitoring
+
+      - name: Check install!
+        run: |
+          helm status prometheus -n monitoring-system
+          kubectl get pods -n monitoring-system
+          kubectl wait --for=condition=ready pod \
+            --all -n monitoring-system --timeout=5m
+
+      - name: Dump monitoring namespace on failure
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -n monitoring-system -o wide || true
+          kubectl get events -n monitoring-system --sort-by=.lastTimestamp | tail -40 || true
+          # Note: a CrashLoopBackOff pod still has phase=Running, so describe
+          # and log every pod rather than filtering on phase.
+          for p in $(kubectl get pods -n monitoring-system -o name 2>/dev/null); do
+            echo "::group:: $p"
+            kubectl describe -n monitoring-system "$p" || true
+            kubectl logs -n monitoring-system "$p" --all-containers --tail=50 --previous 2>/dev/null \
+              || kubectl logs -n monitoring-system "$p" --all-containers --tail=50 || true
+            echo "::endgroup::"
+          done
+
+      - name: Collect diagnostics
+        if: ${{ failure() }}
+        uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23

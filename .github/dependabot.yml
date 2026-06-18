@@ -3,6 +3,8 @@ updates:
   - package-ecosystem: "github-actions"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 3
     directories:
       # / covers .github/workflows
       - "/"
@@ -36,3 +38,19 @@ updates:
       - "/wgetsum"
       - "/whereami"
       - "/wolfi-build-pkg"
+
+  - package-ecosystem: "npm"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3
+    directories:
+      - "/otel-export"
+
+  - package-ecosystem: "gomod"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3
+    directories:
+      - "/hugo2confluence"

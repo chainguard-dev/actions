@@ -10,9 +10,9 @@ inputs:
 
   argo-version:
     description: |
-      The version of Argo Workflows to use in the form: 3.6.10
+      The version of Argo Workflows to use in the form: 4.0.6
     required: true
-    default: 3.6.10
+    default: 4.0.6
   install-argo-cli-only:
     description: |
       If true, only the Argo CLI will be installed, and the Argo Workflows
@@ -31,7 +31,9 @@ runs:
       shell: bash
       run: |
         kubectl create namespace argo
-        kubectl apply -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/install.yaml"
+        # Use server-side apply: as of v4.x the Argo CRDs exceed the 262144-byte
+        # limit on the client-side "last-applied-configuration" annotation.
+        kubectl apply --server-side -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/install.yaml"
 
     - name: Install cosign to validate argo-cli binaries
       uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
