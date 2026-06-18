@@ -11,12 +11,17 @@ grafana:
   sidecar:
     dashboards:
       searchNamespace: ALL
-  plugins:
-    enabled: true
   plugins: []
   extraContainers: |
     - name: renderer
       image: docker.io/grafana/grafana-image-renderer:3.4.2
+      env:
+        - name: AUTH_TOKEN
+          value: monitoring-renderer-token
   env:
     GF_RENDERING_SERVER_URL: http://localhost:8081/render
     GF_RENDERING_CALLBACK_URL: http://localhost:3000/
+    # Modern Grafana refuses to start when an external renderer is configured
+    # and the renderer token is left at its default. Set a non-default value
+    # that matches the renderer container's AUTH_TOKEN above.
+    GF_RENDERING_RENDERER_TOKEN: monitoring-renderer-token

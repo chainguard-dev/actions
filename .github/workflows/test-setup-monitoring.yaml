@@ -51,10 +51,13 @@ jobs:
         run: |
           kubectl get pods -n monitoring-system -o wide || true
           kubectl get events -n monitoring-system --sort-by=.lastTimestamp | tail -40 || true
-          for p in $(kubectl get pods -n monitoring-system \
-            --field-selector=status.phase!=Running -o name 2>/dev/null); do
-            echo "::group:: describe $p"
+          # Note: a CrashLoopBackOff pod still has phase=Running, so describe
+          # and log every pod rather than filtering on phase.
+          for p in $(kubectl get pods -n monitoring-system -o name 2>/dev/null); do
+            echo "::group:: $p"
             kubectl describe -n monitoring-system "$p" || true
+            kubectl logs -n monitoring-system "$p" --all-containers --tail=50 --previous 2>/dev/null \
+              || kubectl logs -n monitoring-system "$p" --all-containers --tail=50 || true
             echo "::endgroup::"
           done
 
