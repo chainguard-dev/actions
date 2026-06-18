@@ -142,7 +142,7 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23
+      uses: chainguard-dev/actions/kind-diag@9978bf17926f53444b5eff45479954d94ec12e32 # v1.6.24
       with:
         artifact-name: logs.${{ matrix.k8s-version }}
 
@@ -214,7 +214,7 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23
+      uses: chainguard-dev/actions/kind-diag@9978bf17926f53444b5eff45479954d94ec12e32 # v1.6.24
       with:
         artifact-name: logs.kvm-available
 
@@ -277,6 +277,6 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@5f020827ba80ff5d64d45116542d0c733e8e7e71 # v1.6.23
+      uses: chainguard-dev/actions/kind-diag@9978bf17926f53444b5eff45479954d94ec12e32 # v1.6.24
       with:
         artifact-name: logs.kvm-unavailable
