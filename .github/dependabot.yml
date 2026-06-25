@@ -5,6 +5,10 @@ updates:
       interval: "daily"
     cooldown:
       default-days: 3
+    groups:
+      actions:
+        update-types:
+          - "patch"
     directories:
       # / covers .github/workflows
       - "/"
