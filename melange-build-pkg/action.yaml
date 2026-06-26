@@ -140,7 +140,7 @@ runs:
         [ -n "${INPUTS_GIT_COMMIT}" ] && gitcommitarg="--git-commit ${INPUTS_GIT_COMMIT}"
         [ -n "${INPUTS_GIT_REPO_URL}" ] && gitrepoarg="--git-repo-url ${INPUTS_GIT_REPO_URL}"
         "${INPUTS_EMPTY_WORKSPACE}" && workspacearg="$workspacearg --empty-workspace"
-        "${INPUTS_EMPTY_WORKSPACE}" || workspacearg="$workspacearg --source-dir ${INPUTS_SOURCE_DIR}/${INPUTS_WORKDIR}"
+        "${INPUTS_EMPTY_WORKSPACE}" || workspacearg="$workspacearg --source-dir ${INPUTS_SOURCE_DIR}"
         "${INPUTS_SIGN_WITH_KEY}" && signarg="--signing-key ${INPUTS_SIGNING_KEY_PATH}"
         "${INPUTS_UPDATE_INDEX}" || indexarg="--generate-index=false"
         melangeconfigs="${INPUTS_MULTI_CONFIG}"
