@@ -158,6 +158,7 @@ runs:
         done
     - name: 'Fix local repository permissions'
       env:
+        INPUTS_WORKDIR: ${{ inputs.workdir }}
         INPUTS_REPOSITORY_PATH: ${{ inputs.repository-path }}
       shell: bash
       run: |
