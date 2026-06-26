@@ -161,4 +161,5 @@ runs:
         INPUTS_REPOSITORY_PATH: ${{ inputs.repository-path }}
       shell: bash
       run: |
+        [ -n "${INPUTS_WORKDIR}" ] && { cd "${INPUTS_WORKDIR}" || exit; }
         sudo chown -R runner:runner "${INPUTS_REPOSITORY_PATH}"
