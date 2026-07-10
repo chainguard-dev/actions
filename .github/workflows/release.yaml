@@ -85,7 +85,7 @@ jobs:
           fi
 
       - name: Bump and push Git tag
-        uses: chainguard-dev/actions/git-tag@e1c4977ad9cb32b12c5b222ec0134a22bec60bd5 # v1.6.25
+        uses: chainguard-dev/actions/git-tag@f0be69916b439d0fcced2451b23d0f27cd46d545 # v1.6.26
         if: steps.check.outputs.bump == 'yes'
         with:
           token: ${{ steps.octo-sts.outputs.token }}
@@ -98,7 +98,7 @@ jobs:
 
       # to create a GH release and fill with the changelog
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         if: steps.check.outputs.bump == 'yes'
         with:
           distribution: goreleaser
