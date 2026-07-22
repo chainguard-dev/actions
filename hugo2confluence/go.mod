@@ -1,10 +1,10 @@
 module github.com/chainguard-dev/actions/hugo2confluence
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/gomarkdown/markdown v0.0.0-20260217112301-37c66b85d6ab
-	github.com/sethvargo/go-envconfig v1.3.1
+	github.com/sethvargo/go-envconfig v1.4.2
 	github.com/virtomize/confluence-go-api v1.5.0
 )
 
