@@ -52,7 +52,6 @@ jobs:
             api.github.com:443
             fulcio.sigstore.dev:443
             github.com:443
-            goreleaser.com:443
             octo-sts.dev:443
             raw.githubusercontent.com:443
             rekor.sigstore.dev:443
@@ -85,6 +84,7 @@ jobs:
           fi
 
       - name: Bump and push Git tag
+        id: tag
         uses: chainguard-dev/actions/git-tag@4d37df0d85a91f619edc34a8803323033cdcb124 # v1.6.27
         if: steps.check.outputs.bump == 'yes'
         with:
@@ -96,13 +96,13 @@ jobs:
           author: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
           committer: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
 
-      # to create a GH release and fill with the changelog
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-        if: steps.check.outputs.bump == 'yes'
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+      # Create the GH release with GitHub-generated notes using the
+      # runner-provisioned gh CLI: this step runs with a contents:write
+      # token, so it must not execute tooling resolved from a mutable
+      # external channel at run time.
+      - name: Create GitHub release
+        if: steps.check.outputs.bump == 'yes' && inputs.dry_run != true
         env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          GIT_TAG: ${{ steps.tag.outputs.git_tag }}
+        run: gh release create "$GIT_TAG" --generate-notes --verify-tag
