@@ -64,7 +64,7 @@ jobs:
           scope: ${{ github.repository }}
           identity: release
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # fetch all history for all tags and branches
           token: ${{ steps.octo-sts.outputs.token }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: Bump and push Git tag
         id: tag
-        uses: chainguard-dev/actions/git-tag@4d37df0d85a91f619edc34a8803323033cdcb124 # v1.6.27
+        uses: chainguard-dev/actions/git-tag@fabe4ed3f66ceb5f8ec86ed7ae6d0c945ca362fb # v1.6.28
         if: steps.check.outputs.bump == 'yes'
         with:
           token: ${{ steps.octo-sts.outputs.token }}
