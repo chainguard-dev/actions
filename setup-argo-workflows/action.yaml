@@ -19,6 +19,14 @@ inputs:
       controller will not be installed.
     required: false
     default: 'false'
+  install-cosign:
+    description: |
+      If 'false', skip the bundled cosign install and assume cosign is already
+      on PATH (provided by the caller). Use this when the caller installs cosign
+      itself — e.g. through its own retry-hardened wrapper — to avoid a second,
+      unretried cosign download. Defaults to 'true' (install cosign here).
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
@@ -31,11 +39,19 @@ runs:
       shell: bash
       run: |
         kubectl create namespace argo
+        # Fetch the manifest with curl (--fail + built-in --retry) rather than
+        # letting kubectl fetch the URL directly: a transient GitHub release-asset
+        # 504 has no retry when piped straight into kubectl, and flakes the apply.
+        curl --fail --location --silent --show-error \
+          --retry 5 --retry-delay 2 --retry-all-errors --retry-max-time 180 \
+          "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/install.yaml" \
+          -o install.yaml
         # Use server-side apply: as of v4.x the Argo CRDs exceed the 262144-byte
         # limit on the client-side "last-applied-configuration" annotation.
-        kubectl apply --server-side -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/install.yaml"
+        kubectl apply --server-side -n argo -f install.yaml
 
     - name: Install cosign to validate argo-cli binaries
+      if: ${{ inputs.install-cosign != 'false' }}
       uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
     - env:
@@ -51,6 +67,18 @@ runs:
           alias log_error="echo \"ERROR:\""
         fi
         set -e
+
+        # Hardened fetch. GitHub release assets intermittently return 504, and
+        # plain `curl -sL` writes the error-page body to the output file and
+        # exits 0 -- the failure then surfaces later as a bad checksum or a
+        # "PEM decoding failed" in cosign, far from its cause. --fail turns an
+        # HTTP error into a non-zero exit, and curl's built-in --retry rides out
+        # the blip. Every download below goes through this.
+        retry_fetch() {
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-delay 2 --retry-all-errors --retry-max-time 180 \
+            "$1" -o "$2"
+        }
 
         mkdir -p "$HOME/.argo-cli"
 
@@ -89,11 +117,19 @@ runs:
             ;;
         esac
 
-        log_info "Downloading argo-cli version '${INPUTS_ARGO_VERSION}' from https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/${argo_cli_filename}"
-        curl -sL "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/${argo_cli_filename}" -o argo.gz
-        curl -sL "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cli-checksums.txt" -o checksums.txt
+        base="https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}"
 
-        cosign verify-blob  --signature "https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cli-checksums.sig" --key="https://github.com/argoproj/argo-workflows/releases/download/v${INPUTS_ARGO_VERSION}/argo-workflows-cosign.pub" checksums.txt
+        log_info "Downloading argo-cli version '${INPUTS_ARGO_VERSION}' from ${base}/${argo_cli_filename}"
+        retry_fetch "${base}/${argo_cli_filename}" argo.gz
+        retry_fetch "${base}/argo-workflows-cli-checksums.txt" checksums.txt
+
+        # Pre-fetch the verify inputs through retry_fetch too. Passing URLs to
+        # `cosign verify-blob` lets cosign fetch them itself with no retry, so a
+        # blip here is the "PEM decoding failed" flake; download to local files
+        # first, then verify against those.
+        retry_fetch "${base}/argo-workflows-cli-checksums.sig" checksums.sig
+        retry_fetch "${base}/argo-workflows-cosign.pub" argo-workflows-cosign.pub
+        cosign verify-blob --signature checksums.sig --key argo-workflows-cosign.pub checksums.txt
 
         log_info "Validating checksum for ${argo_cli_filename}"
         expected_checksum=$(grep "${argo_cli_filename}" checksums.txt | cut -d' ' -f1)
