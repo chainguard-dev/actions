@@ -29271,10 +29271,10 @@ var Hook = { Collection: Collection$1 };
 // pkg/dist-src/defaults.js
 
 // pkg/dist-src/version.js
-var VERSION$9 = "0.0.0-development";
+var VERSION$a = "0.0.0-development";
 
 // pkg/dist-src/defaults.js
-var userAgent = `octokit-endpoint.js/${VERSION$9} ${getUserAgent()}`;
+var userAgent = `octokit-endpoint.js/${VERSION$a} ${getUserAgent()}`;
 var DEFAULTS = {
   method: "GET",
   baseUrl: "https://api.github.com",
@@ -30039,12 +30039,12 @@ class RequestError extends Error {
 // pkg/dist-src/index.js
 
 // pkg/dist-src/version.js
-var VERSION$8 = "10.0.8";
+var VERSION$9 = "10.0.8";
 
 // pkg/dist-src/defaults.js
 var defaults_default = {
   headers: {
-    "user-agent": `octokit-request.js/${VERSION$8} ${getUserAgent()}`
+    "user-agent": `octokit-request.js/${VERSION$9} ${getUserAgent()}`
   }
 };
 
@@ -30229,7 +30229,7 @@ var request = withDefaults$1(endpoint, defaults_default);
 // pkg/dist-src/index.js
 
 // pkg/dist-src/version.js
-var VERSION$7 = "0.0.0-development";
+var VERSION$8 = "0.0.0-development";
 
 // pkg/dist-src/error.js
 function _buildMessageForResponseErrors(data) {
@@ -30331,7 +30331,7 @@ function withDefaults(request2, newDefaults) {
 // pkg/dist-src/index.js
 withDefaults(request, {
   headers: {
-    "user-agent": `octokit-graphql.js/${VERSION$7} ${getUserAgent()}`
+    "user-agent": `octokit-graphql.js/${VERSION$8} ${getUserAgent()}`
   },
   method: "POST",
   url: "/graphql"
@@ -30396,7 +30396,7 @@ var createTokenAuth = function createTokenAuth2(token) {
   });
 };
 
-const VERSION$6 = "7.0.6";
+const VERSION$7 = "7.0.6";
 
 const noop = () => {
 };
@@ -30417,9 +30417,9 @@ function createLogger(logger = {}) {
   }
   return logger;
 }
-const userAgentTrail = `octokit-core.js/${VERSION$6} ${getUserAgent()}`;
+const userAgentTrail = `octokit-core.js/${VERSION$7} ${getUserAgent()}`;
 class Octokit {
-  static VERSION = VERSION$6;
+  static VERSION = VERSION$7;
   static defaults(defaults) {
     const OctokitWithDefaults = class extends this {
       constructor(...args) {
@@ -30531,7 +30531,7 @@ class Octokit {
   auth;
 }
 
-const VERSION$5 = "17.0.0";
+const VERSION$6 = "17.0.0";
 
 const Endpoints = {
   actions: {
@@ -32952,10 +32952,10 @@ function restEndpointMethods(octokit) {
     rest: api
   };
 }
-restEndpointMethods.VERSION = VERSION$5;
+restEndpointMethods.VERSION = VERSION$6;
 
 // pkg/dist-src/version.js
-var VERSION$4 = "0.0.0-development";
+var VERSION$5 = "0.0.0-development";
 
 // pkg/dist-src/normalize-paginated-list-response.js
 function normalizePaginatedListResponse(response) {
@@ -33078,7 +33078,7 @@ function paginateRest(octokit) {
     })
   };
 }
-paginateRest.VERSION = VERSION$4;
+paginateRest.VERSION = VERSION$5;
 
 new Context();
 const baseUrl = getApiBaseUrl();
@@ -33676,6 +33676,8 @@ class Alias extends NodeBase {
      * instance of the `source` anchor before this node.
      */
     resolve(doc, ctx) {
+        if (ctx?.maxAliasCount === 0)
+            throw new ReferenceError('Alias resolution is disabled');
         let nodes;
         if (ctx?.aliasResolveCache) {
             nodes = ctx.aliasResolveCache;
@@ -34806,18 +34808,18 @@ const isMergeKey = (ctx, key) => (merge$1.identify(key) ||
         merge$1.identify(key.value))) &&
     ctx?.doc.schema.tags.some(tag => tag.tag === merge$1.tag && tag.default);
 function addMergeToJSMap(ctx, map, value) {
-    value = ctx && isAlias(value) ? value.resolve(ctx.doc) : value;
-    if (isSeq(value))
-        for (const it of value.items)
+    const source = resolveAliasValue(ctx, value);
+    if (isSeq(source))
+        for (const it of source.items)
             mergeValue(ctx, map, it);
-    else if (Array.isArray(value))
-        for (const it of value)
+    else if (Array.isArray(source))
+        for (const it of source)
             mergeValue(ctx, map, it);
     else
-        mergeValue(ctx, map, value);
+        mergeValue(ctx, map, source);
 }
 function mergeValue(ctx, map, value) {
-    const source = ctx && isAlias(value) ? value.resolve(ctx.doc) : value;
+    const source = resolveAliasValue(ctx, value);
     if (!isMap(source))
         throw new Error('Merge sources must be maps or map aliases');
     const srcMap = source.toJSON(null, ctx, Map);
@@ -34839,6 +34841,9 @@ function mergeValue(ctx, map, value) {
         }
     }
     return map;
+}
+function resolveAliasValue(ctx, value) {
+    return ctx && isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
 }
 
 function addPairToJSMap(ctx, map, { key, value }) {
@@ -35391,7 +35396,8 @@ function stringifyNumber({ format, minFractionDigits, tag, value }) {
     if (!format &&
         minFractionDigits &&
         (!tag || tag === 'tag:yaml.org,2002:float') &&
-        /^\d/.test(n)) {
+        /^-?\d/.test(n) &&
+        !n.includes('e')) {
         let i = n.indexOf('.');
         if (i < 0) {
             i = n.length;
@@ -37650,7 +37656,7 @@ function doubleQuotedValue(source, onError) {
                     next = source[++i + 1];
             }
             else if (next === 'x' || next === 'u' || next === 'U') {
-                const length = { x: 2, u: 4, U: 8 }[next];
+                const length = next === 'x' ? 2 : next === 'u' ? 4 : 8;
                 res += parseCharCode(source, i + 1, length, onError);
                 i += length;
             }
@@ -37720,12 +37726,14 @@ function parseCharCode(source, offset, length, onError) {
     const cc = source.substr(offset, length);
     const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
     const code = ok ? parseInt(cc, 16) : NaN;
-    if (isNaN(code)) {
+    try {
+        return String.fromCodePoint(code);
+    }
+    catch {
         const raw = source.substr(offset - 2, length + 2);
         onError(offset - 2, 'BAD_DQ_ESCAPE', `Invalid escape sequence ${raw}`);
         return raw;
     }
-    return String.fromCodePoint(code);
 }
 
 function composeScalar(ctx, token, tagToken, onError) {
@@ -38060,8 +38068,10 @@ class Composer {
             }
         }
         if (afterDoc) {
-            Array.prototype.push.apply(doc.errors, this.errors);
-            Array.prototype.push.apply(doc.warnings, this.warnings);
+            for (let i = 0; i < this.errors.length; ++i)
+                doc.errors.push(this.errors[i]);
+            for (let i = 0; i < this.warnings.length; ++i)
+                doc.warnings.push(this.warnings[i]);
         }
         else {
             doc.errors = this.errors;
@@ -38559,7 +38569,7 @@ class Lexer {
             const n = (yield* this.pushCount(1)) + (yield* this.pushSpaces(true));
             this.indentNext = this.indentValue + 1;
             this.indentValue += n;
-            return yield* this.parseBlockStart();
+            return 'block-start';
         }
         return 'doc';
     }
@@ -38880,32 +38890,36 @@ class Lexer {
         return 0;
     }
     *pushIndicators() {
-        switch (this.charAt(0)) {
-            case '!':
-                return ((yield* this.pushTag()) +
-                    (yield* this.pushSpaces(true)) +
-                    (yield* this.pushIndicators()));
-            case '&':
-                return ((yield* this.pushUntil(isNotAnchorChar)) +
-                    (yield* this.pushSpaces(true)) +
-                    (yield* this.pushIndicators()));
-            case '-': // this is an error
-            case '?': // this is an error outside flow collections
-            case ':': {
-                const inFlow = this.flowLevel > 0;
-                const ch1 = this.charAt(1);
-                if (isEmpty(ch1) || (inFlow && flowIndicatorChars.has(ch1))) {
-                    if (!inFlow)
-                        this.indentNext = this.indentValue + 1;
-                    else if (this.flowKey)
-                        this.flowKey = false;
-                    return ((yield* this.pushCount(1)) +
-                        (yield* this.pushSpaces(true)) +
-                        (yield* this.pushIndicators()));
+        let n = 0;
+        loop: while (true) {
+            switch (this.charAt(0)) {
+                case '!':
+                    n += yield* this.pushTag();
+                    n += yield* this.pushSpaces(true);
+                    continue loop;
+                case '&':
+                    n += yield* this.pushUntil(isNotAnchorChar);
+                    n += yield* this.pushSpaces(true);
+                    continue loop;
+                case '-': // this is an error
+                case '?': // this is an error outside flow collections
+                case ':': {
+                    const inFlow = this.flowLevel > 0;
+                    const ch1 = this.charAt(1);
+                    if (isEmpty(ch1) || (inFlow && flowIndicatorChars.has(ch1))) {
+                        if (!inFlow)
+                            this.indentNext = this.indentValue + 1;
+                        else if (this.flowKey)
+                            this.flowKey = false;
+                        n += yield* this.pushCount(1);
+                        n += yield* this.pushSpaces(true);
+                        continue loop;
+                    }
                 }
             }
+            break loop;
         }
-        return 0;
+        return n;
     }
     *pushTag() {
         if (this.charAt(1) === '<') {
@@ -39067,6 +39081,14 @@ function getFirstKeyStartProps(prev) {
     }
     return prev.splice(i, prev.length);
 }
+function arrayPushArray(target, source) {
+    // May exhaust call stack with large `source` array
+    if (source.length < 1e5)
+        Array.prototype.push.apply(target, source);
+    else
+        for (let i = 0; i < source.length; ++i)
+            target.push(source[i]);
+}
 function fixFlowSeqItems(fc) {
     if (fc.start.type === 'flow-seq-start') {
         for (const it of fc.items) {
@@ -39079,12 +39101,12 @@ function fixFlowSeqItems(fc) {
                 delete it.key;
                 if (isFlowToken(it.value)) {
                     if (it.value.end)
-                        Array.prototype.push.apply(it.value.end, it.sep);
+                        arrayPushArray(it.value.end, it.sep);
                     else
                         it.value.end = it.sep;
                 }
                 else
-                    Array.prototype.push.apply(it.start, it.sep);
+                    arrayPushArray(it.start, it.sep);
                 delete it.sep;
             }
         }
@@ -39502,7 +39524,7 @@ class Parser {
                         const prev = map.items[map.items.length - 2];
                         const end = prev?.value?.end;
                         if (Array.isArray(end)) {
-                            Array.prototype.push.apply(end, it.start);
+                            arrayPushArray(end, it.start);
                             end.push(this.sourceToken);
                             map.items.pop();
                             return;
@@ -39717,7 +39739,7 @@ class Parser {
                         const prev = seq.items[seq.items.length - 2];
                         const end = prev?.value?.end;
                         if (Array.isArray(end)) {
-                            Array.prototype.push.apply(end, it.start);
+                            arrayPushArray(end, it.start);
                             end.push(this.sourceToken);
                             seq.items.pop();
                             return;
@@ -43042,7 +43064,7 @@ var DataPointType;
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$3 = '1.9.1';
+const VERSION$4 = '1.9.1';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -43148,13 +43170,13 @@ function _makeCompatibilityCheck(ownVersion) {
  *
  * @param version version of the API requesting an instance of the global API
  */
-const isCompatible = _makeCompatibilityCheck(VERSION$3);
+const isCompatible = _makeCompatibilityCheck(VERSION$4);
 
 /*
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
-const major = VERSION$3.split('.')[0];
+const major = VERSION$4.split('.')[0];
 const GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for(`opentelemetry.js.api.${major}`);
 const _global = (typeof globalThis === 'object'
     ? globalThis
@@ -43168,7 +43190,7 @@ const _global = (typeof globalThis === 'object'
 function registerGlobal(type, instance, diag, allowOverride = false) {
     var _a;
     const api = (_global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a !== void 0 ? _a : {
-        version: VERSION$3,
+        version: VERSION$4,
     });
     if (!allowOverride && api[type]) {
         // already registered an API of this type
@@ -43176,14 +43198,14 @@ function registerGlobal(type, instance, diag, allowOverride = false) {
         diag.error(err.stack || err.message);
         return false;
     }
-    if (api.version !== VERSION$3) {
+    if (api.version !== VERSION$4) {
         // All registered APIs must be of the same version exactly
-        const err = new Error(`@opentelemetry/api: Registration of version v${api.version} for ${type} does not match previously registered API v${VERSION$3}`);
+        const err = new Error(`@opentelemetry/api: Registration of version v${api.version} for ${type} does not match previously registered API v${VERSION$4}`);
         diag.error(err.stack || err.message);
         return false;
     }
     api[type] = instance;
-    diag.debug(`@opentelemetry/api: Registered a global for ${type} v${VERSION$3}.`);
+    diag.debug(`@opentelemetry/api: Registered a global for ${type} v${VERSION$4}.`);
     return true;
 }
 function getGlobal(type) {
@@ -43195,7 +43217,7 @@ function getGlobal(type) {
     return (_b = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b === void 0 ? void 0 : _b[type];
 }
 function unregisterGlobal(type, diag) {
-    diag.debug(`@opentelemetry/api: Unregistering a global for ${type} v${VERSION$3}.`);
+    diag.debug(`@opentelemetry/api: Unregistering a global for ${type} v${VERSION$4}.`);
     const api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
     if (api) {
         delete api[type];
@@ -45850,22 +45872,11 @@ function getStringFromEnv(key) {
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$2 = '2.7.0';
+const VERSION$3 = '2.8.0';
 
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //----------------------------------------------------------------------------------------------------------
 // DO NOT EDIT, this is an Auto-generated file from scripts/semconv/templates/registry/stable/attributes.ts.j2
@@ -45898,6 +45909,12 @@ const ATTR_EXCEPTION_STACKTRACE = 'exception.stacktrace';
  *
  * @example java.net.ConnectException
  * @example OSError
+ *
+ * @note If the recorded exception type is a wrapper that is not meaningful for
+ * failure classification, instrumentation **MAY** use the type of the inner
+ * exception instead. For example, in Go, errors created with `fmt.Errorf`
+ * using `%w` **MAY** be unwrapped when the wrapper type does not help
+ * classify the failure.
  */
 const ATTR_EXCEPTION_TYPE = 'exception.type';
 /**
@@ -45905,7 +45922,8 @@ const ATTR_EXCEPTION_TYPE = 'exception.type';
  *
  * @example shoppingcart
  *
- * @note **MUST** be the same for all instances of horizontally scaled services. If the value was not specified, SDKs **MUST** fallback to `unknown_service:` concatenated with [`process.executable.name`](process.md), e.g. `unknown_service:bash`. If `process.executable.name` is not available, the value **MUST** be set to `unknown_service`.
+ * @note **MUST** be the same for all instances of horizontally scaled services. If the value was not specified, SDKs **MUST** fallback to `unknown_service:` concatenated with the process executable name, e.g. `unknown_service:bash`. If the process executable name is not available, the value **MUST** be set to `unknown_service`.
+ * The process executable name is the name of the process executable, the same value as described by the [`process.executable.name`](process.md) resource attribute.
  */
 const ATTR_SERVICE_NAME = 'service.name';
 /**
@@ -45963,7 +45981,7 @@ const SDK_INFO = {
     [ATTR_TELEMETRY_SDK_NAME]: 'opentelemetry',
     [ATTR_PROCESS_RUNTIME_NAME]: 'node',
     [ATTR_TELEMETRY_SDK_LANGUAGE]: TELEMETRY_SDK_LANGUAGE_VALUE_NODEJS,
-    [ATTR_TELEMETRY_SDK_VERSION]: VERSION$2,
+    [ATTR_TELEMETRY_SDK_VERSION]: VERSION$3,
 };
 
 /*
@@ -46033,6 +46051,13 @@ function hrTimeToNanoseconds(time) {
  */
 function hrTimeToMicroseconds(time) {
     return time[0] * 1e6 + time[1] / 1e3;
+}
+/**
+ * Convert hrTime to seconds.
+ * @param time
+ */
+function hrTimeToSeconds(time) {
+    return time[0] + time[1] / SECOND_TO_NANOSECONDS;
 }
 /**
  * check if time is HrTime
@@ -46800,6 +46825,139 @@ const DEFAULT_AGGREGATION_TEMPORALITY_SELECTOR = _instrumentType => AggregationT
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * A name uniquely identifying the instance of the OpenTelemetry component within its containing SDK instance.
+ *
+ * @example otlp_grpc_span_exporter/0
+ * @example custom-name
+ *
+ * @note Implementations **SHOULD** ensure a low cardinality for this attribute, even across application or SDK restarts.
+ * E.g. implementations **MUST NOT** use UUIDs as values for this attribute.
+ *
+ * Implementations **MAY** achieve these goals by following a `<otel.component.type>/<instance-counter>` pattern, e.g. `batching_span_processor/0`.
+ * Hereby `otel.component.type` refers to the corresponding attribute value of the component.
+ *
+ * The value of `instance-counter` **MAY** be automatically assigned by the component and uniqueness within the enclosing SDK instance **MUST** be guaranteed.
+ * For example, `<instance-counter>` **MAY** be implemented by using a monotonically increasing counter (starting with `0`), which is incremented every time an
+ * instance of the given component type is started.
+ *
+ * With this implementation, for example the first Batching Span Processor would have `batching_span_processor/0`
+ * as `otel.component.name`, the second one `batching_span_processor/1` and so on.
+ * These values will therefore be reused in the case of an application restart.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_NAME = 'otel.component.name';
+/**
+ * A name identifying the type of the OpenTelemetry component.
+ *
+ * @example batching_span_processor
+ * @example com.example.MySpanExporter
+ *
+ * @note If none of the standardized values apply, implementations **SHOULD** use the language-defined name of the type.
+ * E.g. for Java the fully qualified classname **SHOULD** be used in this case.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_TYPE = 'otel.component.type';
+/**
+ * Enum value "periodic_metric_reader" for attribute {@link ATTR_OTEL_COMPONENT_TYPE}.
+ *
+ * The builtin SDK periodically exporting metric reader
+ *
+ * @experimental This enum value is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const OTEL_COMPONENT_TYPE_VALUE_PERIODIC_METRIC_READER = 'periodic_metric_reader';
+/**
+ * The duration of the collect operation of the metric reader.
+ *
+ * @note For successful collections, `error.type` **MUST NOT** be set. For failed collections, `error.type` **SHOULD** contain the failure cause.
+ * It can happen that metrics collection is successful for some MetricProducers, while others fail. In that case `error.type` **SHOULD** be set to any of the failure causes.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_METRIC_READER_COLLECTION_DURATION = 'otel.sdk.metric_reader.collection.duration';
+/**
+ * Describes a class of error the operation ended with.
+ *
+ * @example timeout
+ * @example java.net.UnknownHostException
+ * @example server_certificate_invalid
+ * @example 500
+ *
+ * @note The `error.type` **SHOULD** be predictable, and **SHOULD** have low cardinality.
+ *
+ * When `error.type` is set to a type (e.g., an exception type), its
+ * canonical class name identifying the type within the artifact **SHOULD** be used.
+ *
+ * Instrumentations **SHOULD** document the list of errors they report.
+ *
+ * The cardinality of `error.type` within one instrumentation library **SHOULD** be low.
+ * Telemetry consumers that aggregate data from multiple instrumentation libraries and applications
+ * should be prepared for `error.type` to have high cardinality at query time when no
+ * additional filters are applied.
+ *
+ * If the operation has completed successfully, instrumentations **SHOULD NOT** set `error.type`.
+ *
+ * If a specific domain defines its own set of error identifiers (such as HTTP or RPC status codes),
+ * it's **RECOMMENDED** to:
+ *
+ *   - Use a domain-specific attribute
+ *   - Set `error.type` to capture all errors, regardless of whether they are defined within the domain-specific set or not.
+ */
+const ATTR_ERROR_TYPE = 'error.type';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+const componentCounter = new Map();
+/**
+ * Generates `otel.sdk.metric_reader.*` self-observability metrics.
+ * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/#metric-otelsdkmetric_readercollectionduration
+ */
+class MetricReaderMetrics {
+    collectionDuration;
+    standardAttrs;
+    constructor(componentType, meter) {
+        const counter = componentCounter.get(componentType) ?? 0;
+        componentCounter.set(componentType, counter + 1);
+        this.standardAttrs = {
+            [ATTR_OTEL_COMPONENT_TYPE]: componentType,
+            [ATTR_OTEL_COMPONENT_NAME]: `${componentType}/${counter}`,
+        };
+        this.collectionDuration = meter.createHistogram(METRIC_OTEL_SDK_METRIC_READER_COLLECTION_DURATION, {
+            unit: 's',
+            description: 'The duration of the collect operation of the metric reader.',
+            advice: {
+                explicitBucketBoundaries: [],
+            },
+        });
+    }
+    recordCollection(durationSecs, error) {
+        const attrs = error
+            ? { ...this.standardAttrs, [ATTR_ERROR_TYPE]: error }
+            : this.standardAttrs;
+        this.collectionDuration.record(durationSecs, attrs);
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// this is autogenerated file, see scripts/version-update.js
+const VERSION$2 = '2.8.0';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /**
  * A registered reader of metrics that, when linked to a {@link MetricProducer}, offers global
  * control over metrics.
@@ -46812,9 +46970,12 @@ class MetricReader {
     _metricProducers;
     // MetricProducer used by this instance which produces metrics from the SDK
     _sdkMetricProducer;
+    // Metrics about the MetricReader itself
+    _selfObsMetrics;
     _aggregationTemporalitySelector;
     _aggregationSelector;
     _cardinalitySelector;
+    _otelComponentType;
     constructor(options) {
         this._aggregationSelector =
             options?.aggregationSelector ?? DEFAULT_AGGREGATION_SELECTOR;
@@ -46823,6 +46984,9 @@ class MetricReader {
                 DEFAULT_AGGREGATION_TEMPORALITY_SELECTOR;
         this._metricProducers = options?.metricProducers ?? [];
         this._cardinalitySelector = options?.cardinalitySelector;
+        this._otelComponentType =
+            options?.otelComponentType ?? this.constructor.name;
+        this._selfObsMetrics = new MetricReaderMetrics(this._otelComponentType, createNoopMeter());
     }
     setMetricProducer(metricProducer) {
         if (this._sdkMetricProducer) {
@@ -46837,6 +47001,10 @@ class MetricReader {
         }
         this._sdkMetricProducer = metricProducer;
         this.onInitialized();
+    }
+    _setSelfObsMeterProvider(meterProvider) {
+        const meter = meterProvider.getMeter('@opentelemetry/sdk-metrics', VERSION$2);
+        this._selfObsMetrics = new MetricReaderMetrics(this._otelComponentType, meter);
     }
     selectAggregation(instrumentType) {
         return this._aggregationSelector(instrumentType);
@@ -46864,6 +47032,7 @@ class MetricReader {
         if (this._shutdown) {
             throw new Error('MetricReader is shutdown');
         }
+        const startTime = hrTime();
         const [sdkCollectionResults, ...additionalCollectionResults] = await Promise.all([
             this._sdkMetricProducer.collect({
                 timeoutMillis: options?.timeoutMillis,
@@ -46872,8 +47041,13 @@ class MetricReader {
                 timeoutMillis: options?.timeoutMillis,
             })),
         ]);
+        const endTime = hrTime();
         // Merge the results, keeping the SDK's Resource
         const errors = sdkCollectionResults.errors.concat(additionalCollectionResults.flatMap(result => result.errors));
+        const collectDuration = hrTimeToSeconds(hrTimeDuration(startTime, endTime));
+        this._selfObsMetrics.recordCollection(collectDuration, errors.length > 0
+            ? (errors[0].name ?? 'collect_error')
+            : undefined);
         const resource = sdkCollectionResults.resourceMetrics.resource;
         const scopeMetrics = sdkCollectionResults.resourceMetrics.scopeMetrics.concat(additionalCollectionResults.flatMap(result => result.resourceMetrics.scopeMetrics));
         return {
@@ -46932,6 +47106,7 @@ class PeriodicExportingMetricReader extends MetricReader {
         super({
             aggregationSelector: exporter.selectAggregation?.bind(exporter),
             aggregationTemporalitySelector: exporter.selectAggregationTemporality?.bind(exporter),
+            otelComponentType: OTEL_COMPONENT_TYPE_VALUE_PERIODIC_METRIC_READER,
             metricProducers,
             cardinalitySelector: (instrumentType) => {
                 const limits = {
@@ -47557,7 +47732,6 @@ class HashMap {
         let next = valueIterator.next();
         while (next.done !== true) {
             // next.value[0] here can not be undefined
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             yield [this._keyMap.get(next.value[0]), next.value[1], next.value[0]];
             next = valueIterator.next();
         }
@@ -47611,14 +47785,15 @@ class DeltaMetricProcessor {
         accumulation?.record(value);
     }
     batchCumulate(measurements, collectionTime) {
-        Array.from(measurements.entries()).forEach(([attributes, value, hashCode]) => {
+        for (const [originalAttributes, value, originalHashCode,] of measurements.entries()) {
+            let attributes = originalAttributes;
+            let hashCode = originalHashCode;
             const accumulation = this._aggregator.createAccumulation(collectionTime);
             accumulation?.record(value);
             let delta = accumulation;
             // Diff with recorded cumulative memo.
             if (this._cumulativeMemoStorage.has(attributes, hashCode)) {
                 // has() returned true, previous is present.
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 const previous = this._cumulativeMemoStorage.get(attributes, hashCode);
                 delta = this._aggregator.diff(previous, accumulation);
             }
@@ -47629,7 +47804,6 @@ class DeltaMetricProcessor {
                     hashCode = this._overflowHashCode;
                     if (this._cumulativeMemoStorage.has(attributes, hashCode)) {
                         // has() returned true, previous is present.
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                         const previous = this._cumulativeMemoStorage.get(attributes, hashCode);
                         delta = this._aggregator.diff(previous, accumulation);
                     }
@@ -47638,14 +47812,13 @@ class DeltaMetricProcessor {
             // Merge with uncollected active delta.
             if (this._activeCollectionStorage.has(attributes, hashCode)) {
                 // has() returned true, active is present.
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 const active = this._activeCollectionStorage.get(attributes, hashCode);
                 delta = this._aggregator.merge(active, delta);
             }
             // Save the current record and the delta record.
             this._cumulativeMemoStorage.set(attributes, accumulation, hashCode);
             this._activeCollectionStorage.set(attributes, delta, hashCode);
-        });
+        }
     }
     /**
      * Returns a collection of delta metrics. Start time is the when first
@@ -47694,7 +47867,6 @@ class TemporalMetricProcessor {
         let aggregationTemporality;
         // Check our last report time.
         if (this._reportHistory.has(collector)) {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const last = this._reportHistory.get(collector);
             const lastCollectionTime = last.collectionTime;
             aggregationTemporality = last.aggregationTemporality;
@@ -47769,7 +47941,6 @@ class TemporalMetricProcessor {
             if (last.has(key, hash)) {
                 const lastAccumulation = last.get(key, hash);
                 // last.has() returned true, lastAccumulation is present.
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 const accumulation = aggregator.merge(lastAccumulation, record);
                 result.set(key, accumulation, hash);
             }
@@ -47820,9 +47991,9 @@ class AsyncMetricStorage extends MetricStorage {
     }
     record(measurements, observationTime) {
         const processed = new AttributeHashMap();
-        Array.from(measurements.entries()).forEach(([attributes, value]) => {
+        for (const [attributes, value] of measurements.entries()) {
             processed.set(this._attributesProcessor.process(attributes), value);
-        });
+        }
         this._deltaMetricStorage.batchCumulate(processed, observationTime);
     }
     /**
@@ -48010,9 +48181,10 @@ class MultiMetricStorage {
         this._backingStorages = backingStorages;
     }
     record(value, attributes, context, recordTime) {
-        this._backingStorages.forEach(it => {
-            it.record(value, attributes, context, recordTime);
-        });
+        const storages = this._backingStorages;
+        for (let i = 0; i < storages.length; i++) {
+            storages[i].record(value, attributes, context, recordTime);
+        }
     }
 }
 
@@ -48726,6 +48898,9 @@ class MeterProvider {
                 const collector = new MetricCollector(this._sharedState, metricReader);
                 metricReader.setMetricProducer(collector);
                 this._sharedState.metricCollectors.push(collector);
+                if (options.sdkMetricsEnabled && metricReader instanceof MetricReader) {
+                    metricReader._setSelfObsMeterProvider(this);
+                }
             }
         }
     }
@@ -49116,6 +49291,108 @@ class OTLPMetricExporterBase extends OTLPExporterBase {
     }
 }
 
+function createResource(resource, encoder) {
+    const result = {
+        attributes: toAttributes(resource.attributes, encoder),
+        droppedAttributesCount: 0,
+    };
+    const schemaUrl = resource.schemaUrl;
+    if (schemaUrl && schemaUrl !== '')
+        result.schemaUrl = schemaUrl;
+    return result;
+}
+function createInstrumentationScope(scope, encoder) {
+    const result = {
+        name: scope.name,
+        version: scope.version,
+    };
+    if (scope.attributes && Object.keys(scope.attributes).length > 0) {
+        result.attributes = toAttributes(scope.attributes, encoder);
+        result.droppedAttributesCount = scope.droppedAttributesCount ?? 0;
+    }
+    return result;
+}
+function toAttributes(attributes, encoder) {
+    return Object.keys(attributes).map(key => toKeyValue(key, attributes[key], encoder));
+}
+function toKeyValue(key, value, encoder) {
+    return {
+        key: key,
+        value: toAnyValue(value, encoder),
+    };
+}
+function toAnyValue(value, encoder) {
+    const t = typeof value;
+    if (t === 'string')
+        return { stringValue: value };
+    if (t === 'number') {
+        if (!Number.isInteger(value))
+            return { doubleValue: value };
+        return { intValue: value };
+    }
+    if (t === 'boolean')
+        return { boolValue: value };
+    if (value instanceof Uint8Array)
+        return { bytesValue: encoder.encodeUint8Array(value) };
+    if (Array.isArray(value)) {
+        const values = new Array(value.length);
+        for (let i = 0; i < value.length; i++) {
+            values[i] = toAnyValue(value[i], encoder);
+        }
+        return { arrayValue: { values } };
+    }
+    if (t === 'object' && value != null) {
+        const keys = Object.keys(value);
+        const values = new Array(keys.length);
+        for (let i = 0; i < keys.length; i++) {
+            values[i] = {
+                key: keys[i],
+                value: toAnyValue(value[keys[i]], encoder),
+            };
+        }
+        return { kvlistValue: { values } };
+    }
+    return {};
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+function hrTimeToNanos(hrTime) {
+    const NANOSECONDS = BigInt(1000000000);
+    return (BigInt(Math.trunc(hrTime[0])) * NANOSECONDS + BigInt(Math.trunc(hrTime[1])));
+}
+function encodeAsString(hrTime) {
+    const nanos = hrTimeToNanos(hrTime);
+    return nanos.toString();
+}
+const encodeTimestamp = typeof BigInt !== 'undefined' ? encodeAsString : hrTimeToNanoseconds;
+function identity(value) {
+    return value;
+}
+/**
+ * Encoder for JSON format.
+ * Uses string timestamps, hex for span/trace IDs, and base64 for Uint8Array.
+ */
+const JSON_ENCODER = {
+    encodeHrTime: encodeTimestamp,
+    encodeSpanContext: identity,
+    encodeOptionalSpanContext: identity,
+    encodeUint8Array: (bytes) => {
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(bytes).toString('base64');
+        }
+        // implementation note: not using spread operator and passing to
+        // btoa to avoid stack overflow on large Uint8Arrays
+        const chars = new Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) {
+            chars[i] = String.fromCharCode(bytes[i]);
+        }
+        return btoa(chars.join(''));
+    },
+};
+
 /**
  * AggregationTemporality defines how a metric aggregator reports aggregated
  * values. It describes how those values relate to the time interval over
@@ -49188,65 +49465,6 @@ var EAggregationTemporality;
     EAggregationTemporality[EAggregationTemporality["AGGREGATION_TEMPORALITY_CUMULATIVE"] = 2] = "AGGREGATION_TEMPORALITY_CUMULATIVE";
 })(EAggregationTemporality || (EAggregationTemporality = {}));
 
-function createResource(resource, encoder) {
-    const result = {
-        attributes: toAttributes(resource.attributes, encoder),
-        droppedAttributesCount: 0,
-    };
-    const schemaUrl = resource.schemaUrl;
-    if (schemaUrl && schemaUrl !== '')
-        result.schemaUrl = schemaUrl;
-    return result;
-}
-function createInstrumentationScope(scope) {
-    return {
-        name: scope.name,
-        version: scope.version,
-    };
-}
-function toAttributes(attributes, encoder) {
-    return Object.keys(attributes).map(key => toKeyValue(key, attributes[key], encoder));
-}
-function toKeyValue(key, value, encoder) {
-    return {
-        key: key,
-        value: toAnyValue(value, encoder),
-    };
-}
-function toAnyValue(value, encoder) {
-    const t = typeof value;
-    if (t === 'string')
-        return { stringValue: value };
-    if (t === 'number') {
-        if (!Number.isInteger(value))
-            return { doubleValue: value };
-        return { intValue: value };
-    }
-    if (t === 'boolean')
-        return { boolValue: value };
-    if (value instanceof Uint8Array)
-        return { bytesValue: encoder.encodeUint8Array(value) };
-    if (Array.isArray(value)) {
-        const values = new Array(value.length);
-        for (let i = 0; i < value.length; i++) {
-            values[i] = toAnyValue(value[i], encoder);
-        }
-        return { arrayValue: { values } };
-    }
-    if (t === 'object' && value != null) {
-        const keys = Object.keys(value);
-        const values = new Array(keys.length);
-        for (let i = 0; i < keys.length; i++) {
-            values[i] = {
-                key: keys[i],
-                value: toAnyValue(value[keys[i]], encoder),
-            };
-        }
-        return { kvlistValue: { values } };
-    }
-    return {};
-}
-
 /*
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
@@ -49261,7 +49479,7 @@ function toResourceMetrics(resourceMetrics, encoder) {
 }
 function toScopeMetrics(scopeMetrics, encoder) {
     return Array.from(scopeMetrics.map(metrics => ({
-        scope: createInstrumentationScope(metrics.scope),
+        scope: createInstrumentationScope(metrics.scope, encoder),
         metrics: metrics.metrics.map(metricData => toMetric(metricData, encoder)),
         schemaUrl: metrics.scope.schemaUrl,
     })));
@@ -49376,41 +49594,24 @@ function createExportMetricsServiceRequest(resourceMetrics, encoder) {
     };
 }
 
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-function hrTimeToNanos(hrTime) {
-    const NANOSECONDS = BigInt(1000000000);
-    return (BigInt(Math.trunc(hrTime[0])) * NANOSECONDS + BigInt(Math.trunc(hrTime[1])));
-}
-function encodeAsString(hrTime) {
-    const nanos = hrTimeToNanos(hrTime);
-    return nanos.toString();
-}
-const encodeTimestamp = typeof BigInt !== 'undefined' ? encodeAsString : hrTimeToNanoseconds;
-function identity(value) {
-    return value;
-}
-/**
- * Encoder for JSON format.
- * Uses string timestamps, hex for span/trace IDs, and base64 for Uint8Array.
- */
-const JSON_ENCODER = {
-    encodeHrTime: encodeTimestamp,
-    encodeSpanContext: identity,
-    encodeOptionalSpanContext: identity,
-    encodeUint8Array: (bytes) => {
-        if (typeof Buffer !== 'undefined') {
-            return Buffer.from(bytes).toString('base64');
+const JsonMetricsSerializer = {
+    serializeRequest: (arg) => {
+        const request = createExportMetricsServiceRequest([arg], JSON_ENCODER);
+        const encoder = new TextEncoder();
+        return encoder.encode(JSON.stringify(request));
+    },
+    deserializeResponse: (arg) => {
+        if (arg.length === 0) {
+            return {};
         }
-        // implementation note: not using spread operator and passing to
-        // btoa to avoid stack overflow on large Uint8Arrays
-        const chars = new Array(bytes.length);
-        for (let i = 0; i < bytes.length; i++) {
-            chars[i] = String.fromCharCode(bytes[i]);
+        const decoder = new TextDecoder();
+        try {
+            return JSON.parse(decoder.decode(arg));
         }
-        return btoa(chars.join(''));
+        catch (err) {
+            diag.warn(`Failed to parse metrics export response: ${err.message}. Returning empty response`);
+            return {};
+        }
     },
 };
 
@@ -49518,7 +49719,7 @@ function spanRecordsToResourceSpans(readableSpans, encoder) {
             if (scopeSpans.length > 0) {
                 const spans = scopeSpans.map(readableSpan => sdkSpanToOtlpSpan(readableSpan, encoder));
                 scopeResourceSpans.push({
-                    scope: createInstrumentationScope(scopeSpans[0].instrumentationScope),
+                    scope: createInstrumentationScope(scopeSpans[0].instrumentationScope, encoder),
                     spans: spans,
                     schemaUrl: scopeSpans[0].instrumentationScope.schemaUrl,
                 });
@@ -49536,27 +49737,6 @@ function spanRecordsToResourceSpans(readableSpans, encoder) {
     }
     return out;
 }
-
-const JsonMetricsSerializer = {
-    serializeRequest: (arg) => {
-        const request = createExportMetricsServiceRequest([arg], JSON_ENCODER);
-        const encoder = new TextEncoder();
-        return encoder.encode(JSON.stringify(request));
-    },
-    deserializeResponse: (arg) => {
-        if (arg.length === 0) {
-            return {};
-        }
-        const decoder = new TextDecoder();
-        try {
-            return JSON.parse(decoder.decode(arg));
-        }
-        catch (err) {
-            diag.warn(`Failed to parse metrics export response: ${err.message}. Returning empty response`);
-            return {};
-        }
-    },
-};
 
 const JsonTraceSerializer = {
     serializeRequest: (arg) => {
@@ -49722,7 +49902,7 @@ function parseRetryAfterToMills(retryAfter) {
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$1 = '0.215.0';
+const VERSION$1 = '0.219.0';
 
 const DEFAULT_USER_AGENT = `OTel-OTLP-Exporter-JavaScript/${VERSION$1}`;
 /**
@@ -49752,14 +49932,11 @@ function sendWithHttp(request, url, headers, compression, userAgent, agent, data
             headers['User-Agent'] = DEFAULT_USER_AGENT;
         }
         const options = {
-            hostname: parsedUrl.hostname,
-            port: parsedUrl.port,
-            path: parsedUrl.pathname,
             method: 'POST',
             headers,
             agent,
         };
-        const req = request(options, (res) => {
+        const req = request(parsedUrl, options, (res) => {
             const responseData = [];
             let responseSize = 0;
             res.on('data', (chunk) => {
@@ -50250,6 +50427,59 @@ const ExceptionEventName = 'exception';
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
+ * Well-known symbol used by Node.js `util.inspect` (and `console.*`) to
+ * render an object via a custom representation. Defined as a global Symbol
+ * so it works without importing from `node:util`, keeping this module safe
+ * for browser builds (where the symbol is simply never looked up).
+ */
+const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
+/**
+ * Collect a Resource's settled attributes without touching the
+ * `attributes` getter, which emits diag.error/debug entries when async
+ * attribute detectors are still pending. Promise-like (unsettled)
+ * entries are silently skipped so logging a Span/Tracer/Provider during
+ * startup doesn't recurse through the diag pipeline.
+ */
+function settledResourceAttributes(resource) {
+    const attrs = {};
+    for (const [k, v] of resource.getRawAttributes()) {
+        if (typeof v?.then === 'function') {
+            continue;
+        }
+        if (v != null) {
+            attrs[k] ??= v;
+        }
+    }
+    return attrs;
+}
+/**
+ * Build a class-tagged inspect representation. Returns a stub like
+ * `[ClassName]` once the recursion budget is exhausted, otherwise returns
+ * `ClassName <inspected payload>` so nested fields keep proper coloring,
+ * indentation, and depth handling. In environments that don't supply an
+ * `inspect` callback (e.g. browsers), falls back to returning the raw
+ * payload object.
+ */
+function formatInspect(className, payload, depth, options, inspect) {
+    if (typeof depth === 'number' && depth < 0) {
+        const tag = `[${className}]`;
+        return options?.stylize ? options.stylize(tag, 'special') : tag;
+    }
+    if (typeof inspect !== 'function' || !options) {
+        return payload;
+    }
+    const childOptions = {
+        ...options,
+        depth: options.depth == null ? options.depth : options.depth - 1,
+    };
+    return `${className} ${inspect(payload, childOptions)}`;
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * This class represents a span.
  */
 class SpanImpl {
@@ -50623,6 +50853,28 @@ class SpanImpl {
         // Other types, no need to apply value length limit
         return value;
     }
+    [inspectCustom](depth, options, inspect) {
+        const payload = {
+            name: this.name,
+            kind: this.kind,
+            spanContext: this._spanContext,
+            parentSpanContext: this.parentSpanContext,
+            status: this.status,
+            startTime: this.startTime,
+            endTime: this.endTime,
+            duration: this._duration,
+            ended: this._ended,
+            attributes: this.attributes,
+            events: this.events,
+            links: this.links,
+            droppedAttributesCount: this._droppedAttributesCount,
+            droppedEventsCount: this._droppedEventsCount,
+            droppedLinksCount: this._droppedLinksCount,
+            instrumentationScope: this.instrumentationScope,
+            resource: { attributes: settledResourceAttributes(this.resource) },
+        };
+        return formatInspect('SpanImpl', payload, depth, options, inspect);
+    }
 }
 
 /*
@@ -50763,9 +51015,14 @@ class TraceIdRatioBasedSampler {
     }
     _accumulate(traceId) {
         let accumulation = 0;
-        for (let i = 0; i < traceId.length / 8; i++) {
-            const pos = i * 8;
-            const part = parseInt(traceId.slice(pos, pos + 8), 16);
+        for (let i = 0; i < 32; i += 8) {
+            let part = 0;
+            for (let j = 0; j < 8; j++) {
+                const c = traceId.charCodeAt(i + j);
+                // Convert hex char code to value: '0'-'9' -> 0-9, 'a'-'f' -> 10-15, 'A'-'F' -> 10-15
+                const v = c < 58 ? c - 48 : c < 71 ? c - 55 : c - 87;
+                part = (part << 4) | v;
+            }
             accumulation = (accumulation ^ part) >>> 0;
         }
         return accumulation;
@@ -51254,7 +51511,7 @@ function samplingDecisionToString(decision) {
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION = '2.7.0';
+const VERSION = '2.8.0';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -51393,6 +51650,15 @@ class Tracer {
     getSpanLimits() {
         return this._spanLimits;
     }
+    [inspectCustom](depth, options, inspect) {
+        const payload = {
+            instrumentationScope: this.instrumentationScope,
+            resource: { attributes: settledResourceAttributes(this._resource) },
+            spanLimits: this._spanLimits,
+            generalLimits: this._generalLimits,
+        };
+        return formatInspect('Tracer', payload, depth, options, inspect);
+    }
 }
 
 /*
@@ -51490,7 +51756,6 @@ class BasicTracerProvider {
         if (!this._tracers.has(key)) {
             this._tracers.set(key, new Tracer({ name, version, schemaUrl: options?.schemaUrl }, this._config, this._resource, this._activeSpanProcessor));
         }
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return this._tracers.get(key);
     }
     forceFlush() {
@@ -51534,6 +51799,15 @@ class BasicTracerProvider {
     }
     shutdown() {
         return this._activeSpanProcessor.shutdown();
+    }
+    [inspectCustom](depth, options, inspect) {
+        const processors = this._activeSpanProcessor['_spanProcessors'];
+        const payload = {
+            resource: { attributes: settledResourceAttributes(this._resource) },
+            tracers: Array.from(this._tracers.keys()),
+            spanProcessors: processors.map(p => p.constructor?.name ?? 'SpanProcessor'),
+        };
+        return formatInspect('BasicTracerProvider', payload, depth, options, inspect);
     }
 }
 
