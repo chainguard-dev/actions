@@ -33,10 +33,20 @@ jobs:
       uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
       with:
         egress-policy: block
+        # The sectigo.com/lencr.org entries are the OCSP, CRL and AIA endpoints
+        # named in the certificate chains for github.com (Sectigo) and
+        # release-assets.githubusercontent.com (Let's Encrypt). Windows Schannel
+        # fetches them during the TLS handshake and fails closed when they are
+        # unreachable, so curl exits 35 without them. They are plain HTTP.
         allowed-endpoints: >
           *.blob.core.windows.net:443
+          *.c.lencr.org:80
           *.githubapp.com:443
+          *.i.lencr.org:80
+          crl.sectigo.com:80
+          crt.sectigo.com:80
           github.com:443
+          ocsp.sectigo.com:80
           release-assets.githubusercontent.com:443
 
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
