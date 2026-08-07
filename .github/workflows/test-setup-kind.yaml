@@ -58,7 +58,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+    - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
       with:
         egress-policy: audit # TODO(harden-runner): switch to block once IPv6 multicast (ff02::1) is supported
         allowed-endpoints: >
@@ -144,7 +144,7 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@b2555de0cf9724fb9b49d050ff18bd1f49562ba7 # v1.6.29
+      uses: chainguard-dev/actions/kind-diag@9d631658f55713e5f63ca0cc21ee168f81301fd9 # v1.6.30
       with:
         artifact-name: logs.${{ matrix.k8s-version }}
 
@@ -163,7 +163,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+    - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
       with:
         egress-policy: audit
         allowed-endpoints: >
@@ -216,7 +216,7 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@b2555de0cf9724fb9b49d050ff18bd1f49562ba7 # v1.6.29
+      uses: chainguard-dev/actions/kind-diag@9d631658f55713e5f63ca0cc21ee168f81301fd9 # v1.6.30
       with:
         artifact-name: logs.kvm-available
 
@@ -232,7 +232,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+    - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
       with:
         egress-policy: audit
         allowed-endpoints: >
@@ -279,6 +279,6 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@b2555de0cf9724fb9b49d050ff18bd1f49562ba7 # v1.6.29
+      uses: chainguard-dev/actions/kind-diag@9d631658f55713e5f63ca0cc21ee168f81301fd9 # v1.6.30
       with:
         artifact-name: logs.kvm-unavailable
