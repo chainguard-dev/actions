@@ -69,6 +69,11 @@ inputs:
       Whether to use an empty workspace or not.
     default: 'false'
 
+  source-dir:
+    description: |
+      The source directory to use if empty-workspace is false.
+    default: ${{ github.workspace }}
+
   workdir:
     description: |
       Switch to this directory prior to running build
@@ -127,6 +132,7 @@ runs:
         keyring-append: ${{ inputs.keyring-append }}
         empty-workspace: ${{ inputs.empty-workspace }}
         namespace: ${{ inputs.namespace }}
+        source-dir: ${{ inputs.source-dir }}
         workdir: ${{ inputs.workdir }}
         cache-dir: ${{ inputs.cache-dir }}
         pipeline-dir: ${{ inputs.pipeline-dir }}
