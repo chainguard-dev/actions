@@ -53,4 +53,4 @@ runs:
       INPUTS_SBOM_FORMAT: ${{ inputs.sbom-format }}
     shell: bash
     run: |
-      java -jar "./tools-java-${INPUTS_SPDX_TOOLS_VERSION}-jar-with-dependencies.jar" Verify "${INPUTS_SBOM_PATH}" "${INPUTS_SBOM_FORMAT}"
+      java -jar "./tools-java-${INPUTS_SPDX_TOOLS_VERSION}-jar-with-dependencies.jar" Verify "${INPUTS_SBOM_PATH}" ${INPUTS_SBOM_FORMAT:+"${INPUTS_SBOM_FORMAT}"}
