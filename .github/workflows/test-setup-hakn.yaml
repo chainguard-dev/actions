@@ -24,7 +24,7 @@ jobs:
     name: Install hakn (Knative + Istio) and verify it comes up
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit # TODO(harden-runner): switch to block once IPv6 multicast (ff02::1) is supported (kind uses Docker container networking)
 
