@@ -109,8 +109,12 @@ runs:
             REAL_KNATIVE_VERSION=$(git ls-remote --tags --refs "https://github.com/knative/${REPO}" | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | sort -V | tail -1)
           # It will match only if the input is something like `1.2.x` if there is any trailing chars (`1.2.xa`) that will not match
           elif [[ "${INPUTS_VERSION}" == *".x" ]]; then
-            INPUT=$(echo "${INPUTS_VERSION}" | sed 's/.x//g')
-            VERSION=$(git ls-remote --tags --refs "https://github.com/knative/${REPO}" | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep "${INPUT}" | sort -V | tail -1)
+            INPUT="${INPUTS_VERSION%.x}"
+            # Anchor the match and escape the dots, so `1.2.x` selects the
+            # newest 1.2.z rather than anything merely containing "1.2"
+            # (unanchored, `1.2` also matches 1.23.0, 1.12.0, 2.1.20, ...).
+            # The trailing `\.` keeps `1.x` working as "newest 1.y.z" too.
+            VERSION=$(git ls-remote --tags --refs "https://github.com/knative/${REPO}" | awk '{print $2}' | sed 's/refs\/tags\/.*v//g' | grep -E "^${INPUT//./\\.}\." | sort -V | tail -1)
             REAL_KNATIVE_VERSION="knative-v${VERSION}"
           else
             REAL_KNATIVE_VERSION="knative-v${INPUTS_VERSION}"
