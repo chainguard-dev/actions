@@ -2545,7 +2545,13 @@ function requireRequest$1 () {
 	      } else if (typeof val[i] === 'object') {
 	        throw new InvalidArgumentError(`invalid ${key} header`)
 	      } else {
-	        arr.push(`${val[i]}`);
+	        // Coerce primitives (and reject unsafe coercions such as functions
+	        // with a crafted toString/Symbol.toPrimitive).
+	        const str = `${val[i]}`;
+	        if (!isValidHeaderValue(str)) {
+	          throw new InvalidArgumentError(`invalid ${key} header`)
+	        }
+	        arr.push(str);
 	      }
 	    }
 	    val = arr;
@@ -2556,7 +2562,12 @@ function requireRequest$1 () {
 	  } else if (val === null) {
 	    val = '';
 	  } else {
+	    // Coerce primitives (and reject unsafe coercions such as functions
+	    // with a crafted toString/Symbol.toPrimitive).
 	    val = `${val}`;
+	    if (!isValidHeaderValue(val)) {
+	      throw new InvalidArgumentError(`invalid ${key} header`)
+	    }
 	  }
 
 	  if (headerName === 'host') {
@@ -2707,6 +2718,7 @@ function requireDispatcherBase () {
 
 	  get webSocketOptions () {
 	    return {
+	      maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
 	      maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
 	    }
 	  }
@@ -8626,6 +8638,7 @@ function requireClientH1 () {
 	  RequestContentLengthMismatchError,
 	  ResponseContentLengthMismatchError,
 	  RequestAbortedError,
+	  InvalidArgumentError,
 	  HeadersTimeoutError,
 	  HeadersOverflowError,
 	  SocketError,
@@ -8673,6 +8686,9 @@ function requireClientH1 () {
 	const FastBuffer = Buffer[Symbol.species];
 	const addListener = util.addListener;
 	const removeAllListeners = util.removeAllListeners;
+	const kIdleSocketValidation = Symbol('kIdleSocketValidation');
+	const kIdleSocketValidationTimeout = Symbol('kIdleSocketValidationTimeout');
+	const kSocketUsed = Symbol('kSocketUsed');
 
 	let extractBody;
 
@@ -8895,27 +8911,69 @@ function requireClientH1 () {
 
 	      const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
 
-	      if (ret === constants.ERROR.PAUSED_UPGRADE) {
-	        this.onUpgrade(data.slice(offset));
-	      } else if (ret === constants.ERROR.PAUSED) {
-	        this.paused = true;
-	        socket.unshift(data.slice(offset));
-	      } else if (ret !== constants.ERROR.OK) {
-	        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-	        let message = '';
-	        /* istanbul ignore else: difficult to make a test case for */
-	        if (ptr) {
-	          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-	          message =
-	            'Response does not match the HTTP/1.1 protocol (' +
-	            Buffer.from(llhttp.memory.buffer, ptr, len).toString() +
-	            ')';
+	      if (ret !== constants.ERROR.OK) {
+	        const body = data.subarray(offset);
+
+	        if (ret === constants.ERROR.PAUSED_UPGRADE) {
+	          this.onUpgrade(body);
+	        } else if (ret === constants.ERROR.PAUSED) {
+	          this.paused = true;
+	          socket.unshift(body);
+	        } else {
+	          throw this.createError(ret, body)
 	        }
-	        throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset))
 	      }
 	    } catch (err) {
 	      util.destroy(socket, err);
 	    }
+	  }
+
+	  finish () {
+	    assert(currentParser === null);
+	    assert(this.ptr != null);
+	    assert(!this.paused);
+
+	    const { llhttp } = this;
+
+	    let ret;
+
+	    try {
+	      currentParser = this;
+	      ret = llhttp.llhttp_finish(this.ptr);
+	    } finally {
+	      currentParser = null;
+	    }
+
+	    if (ret === constants.ERROR.OK) {
+	      return null
+	    }
+
+	    if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
+	      this.paused = true;
+	      return null
+	    }
+
+	    return this.createError(ret, EMPTY_BUF)
+	  }
+
+	  createError (ret, data) {
+	    const { llhttp, contentLength, bytesRead } = this;
+
+	    if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
+	      return new ResponseContentLengthMismatchError()
+	    }
+
+	    const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+	    let message = '';
+	    if (ptr) {
+	      const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+	      message =
+	        'Response does not match the HTTP/1.1 protocol (' +
+	        Buffer.from(llhttp.memory.buffer, ptr, len).toString() +
+	        ')';
+	    }
+
+	    return new HTTPParserError(message, constants.ERROR[ret], data)
 	  }
 
 	  destroy () {
@@ -8942,6 +9000,11 @@ function requireClientH1 () {
 
 	    /* istanbul ignore next: difficult to make a test case for */
 	    if (socket.destroyed) {
+	      return -1
+	    }
+
+	    if (client[kRunning] === 0) {
+	      util.destroy(socket, new SocketError('bad response', util.getSocketInfo(socket)));
 	      return -1
 	    }
 
@@ -9045,6 +9108,11 @@ function requireClientH1 () {
 
 	    /* istanbul ignore next: difficult to make a test case for */
 	    if (socket.destroyed) {
+	      return -1
+	    }
+
+	    if (client[kRunning] === 0) {
+	      util.destroy(socket, new SocketError('bad response', util.getSocketInfo(socket)));
 	      return -1
 	    }
 
@@ -9221,6 +9289,7 @@ function requireClientH1 () {
 	    request.onComplete(headers);
 
 	    client[kQueue][client[kRunningIdx]++] = null;
+	    socket[kSocketUsed] = true;
 
 	    if (socket[kWriting]) {
 	      assert(client[kRunning] === 0);
@@ -9279,6 +9348,9 @@ function requireClientH1 () {
 	  socket[kWriting] = false;
 	  socket[kReset] = false;
 	  socket[kBlocking] = false;
+	  socket[kIdleSocketValidation] = 0;
+	  socket[kIdleSocketValidationTimeout] = null;
+	  socket[kSocketUsed] = false;
 	  socket[kParser] = new Parser(client, socket, llhttpInstance);
 
 	  addListener(socket, 'error', function (err) {
@@ -9289,8 +9361,11 @@ function requireClientH1 () {
 	    // On Mac OS, we get an ECONNRESET even if there is a full body to be forwarded
 	    // to the user.
 	    if (err.code === 'ECONNRESET' && parser.statusCode && !parser.shouldKeepAlive) {
-	      // We treat all incoming data so for as a valid response.
-	      parser.onMessageComplete();
+	      const parserErr = parser.finish();
+	      if (parserErr) {
+	        this[kError] = parserErr;
+	        this[kClient][kOnError](parserErr);
+	      }
 	      return
 	    }
 
@@ -9309,8 +9384,10 @@ function requireClientH1 () {
 	    const parser = this[kParser];
 
 	    if (parser.statusCode && !parser.shouldKeepAlive) {
-	      // We treat all incoming data so far as a valid response.
-	      parser.onMessageComplete();
+	      const parserErr = parser.finish();
+	      if (parserErr) {
+	        util.destroy(this, parserErr);
+	      }
 	      return
 	    }
 
@@ -9320,10 +9397,11 @@ function requireClientH1 () {
 	    const client = this[kClient];
 	    const parser = this[kParser];
 
+	    clearIdleSocketValidation(this);
+
 	    if (parser) {
 	      if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-	        // We treat all incoming data so far as a valid response.
-	        parser.onMessageComplete();
+	        this[kError] = parser.finish() || this[kError];
 	      }
 
 	      this[kParser].destroy();
@@ -9386,7 +9464,7 @@ function requireClientH1 () {
 	      return socket.destroyed
 	    },
 	    busy (request) {
-	      if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
+	      if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
 	        return true
 	      }
 
@@ -9424,6 +9502,39 @@ function requireClientH1 () {
 	  }
 	}
 
+	function clearIdleSocketValidation (socket) {
+	  if (socket[kIdleSocketValidationTimeout]) {
+	    clearImmediate(socket[kIdleSocketValidationTimeout]);
+	    socket[kIdleSocketValidationTimeout] = null;
+	  }
+
+	  socket[kIdleSocketValidation] = 0;
+	}
+
+	function scheduleIdleSocketValidation (client, socket) {
+	  socket[kIdleSocketValidation] = 1;
+	  // Yield to the check phase (after poll) so unsolicited bytes / FIN / RST
+	  // already pending on this idle keep-alive socket are processed before the
+	  // next request is written (GHSA-35p6-xmwp-9g52).
+	  //
+	  // setTimeout(0) pays Node's ~1ms timer floor on every sequential reuse
+	  // (#5493). setImmediate avoids that, but an *unref'd* Immediate lets poll
+	  // block for ~500ms when the event loop is otherwise idle (#5600 / #5606).
+	  // A ref'd Immediate both keeps the pending request alive and makes poll
+	  // return immediately — the hybrid those issues asked for.
+	  socket[kIdleSocketValidationTimeout] = setImmediate(() => {
+	    socket[kIdleSocketValidationTimeout] = null;
+	    socket[kIdleSocketValidation] = 2;
+
+	    if (client[kSocket] === socket && !socket.destroyed) {
+	      client[kResume]();
+	    }
+	  });
+	}
+
+	/**
+	 * @param {import('./client.js')} client
+	 */
 	function resumeH1 (client) {
 	  const socket = client[kSocket];
 
@@ -9436,6 +9547,32 @@ function requireClientH1 () {
 	    } else if (socket[kNoRef] && socket.ref) {
 	      socket.ref();
 	      socket[kNoRef] = false;
+	    }
+
+	    if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
+	      if (socket[kIdleSocketValidation] === 0) {
+	        scheduleIdleSocketValidation(client, socket);
+	        socket[kParser].readMore();
+	        if (socket.destroyed) {
+	          return
+	        }
+	        return
+	      }
+
+	      if (socket[kIdleSocketValidation] === 1) {
+	        socket[kParser].readMore();
+	        if (socket.destroyed) {
+	          return
+	        }
+	        return
+	      }
+	    }
+
+	    if (client[kRunning] === 0) {
+	      socket[kParser].readMore();
+	      if (socket.destroyed) {
+	        return
+	      }
 	    }
 
 	    if (client[kSize] === 0) {
@@ -9493,8 +9630,16 @@ function requireClientH1 () {
 	    }
 	    body = bodyStream.stream;
 	    contentLength = bodyStream.length;
-	  } else if (util.isBlobLike(body) && request.contentType == null && body.type) {
-	    headers.push('content-type', body.type);
+	  } else if (util.isBlobLike(body) && request.contentType == null) {
+	    const contentType = body.type;
+	    if (contentType) {
+	      const contentTypeValue = `${contentType}`;
+	      if (!util.isValidHeaderValue(contentTypeValue)) {
+	        util.errorRequest(client, request, new InvalidArgumentError('invalid content-type header'));
+	        return false
+	      }
+	      headers.push('content-type', contentTypeValue);
+	    }
 	  }
 
 	  if (body && typeof body.read === 'function') {
@@ -9531,6 +9676,7 @@ function requireClientH1 () {
 	  }
 
 	  const socket = client[kSocket];
+	  clearIdleSocketValidation(socket);
 
 	  const abort = (err) => {
 	    if (request.aborted || request.completed) {
@@ -12350,7 +12496,6 @@ function requireAgent () {
 
 	class Agent extends DispatcherBase {
 	  constructor ({ factory = defaultFactory, maxRedirections = 0, connect, ...options } = {}) {
-
 	    if (typeof factory !== 'function') {
 	      throw new InvalidArgumentError('factory must be a function.')
 	    }
@@ -12932,6 +13077,28 @@ function requireRetryHandler () {
 	  return new Date(retryAfter).getTime() - current
 	}
 
+	function validatePartialResponseContentLength (headers, range, statusCode, retryCount) {
+	  const contentLength = headers['content-length'];
+	  if (contentLength == null) {
+	    return null
+	  }
+
+	  if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) {
+	    return null
+	  }
+
+	  const length = Number(contentLength);
+	  const expectedLength = range.end - range.start + 1;
+	  if (!Number.isFinite(length) || length !== expectedLength) {
+	    return new RequestRetryError('Content-Length mismatch', statusCode, {
+	      headers,
+	      data: { count: retryCount }
+	    })
+	  }
+
+	  return null
+	}
+
 	class RetryHandler {
 	  constructor (opts, handlers) {
 	    const { retryOptions, ...dispatchOpts } = opts;
@@ -12985,6 +13152,7 @@ function requireRetryHandler () {
 	    this.end = null;
 	    this.etag = null;
 	    this.resume = null;
+	    this.headersSent = false;
 
 	    // Handle possible onConnect duplication
 	    this.handler.onConnect(reason => {
@@ -12995,6 +13163,20 @@ function requireRetryHandler () {
 	        this.reason = reason;
 	      }
 	    });
+	  }
+
+	  checkpointResponseEnd (headers, resume) {
+	    if (this.end == null && this.opts.method !== 'HEAD') {
+	      const contentLength = headers['content-length'];
+	      this.end = contentLength != null ? Number(contentLength) - 1 : null;
+
+	      assert(
+	        this.end == null || Number.isFinite(this.end),
+	        'invalid content-length'
+	      );
+	    }
+
+	    this.resume = this.end != null ? resume : null;
 	  }
 
 	  onRequestSent () {
@@ -13086,6 +13268,8 @@ function requireRetryHandler () {
 
 	    if (statusCode >= 300) {
 	      if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+	        this.headersSent = true;
+	        this.checkpointResponseEnd(headers, resume);
 	        return this.handler.onHeaders(
 	          statusCode,
 	          rawHeaders,
@@ -13146,10 +13330,23 @@ function requireRetryHandler () {
 	        return false
 	      }
 
+	      const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount);
+	      if (contentLengthError != null) {
+	        this.abort(contentLengthError);
+	        return false
+	      }
+
 	      const { start, size, end = size - 1 } = contentRange;
 
-	      assert(this.start === start, 'content-range mismatch');
-	      assert(this.end == null || this.end === end, 'content-range mismatch');
+	      if (this.start !== start || (this.end != null && this.end !== end)) {
+	        this.abort(
+	          new RequestRetryError('Content-Range mismatch', statusCode, {
+	            headers,
+	            data: { count: this.retryCount }
+	          })
+	        );
+	        return false
+	      }
 
 	      this.resume = resume;
 	      return true
@@ -13161,12 +13358,19 @@ function requireRetryHandler () {
 	        const range = parseRangeHeader(headers['content-range']);
 
 	        if (range == null) {
+	          this.headersSent = true;
 	          return this.handler.onHeaders(
 	            statusCode,
 	            rawHeaders,
 	            resume,
 	            statusMessage
 	          )
+	        }
+
+	        const contentLengthError = validatePartialResponseContentLength(headers, range, statusCode, this.retryCount);
+	        if (contentLengthError != null) {
+	          this.abort(contentLengthError);
+	          return false
 	        }
 
 	        const { start, size, end = size - 1 } = range;
@@ -13193,6 +13397,7 @@ function requireRetryHandler () {
 	      );
 
 	      this.resume = resume;
+	      this.headersSent = true;
 	      this.etag = headers.etag != null ? headers.etag : null;
 
 	      // Weak etags are not useful for comparison nor cache
@@ -13232,7 +13437,7 @@ function requireRetryHandler () {
 	  }
 
 	  onError (err) {
-	    if (this.aborted || isDisturbed(this.opts.body)) {
+	    if (this.aborted || isDisturbed(this.opts.body) || (this.headersSent && this.resume == null)) {
 	      return this.handler.onError(err)
 	    }
 
@@ -23566,7 +23771,7 @@ function requireUtil$2 () {
 
 	    if (
 	      code < 0x20 || // exclude CTLs (0-31)
-	      code === 0x7F || // DEL
+	      code > 0x7E || // exclude DEL and non-ascii
 	      code === 0x3B // ;
 	    ) {
 	      throw new Error('Invalid cookie path')
@@ -23575,16 +23780,80 @@ function requireUtil$2 () {
 	}
 
 	/**
-	 * I have no idea why these values aren't allowed to be honest,
-	 * but Deno tests these. - Khafra
+	 * <let-dig> ::= <letter> | <digit>
+	 *
+	 * <letter> ::= any one of the 52 alphabetic characters A through Z in
+	 * upper case and a through z in lower case
+	 *
+	 * <digit> ::= any one of the ten digits 0 through 9r
+	 *
+	 * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+	 * @param {number} code
+	 */
+	function isLetterOrDigit (code) {
+	  return (
+	    (code >= 0x30 && code <= 0x39) || // 0-9
+	    (code >= 0x41 && code <= 0x5A) || // A-Z
+	    (code >= 0x61 && code <= 0x7A) // a-z
+	  )
+	}
+
+	/**
+	 * Validates a cookie domain against the "preferred name syntax".
+	 *
+	 * <domain>      ::= <subdomain> | " "
+	 * <subdomain>   ::= <label> | <subdomain> "." <label>
+	 * <label>       ::= <let-dig> [ [ <ldh-str> ] <let-dig> ]
+	 * <ldh-str>     ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+	 * <let-dig-hyp> ::= <let-dig> | "-"
+	 *
+	 * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+	 * @see https://www.rfc-editor.org/rfc/rfc1123#section-2.1
+	 * @see https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4
 	 * @param {string} domain
 	 */
 	function validateCookieDomain (domain) {
-	  if (
-	    domain.startsWith('-') ||
-	    domain.endsWith('.') ||
-	    domain.endsWith('-')
-	  ) {
+	  // <domain> ::= <subdomain> | " "
+	  if (domain === ' ') {
+	    return
+	  }
+
+	  if (domain.length > 255) {
+	    throw new Error('Invalid cookie domain')
+	  }
+
+	  let labelLength = 0;
+
+	  for (let i = 0; i < domain.length; ++i) {
+	    const code = domain.charCodeAt(i);
+
+	    if (code === 0x2E) {
+	      if (labelLength === 0) {
+	        throw new Error('Invalid cookie domain')
+	      }
+
+	      if (domain.charCodeAt(i - 1) === 0x2D) { // "-"
+	        throw new Error('Invalid cookie domain')
+	      }
+
+	      labelLength = 0;
+	      continue
+	    }
+
+	    if (labelLength === 0 && !isLetterOrDigit(code)) {
+	      throw new Error('Invalid cookie domain')
+	    }
+
+	    if (!isLetterOrDigit(code) && code !== 0x2D) { // "-"
+	      throw new Error('Invalid cookie domain')
+	    }
+
+	    if (++labelLength > 63) {
+	      throw new Error('Invalid cookie domain')
+	    }
+	  }
+
+	  if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 0x2D) { // "-"
 	    throw new Error('Invalid cookie domain')
 	  }
 	}
@@ -23727,7 +23996,13 @@ function requireUtil$2 () {
 
 	    const [key, ...value] = part.split('=');
 
-	    out.push(`${key.trim()}=${value.join('=')}`);
+	    const trimmedKey = key.trim();
+	    const joinedValue = value.join('=');
+
+	    validateCookieName(trimmedKey);
+	    validateCookieValue(joinedValue);
+
+	    out.push(`${trimmedKey}=${joinedValue}`);
 	  }
 
 	  return out.join('; ')
@@ -24026,32 +24301,25 @@ function requireParse$1 () {
 	    // If the attribute-name case-insensitively matches the string
 	    // "SameSite", the user agent MUST process the cookie-av as follows:
 
-	    // 1. Let enforcement be "Default".
-	    let enforcement = 'Default';
-
 	    const attributeValueLowercase = attributeValue.toLowerCase();
-	    // 2. If cookie-av's attribute-value is a case-insensitive match for
-	    //    "None", set enforcement to "None".
-	    if (attributeValueLowercase.includes('none')) {
-	      enforcement = 'None';
-	    }
 
-	    // 3. If cookie-av's attribute-value is a case-insensitive match for
-	    //    "Strict", set enforcement to "Strict".
-	    if (attributeValueLowercase.includes('strict')) {
-	      enforcement = 'Strict';
+	    // 1. If cookie-av's attribute-value is a case-insensitive match for
+	    //    "None", append an attribute to the cookie-attribute-list with an
+	    //    attribute-name of "SameSite" and an attribute-value of "None".
+	    if (attributeValueLowercase === 'none') {
+	      cookieAttributeList.sameSite = 'None';
+	    } else if (attributeValueLowercase === 'strict') {
+	      // 2. If cookie-av's attribute-value is a case-insensitive match for
+	      //    "Strict", append an attribute to the cookie-attribute-list with
+	      //    an attribute-name of "SameSite" and an attribute-value of
+	      //    "Strict".
+	      cookieAttributeList.sameSite = 'Strict';
+	    } else if (attributeValueLowercase === 'lax') {
+	      // 3. If cookie-av's attribute-value is a case-insensitive match for
+	      //    "Lax", append an attribute to the cookie-attribute-list with an
+	      //    attribute-name of "SameSite" and an attribute-value of "Lax".
+	      cookieAttributeList.sameSite = 'Lax';
 	    }
-
-	    // 4. If cookie-av's attribute-value is a case-insensitive match for
-	    //    "Lax", set enforcement to "Lax".
-	    if (attributeValueLowercase.includes('lax')) {
-	      enforcement = 'Lax';
-	    }
-
-	    // 5. Append an attribute to the cookie-attribute-list with an
-	    //    attribute-name of "SameSite" and an attribute-value of
-	    //    enforcement.
-	    cookieAttributeList.sameSite = enforcement;
 	  } else {
 	    cookieAttributeList.unparsed ??= [];
 
@@ -25325,7 +25593,7 @@ function requireConnection () {
 	        // is specified, the server needs to include the same field and one of
 	        // the selected subprotocol values in its response for the connection to
 	        // be established.
-	        if (!requestProtocols.includes(secProtocol)) {
+	        if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
 	          failWebsocketConnection(ws, 'Protocol was not set in the opening handshake.');
 	          return
 	        }
@@ -25572,7 +25840,12 @@ function requirePermessageDeflate () {
 
 	        if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
 	          callback(new MessageSizeExceededError());
+	          // The inflater may still hold buffered input that can emit a late
+	          // zlib error. Remove the data listener, then deterministically stop
+	          // the stream so a subsequent 'error' cannot fire without a listener
+	          // (which would terminate the process as an unhandled error event).
 	          this.#inflate.removeAllListeners();
+	          this.#inflate.destroy();
 	          this.#inflate = null;
 	          return
 	        }
@@ -25637,6 +25910,11 @@ function requireReceiver () {
 	const { PerMessageDeflate } = requirePermessageDeflate();
 	const { MessageSizeExceededError } = requireErrors();
 
+	function failWebsocketConnectionWithCode (ws, code, reason) {
+	  closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
+	  failWebsocketConnection(ws, reason);
+	}
+
 	// This code was influenced by ws released under the MIT license.
 	// Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
 	// Copyright (c) 2013 Arnout Kazemier and contributors
@@ -25657,18 +25935,22 @@ function requireReceiver () {
 	  #extensions
 
 	  /** @type {number} */
+	  #maxFragments
+
+	  /** @type {number} */
 	  #maxPayloadSize
 
 	  /**
 	   * @param {import('./websocket').WebSocket} ws
 	   * @param {Map<string, string>|null} extensions
-	   * @param {{ maxPayloadSize?: number }} [options]
+	   * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
 	   */
 	  constructor (ws, extensions, options = {}) {
 	    super();
 
 	    this.ws = ws;
 	    this.#extensions = extensions == null ? new Map() : extensions;
+	    this.#maxFragments = options.maxFragments ?? 0;
 	    this.#maxPayloadSize = options.maxPayloadSize ?? 0;
 
 	    if (this.#extensions.has('permessage-deflate')) {
@@ -25692,9 +25974,9 @@ function requireReceiver () {
 	    if (
 	      this.#maxPayloadSize > 0 &&
 	      !isControlFrame(this.#info.opcode) &&
-	      this.#info.payloadLength > this.#maxPayloadSize
+	      this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize
 	    ) {
-	      failWebsocketConnection(this.ws, 'Payload size exceeds maximum allowed size');
+	      failWebsocketConnectionWithCode(this.ws, 1009, 'Payload size exceeds maximum allowed size');
 	      return false
 	    }
 
@@ -25859,10 +26141,12 @@ function requireReceiver () {
 	          this.#state = parserStates.INFO;
 	        } else {
 	          if (!this.#info.compressed) {
-	            this.writeFragments(body);
+	            if (!this.writeFragments(body)) {
+	              return
+	            }
 
 	            if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-	              failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+	              failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
 	              return
 	            }
 
@@ -25881,14 +26165,17 @@ function requireReceiver () {
 	              this.#info.fin,
 	              (error, data) => {
 	                if (error) {
-	                  failWebsocketConnection(this.ws, error.message);
+	                  const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
+	                  failWebsocketConnectionWithCode(this.ws, code, error.message);
 	                  return
 	                }
 
-	                this.writeFragments(data);
+	                if (!this.writeFragments(data)) {
+	                  return
+	                }
 
 	                if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-	                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+	                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
 	                  return
 	                }
 
@@ -25958,8 +26245,17 @@ function requireReceiver () {
 	  }
 
 	  writeFragments (fragment) {
+	    if (
+	      this.#maxFragments > 0 &&
+	      this.#fragments.length === this.#maxFragments
+	    ) {
+	      failWebsocketConnectionWithCode(this.ws, 1008, 'Too many message fragments');
+	      return false
+	    }
+
 	    this.#fragmentsBytes += fragment.length;
 	    this.#fragments.push(fragment);
+	    return true
 	  }
 
 	  consumeFragments () {
@@ -26662,9 +26958,12 @@ function requireWebsocket () {
 	    // once this happens, the connection is open
 	    this[kResponse] = response;
 
-	    const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
+	    const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
+	    const maxFragments = webSocketOptions?.maxFragments;
+	    const maxPayloadSize = webSocketOptions?.maxPayloadSize;
 
 	    const parser = new ByteParser(this, parsedExtensions, {
+	      maxFragments,
 	      maxPayloadSize
 	    });
 	    parser.on('drain', onParserDrain);
@@ -26895,6 +27194,49 @@ function requireEventsourceStream () {
 	 */
 	const SPACE = 0x20;
 
+	const DATA = Buffer.from('data');
+	const EVENT = Buffer.from('event');
+	const ID = Buffer.from('id');
+	const RETRY = Buffer.from('retry');
+
+	function isASCIINumberBytes (buffer, start) {
+	  if (start >= buffer.length) {
+	    return false
+	  }
+
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] < 0x30 || buffer[i] > 0x39) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isValidLastEventIdBytes (buffer, start) {
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] === 0x00) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isFieldName (line, length, field) {
+	  if (length !== field.length) {
+	    return false
+	  }
+
+	  for (let i = 0; i < length; i++) {
+	    if (line[i] !== field[i]) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
 	/**
 	 * @typedef {object} EventSourceStreamEvent
 	 * @type {object}
@@ -26935,11 +27277,14 @@ function requireEventsourceStream () {
 	  eventEndCheck = false
 
 	  /**
-	   * @type {Buffer}
+	   * @type {Buffer[]}
 	   */
-	  buffer = null
+	  chunks = []
 
+	  chunkIndex = 0
 	  pos = 0
+	  lineChunkIndex = 0
+	  linePos = 0
 
 	  event = {
 	    data: undefined,
@@ -26978,92 +27323,20 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    // Cache the chunk in the buffer, as the data might not be complete while
-	    // processing it
-	    // TODO: Investigate if there is a more performant way to handle
-	    // incoming chunks
-	    // see: https://github.com/nodejs/undici/issues/2630
-	    if (this.buffer) {
-	      this.buffer = Buffer.concat([this.buffer, chunk]);
-	    } else {
-	      this.buffer = chunk;
-	    }
+	    this.chunks.push(chunk);
 
 	    // Strip leading byte-order-mark if we opened the stream and started
 	    // the processing of the incoming data
 	    if (this.checkBOM) {
-	      switch (this.buffer.length) {
-	        case 1:
-	          // Check if the first byte is the same as the first byte of the BOM
-	          if (this.buffer[0] === BOM[0]) {
-	            // If it is, we need to wait for more data
-	            callback();
-	            return
-	          }
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-
-	          // The buffer only contains one byte so we need to wait for more data
-	          callback();
-	          return
-	        case 2:
-	          // Check if the first two bytes are the same as the first two bytes
-	          // of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1]
-	          ) {
-	            // If it is, we need to wait for more data, because the third byte
-	            // is needed to determine if it is the BOM or not
-	            callback();
-	            return
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-	          break
-	        case 3:
-	          // Check if the first three bytes are the same as the first three
-	          // bytes of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // If it is, we can drop the buffered data, as it is only the BOM
-	            this.buffer = Buffer.alloc(0);
-	            // Set the checkBOM flag to false as we don't need to check for the
-	            // BOM anymore
-	            this.checkBOM = false;
-
-	            // Await more data
-	            callback();
-	            return
-	          }
-	          // If it is not the BOM, we can start processing the data
-	          this.checkBOM = false;
-	          break
-	        default:
-	          // The buffer is longer than 3 bytes, so we can drop the BOM if it is
-	          // present
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // Remove the BOM from the buffer
-	            this.buffer = this.buffer.subarray(3);
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          this.checkBOM = false;
-	          break
+	      if (this.handleBOM()) {
+	        callback();
+	        return
 	      }
 	    }
 
-	    while (this.pos < this.buffer.length) {
+	    while (this.hasCurrentByte()) {
+	      const byte = this.currentByte();
+
 	      // If the previous line ended with an end-of-line, we need to check
 	      // if the next character is also an end-of-line.
 	      if (this.eventEndCheck) {
@@ -27076,10 +27349,9 @@ function requireEventsourceStream () {
 	        if (this.crlfCheck) {
 	          // If the current character is a line feed, we can remove it
 	          // from the buffer and reset the crlfCheck flag
-	          if (this.buffer[this.pos] === LF) {
-	            this.buffer = this.buffer.subarray(this.pos + 1);
-	            this.pos = 0;
+	          if (byte === LF) {
 	            this.crlfCheck = false;
+	            this.consumeCurrentByte();
 
 	            // It is possible that the line feed is not the end of the
 	            // event. We need to check if the next character is an
@@ -27095,19 +27367,17 @@ function requireEventsourceStream () {
 	          this.crlfCheck = false;
 	        }
 
-	        if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	        if (byte === LF || byte === CR) {
 	          // If the current character is a carriage return, we need to
 	          // set the crlfCheck flag to true, as we need to check if the
 	          // next character is a line feed so we can remove it from the
 	          // buffer
-	          if (this.buffer[this.pos] === CR) {
+	          if (byte === CR) {
 	            this.crlfCheck = true;
 	          }
 
-	          this.buffer = this.buffer.subarray(this.pos + 1);
-	          this.pos = 0;
-	          if (
-	            this.event.data !== undefined || this.event.event || this.event.id || this.event.retry) {
+	          this.consumeCurrentByte();
+	          if (this.hasPendingEvent()) {
 	            this.processEvent(this.event);
 	          }
 	          this.clearEvent();
@@ -27121,22 +27391,18 @@ function requireEventsourceStream () {
 
 	      // If the current character is an end-of-line, we can process the
 	      // line
-	      if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	      if (byte === LF || byte === CR) {
 	        // If the current character is a carriage return, we need to
 	        // set the crlfCheck flag to true, as we need to check if the
 	        // next character is a line feed
-	        if (this.buffer[this.pos] === CR) {
+	        if (byte === CR) {
 	          this.crlfCheck = true;
 	        }
 
 	        // In any case, we can process the line as we reached an
 	        // end-of-line character
-	        this.parseLine(this.buffer.subarray(0, this.pos), this.event);
-
-	        // Remove the processed line from the buffer
-	        this.buffer = this.buffer.subarray(this.pos + 1);
-	        // Reset the position as we removed the processed line from the buffer
-	        this.pos = 0;
+	        this.parseLine(this.readLine(), this.event);
+	        this.consumeCurrentByte();
 	        // A line was processed and this could be the end of the event. We need
 	        // to check if the next line is empty to determine if the event is
 	        // finished.
@@ -27144,7 +27410,7 @@ function requireEventsourceStream () {
 	        continue
 	      }
 
-	      this.pos++;
+	      this.advanceCursor();
 	    }
 
 	    callback();
@@ -27169,64 +27435,53 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    let field = '';
-	    let value = '';
+	    let fieldLength = line.length;
+	    let valueStart = line.length;
 
 	    // If the line contains a U+003A COLON character (:)
 	    if (colonPosition !== -1) {
-	      // Collect the characters on the line before the first U+003A COLON
-	      // character (:), and let field be that string.
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // field
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      field = line.subarray(0, colonPosition).toString('utf8');
+	      fieldLength = colonPosition;
 
 	      // Collect the characters on the line after the first U+003A COLON
 	      // character (:), and let value be that string.
 	      // If value starts with a U+0020 SPACE character, remove it from value.
-	      let valueStart = colonPosition + 1;
+	      valueStart = colonPosition + 1;
 	      if (line[valueStart] === SPACE) {
 	        ++valueStart;
 	      }
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // value
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      value = line.subarray(valueStart).toString('utf8');
-
-	      // Otherwise, the string is not empty but does not contain a U+003A COLON
-	      // character (:)
-	    } else {
-	      // Process the field using the steps described below, using the whole
-	      // line as the field name, and the empty string as the field value.
-	      field = line.toString('utf8');
-	      value = '';
 	    }
 
-	    // Modify the event with the field name and value. The value is also
-	    // decoded as UTF-8
-	    switch (field) {
-	      case 'data':
-	        if (event[field] === undefined) {
-	          event[field] = value;
-	        } else {
-	          event[field] += `\n${value}`;
-	        }
-	        break
-	      case 'retry':
-	        if (isASCIINumber(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'id':
-	        if (isValidLastEventId(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'event':
-	        if (value.length > 0) {
-	          event[field] = value;
-	        }
-	        break
+	    if (isFieldName(line, fieldLength, DATA)) {
+	      const value = line.toString('utf8', valueStart);
+
+	      if (event.data === undefined) {
+	        event.data = value;
+	      } else {
+	        event.data += `\n${value}`;
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, RETRY)) {
+	      if (isASCIINumberBytes(line, valueStart)) {
+	        event.retry = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, ID)) {
+	      if (isValidLastEventIdBytes(line, valueStart)) {
+	        event.id = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, EVENT)) {
+	      const value = line.toString('utf8', valueStart);
+
+	      if (value.length > 0) {
+	        event.event = value;
+	      }
 	    }
 	  }
 
@@ -27256,12 +27511,151 @@ function requireEventsourceStream () {
 	  }
 
 	  clearEvent () {
-	    this.event = {
-	      data: undefined,
-	      event: undefined,
-	      id: undefined,
-	      retry: undefined
-	    };
+	    this.event.data = undefined;
+	    this.event.event = undefined;
+	    this.event.id = undefined;
+	    this.event.retry = undefined;
+	  }
+
+	  hasPendingEvent () {
+	    return this.event.data !== undefined ||
+	      this.event.event !== undefined ||
+	      this.event.id !== undefined ||
+	      this.event.retry !== undefined
+	  }
+
+	  hasCurrentByte () {
+	    return this.chunkIndex < this.chunks.length &&
+	      this.pos < this.chunks[this.chunkIndex].length
+	  }
+
+	  currentByte () {
+	    return this.chunks[this.chunkIndex][this.pos]
+	  }
+
+	  consumeCurrentByte () {
+	    this.advanceCursor();
+	    this.syncLineStartToCursor();
+	  }
+
+	  advanceCursor () {
+	    this.pos++;
+
+	    while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+	      this.chunkIndex++;
+	      this.pos = 0;
+	    }
+	  }
+
+	  syncLineStartToCursor () {
+	    this.lineChunkIndex = this.chunkIndex;
+	    this.linePos = this.pos;
+	    this.dropConsumedChunks();
+	  }
+
+	  dropConsumedChunks () {
+	    while (this.lineChunkIndex > 0) {
+	      this.chunks.shift();
+	      this.lineChunkIndex--;
+	      this.chunkIndex--;
+	    }
+
+	    if (this.chunkIndex === this.chunks.length) {
+	      this.chunks.length = 0;
+	      this.chunkIndex = 0;
+	      this.pos = 0;
+	      this.lineChunkIndex = 0;
+	      this.linePos = 0;
+	    }
+	  }
+
+	  readLine () {
+	    if (this.lineChunkIndex === this.chunkIndex) {
+	      return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos)
+	    }
+
+	    const chunks = [];
+	    let length = 0;
+
+	    for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+	      const chunk = this.chunks[i];
+	      const start = i === this.lineChunkIndex ? this.linePos : 0;
+	      const end = i === this.chunkIndex ? this.pos : chunk.length;
+	      const slice = chunk.subarray(start, end);
+	      length += slice.length;
+	      chunks.push(slice);
+	    }
+
+	    return Buffer.concat(chunks, length)
+	  }
+
+	  peekBufferedByte (offset) {
+	    let chunkIndex = this.lineChunkIndex;
+	    let pos = this.linePos;
+
+	    while (chunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[chunkIndex];
+	      const remaining = chunk.length - pos;
+
+	      if (offset < remaining) {
+	        return chunk[pos + offset]
+	      }
+
+	      offset -= remaining;
+	      chunkIndex++;
+	      pos = 0;
+	    }
+	  }
+
+	  discardLeadingBytes (count) {
+	    while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[this.lineChunkIndex];
+	      const remaining = chunk.length - this.linePos;
+
+	      if (count < remaining) {
+	        this.linePos += count;
+	        count = 0;
+	      } else {
+	        count -= remaining;
+	        this.lineChunkIndex++;
+	        this.linePos = 0;
+	      }
+	    }
+
+	    this.chunkIndex = this.lineChunkIndex;
+	    this.pos = this.linePos;
+	    this.dropConsumedChunks();
+	  }
+
+	  handleBOM () {
+	    const first = this.peekBufferedByte(0);
+	    const second = this.peekBufferedByte(1);
+	    const third = this.peekBufferedByte(2);
+
+	    if (second === undefined) {
+	      if (first === BOM[0]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return true
+	    }
+
+	    if (third === undefined) {
+	      if (first === BOM[0] && second === BOM[1]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return false
+	    }
+
+	    if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+	      this.discardLeadingBytes(3);
+	    }
+
+	    this.checkBOM = false;
+	    return !this.hasCurrentByte()
 	  }
 	}
 
@@ -33700,38 +34094,40 @@ class Alias extends NodeBase {
             if (node.anchor === this.source)
                 found = node;
         }
+        if (found && ctx) {
+            const { anchors, doc, maxAliasCount } = ctx;
+            let data = anchors.get(found);
+            if (!data) {
+                // Resolve anchors for Node.prototype.toJS()
+                toJS(found, null, ctx);
+                data = anchors.get(found);
+            }
+            /* istanbul ignore if */
+            if (data?.res === undefined) {
+                const msg = 'This should not happen: Alias anchor was not resolved?';
+                throw new ReferenceError(msg);
+            }
+            if (maxAliasCount >= 0) {
+                data.count += 1;
+                if (data.aliasCount === 0)
+                    data.aliasCount = getAliasCount(doc, found, anchors);
+                if (data.count * data.aliasCount > maxAliasCount) {
+                    const msg = 'Excessive alias count indicates a resource exhaustion attack';
+                    throw new ReferenceError(msg);
+                }
+            }
+        }
         return found;
     }
     toJSON(_arg, ctx) {
         if (!ctx)
             return { source: this.source };
-        const { anchors, doc, maxAliasCount } = ctx;
-        const source = this.resolve(doc, ctx);
+        const source = this.resolve(ctx.doc, ctx);
         if (!source) {
             const msg = `Unresolved alias (the anchor must be set before the alias): ${this.source}`;
             throw new ReferenceError(msg);
         }
-        let data = anchors.get(source);
-        if (!data) {
-            // Resolve anchors for Node.prototype.toJS()
-            toJS(source, null, ctx);
-            data = anchors.get(source);
-        }
-        /* istanbul ignore if */
-        if (data?.res === undefined) {
-            const msg = 'This should not happen: Alias anchor was not resolved?';
-            throw new ReferenceError(msg);
-        }
-        if (maxAliasCount >= 0) {
-            data.count += 1;
-            if (data.aliasCount === 0)
-                data.aliasCount = getAliasCount(doc, source, anchors);
-            if (data.count * data.aliasCount > maxAliasCount) {
-                const msg = 'Excessive alias count indicates a resource exhaustion attack';
-                throw new ReferenceError(msg);
-            }
-        }
-        return data.res;
+        return ctx.anchors.get(source).res;
     }
     toString(ctx, _onComment, _onChompKeep) {
         const src = `*${this.source}`;
@@ -37578,46 +37974,47 @@ function plainValue(source, onError) {
     }
     if (badChar)
         onError(0, 'BAD_SCALAR_START', `Plain value cannot start with ${badChar}`);
-    return foldLines(source);
+    return unfoldLines(source);
 }
 function singleQuotedValue(source, onError) {
     if (source[source.length - 1] !== "'" || source.length === 1)
         onError(source.length, 'MISSING_CHAR', "Missing closing 'quote");
-    return foldLines(source.slice(1, -1)).replace(/''/g, "'");
+    return unfoldLines(source.slice(1, -1)).replace(/''/g, "'");
 }
-function foldLines(source) {
-    /**
-     * The negative lookbehind here and in the `re` RegExp is to
-     * prevent causing a polynomial search time in certain cases.
-     *
-     * The try-catch is for Safari, which doesn't support this yet:
-     * https://caniuse.com/js-regexp-lookbehind
-     */
-    let first, line;
-    try {
-        first = new RegExp('(.*?)(?<![ \t])[ \t]*\r?\n', 'sy');
-        line = new RegExp('[ \t]*(.*?)(?:(?<![ \t])[ \t]*)?\r?\n', 'sy');
-    }
-    catch {
-        first = /(.*?)[ \t]*\r?\n/sy;
-        line = /[ \t]*(.*?)[ \t]*\r?\n/sy;
-    }
-    let match = first.exec(source);
+function unfoldLines(source) {
+    const line = /(.*?)\r?\n/sy;
+    let match = line.exec(source);
     if (!match)
         return source;
-    let res = match[1];
+    /**
+     * The negative lookbehinds in these RegExps are to
+     * prevent causing a polynomial search time in certain cases.
+     *
+     * The try-catch is for Safari < 16.4 and other old browsers:
+     * https://caniuse.com/js-regexp-lookbehind
+     */
+    let trimEnd, trimBoth;
+    try {
+        trimEnd = new RegExp('(?<![ \t])[ \t]+$');
+        trimBoth = new RegExp('^[ \t]+|(?<![ \t])[ \t]+$', 'g');
+    }
+    catch {
+        trimEnd = /[ \t]+$/;
+        trimBoth = /^[ \t]+|[ \t]+$/g;
+    }
+    let res = match[1].replace(trimEnd, '');
     let sep = ' ';
-    let pos = first.lastIndex;
-    line.lastIndex = pos;
+    let pos = line.lastIndex;
     while ((match = line.exec(source))) {
-        if (match[1] === '') {
+        const lm = match[1].replace(trimBoth, '');
+        if (lm === '') {
             if (sep === '\n')
                 res += sep;
             else
                 sep = '\n';
         }
         else {
-            res += sep + match[1];
+            res += sep + lm;
             sep = ' ';
         }
         pos = line.lastIndex;
@@ -44862,10 +45259,9 @@ class BucketsBacking {
  * number. We need to work with all 64-bits, thus, care needs to be
  * taken when working with Javascript's bitwise operators (<<, >>, &,
  * |, etc) as they truncate operands to 32-bits. In order to work around
- * this we work with the 64-bits as two 32-bit halves, perform bitwise
- * operations on them independently, and combine the results (if needed).
+ * this we work with the 64-bits as two 32-bit halves and perform bitwise
+ * operations on each half independently.
  */
-const SIGNIFICAND_WIDTH = 52;
 /**
  * EXPONENT_MASK is set to 1 for the hi 32-bits of an IEEE 754
  * floating point exponent: 0x7ff00000.
@@ -44895,6 +45291,19 @@ const MAX_NORMAL_EXPONENT = EXPONENT_BIAS;
  * MIN_VALUE is the smallest normal number
  */
 const MIN_VALUE = Math.pow(2, -1022);
+// A single DataView, allocated once and reused. Sharing the buffer is safe
+// because every read below is synchronous.
+const dv = new DataView(new ArrayBuffer(8));
+/**
+ * floatBits writes value into the shared buffer and returns its two 32-bit
+ * halves.
+ * @param {number} value - the floating point number to read
+ * @returns {{hi: number, lo: number}} the high and low 32-bit halves
+ */
+function floatBits(value) {
+    dv.setFloat64(0, value);
+    return { hi: dv.getUint32(0), lo: dv.getUint32(4) };
+}
 /**
  * getNormalBase2 extracts the normalized base-2 fractional exponent.
  * This returns k for the equation f x 2**k where f is
@@ -44905,29 +45314,18 @@ const MIN_VALUE = Math.pow(2, -1022);
  * @returns {number} the normalized base-2 exponent
  */
 function getNormalBase2(value) {
-    const dv = new DataView(new ArrayBuffer(8));
-    dv.setFloat64(0, value);
-    // access the raw 64-bit float as 32-bit uints
-    const hiBits = dv.getUint32(0);
-    const expBits = (hiBits & EXPONENT_MASK) >> 20;
-    return expBits - EXPONENT_BIAS;
+    const { hi } = floatBits(value);
+    return ((hi & EXPONENT_MASK) >> 20) - EXPONENT_BIAS;
 }
 /**
- * GetSignificand returns the 52 bit (unsigned) significand as a signed value.
- * @param {number} value - the floating point number to extract the significand from
- * @returns {number} The 52-bit significand
+ * isPowerOfTwo reports whether value is an exact power of two, e.g. its 52-bit
+ * significand is all zeros. Only valid for positive, finite values.
+ * @param {number} value - the floating point number to test
+ * @returns {boolean} true if value is an exact power of two
  */
-function getSignificand(value) {
-    const dv = new DataView(new ArrayBuffer(8));
-    dv.setFloat64(0, value);
-    // access the raw 64-bit float as two 32-bit uints
-    const hiBits = dv.getUint32(0);
-    const loBits = dv.getUint32(4);
-    // extract the significand bits from the hi bits and left shift 32 places note:
-    // we can't use the native << operator as it will truncate the result to 32-bits
-    const significandHiBits = (hiBits & SIGNIFICAND_MASK) * Math.pow(2, 32);
-    // combine the hi and lo bits and return
-    return significandHiBits + loBits;
+function isPowerOfTwo(value) {
+    const { hi, lo } = floatBits(value);
+    return (hi & SIGNIFICAND_MASK) === 0 && lo === 0;
 }
 
 /*
@@ -45007,11 +45405,9 @@ class ExponentMapping {
             return this._minNormalLowerBoundaryIndex();
         }
         const exp = getNormalBase2(value);
-        // In case the value is an exact power of two, compute a
-        // correction of -1. Note, we are using a custom _rightShift
-        // to accommodate a 52-bit argument, which the native bitwise
-        // operators do not support
-        const correction = this._rightShift(getSignificand(value) - 1, SIGNIFICAND_WIDTH);
+        // An exact power of two sits on a bucket boundary; correct by -1 so it
+        // falls into the lower bucket.
+        const correction = isPowerOfTwo(value) ? -1 : 0;
         return (exp + correction) >> this._shift;
     }
     /**
@@ -45051,9 +45447,6 @@ class ExponentMapping {
     _maxNormalLowerBoundaryIndex() {
         return MAX_NORMAL_EXPONENT >> this._shift;
     }
-    _rightShift(value, shift) {
-        return Math.floor(value * Math.pow(2, -shift));
-    }
 }
 
 /*
@@ -45083,7 +45476,7 @@ class LogarithmMapping {
             return this._minNormalLowerBoundaryIndex() - 1;
         }
         // exact power of two special case
-        if (getSignificand(value) === 0) {
+        if (isPowerOfTwo(value)) {
             const exp = getNormalBase2(value);
             return (exp << this._scale) - 1;
         }
@@ -45311,9 +45704,9 @@ class ExponentialHistogramAccumulation {
      * @param increment
      */
     updateByIncrement(value, increment) {
-        // NaN does not fall into any bucket, is not zero and should not be counted,
-        // NaN is never greater than max nor less than min, therefore return as there's nothing for us to do.
-        if (Number.isNaN(value)) {
+        // Drop NaN and ±Infinity: they belong in no bucket, are not zero, and would
+        // corrupt sum/min/max.
+        if (!Number.isFinite(value)) {
             return;
         }
         if (value > this._max) {
@@ -45872,7 +46265,7 @@ function getStringFromEnv(key) {
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$3 = '2.8.0';
+const VERSION$3 = '2.11.0';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -45887,6 +46280,41 @@ const VERSION$3 = '2.8.0';
  * @example handled
  * @example unhandled
  */
+/**
+ * Describes a class of error the operation ended with.
+ *
+ * @example timeout
+ * @example java.net.UnknownHostException
+ * @example server_certificate_invalid
+ * @example 500
+ *
+ * @note The `error.type` **SHOULD** be predictable, and **SHOULD** have low cardinality.
+ *
+ * When `error.type` is set to a type (e.g., an exception type), its
+ * canonical class name identifying the type within the artifact **SHOULD** be used.
+ *
+ * If the recorded error type is a wrapper that is not meaningful for
+ * failure classification, instrumentation **MAY** use the type of the inner
+ * error instead. For example, in Go, errors created with `fmt.Errorf`
+ * using `%w` **MAY** be unwrapped when the wrapper type does not help
+ * classify the failure.
+ *
+ * Instrumentations **SHOULD** document the list of errors they report.
+ *
+ * The cardinality of `error.type` within one instrumentation library **SHOULD** be low.
+ * Telemetry consumers that aggregate data from multiple instrumentation libraries and applications
+ * should be prepared for `error.type` to have high cardinality at query time when no
+ * additional filters are applied.
+ *
+ * If the operation has completed successfully, instrumentations **SHOULD NOT** set `error.type`.
+ *
+ * If a specific domain defines its own set of error identifiers (such as HTTP or RPC status codes),
+ * it's **RECOMMENDED** to:
+ *
+ *   - Use a domain-specific attribute
+ *   - Set `error.type` to capture all errors, regardless of whether they are defined within the domain-specific set or not.
+ */
+const ATTR_ERROR_TYPE$2 = 'error.type';
 /**
  * The exception message.
  *
@@ -46051,6 +46479,13 @@ function hrTimeToNanoseconds(time) {
  */
 function hrTimeToMicroseconds(time) {
     return time[0] * 1e6 + time[1] / 1e3;
+}
+/**
+ * Convert hrTime to milliseconds.
+ * @param time
+ */
+function hrTimeToMilliseconds(time) {
+    return time[0] * 1e3 + time[1] / 1e6;
 }
 /**
  * Convert hrTime to seconds.
@@ -46852,7 +47287,7 @@ const DEFAULT_AGGREGATION_TEMPORALITY_SELECTOR = _instrumentType => AggregationT
  *
  * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
  */
-const ATTR_OTEL_COMPONENT_NAME = 'otel.component.name';
+const ATTR_OTEL_COMPONENT_NAME$2 = 'otel.component.name';
 /**
  * A name identifying the type of the OpenTelemetry component.
  *
@@ -46864,7 +47299,7 @@ const ATTR_OTEL_COMPONENT_NAME = 'otel.component.name';
  *
  * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
  */
-const ATTR_OTEL_COMPONENT_TYPE = 'otel.component.type';
+const ATTR_OTEL_COMPONENT_TYPE$2 = 'otel.component.type';
 /**
  * Enum value "periodic_metric_reader" for attribute {@link ATTR_OTEL_COMPONENT_TYPE}.
  *
@@ -46910,13 +47345,13 @@ const METRIC_OTEL_SDK_METRIC_READER_COLLECTION_DURATION = 'otel.sdk.metric_reade
  *   - Use a domain-specific attribute
  *   - Set `error.type` to capture all errors, regardless of whether they are defined within the domain-specific set or not.
  */
-const ATTR_ERROR_TYPE = 'error.type';
+const ATTR_ERROR_TYPE$1 = 'error.type';
 
 /*
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
-const componentCounter = new Map();
+const componentCounter$2 = new Map();
 /**
  * Generates `otel.sdk.metric_reader.*` self-observability metrics.
  * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/#metric-otelsdkmetric_readercollectionduration
@@ -46925,11 +47360,11 @@ class MetricReaderMetrics {
     collectionDuration;
     standardAttrs;
     constructor(componentType, meter) {
-        const counter = componentCounter.get(componentType) ?? 0;
-        componentCounter.set(componentType, counter + 1);
+        const counter = componentCounter$2.get(componentType) ?? 0;
+        componentCounter$2.set(componentType, counter + 1);
         this.standardAttrs = {
-            [ATTR_OTEL_COMPONENT_TYPE]: componentType,
-            [ATTR_OTEL_COMPONENT_NAME]: `${componentType}/${counter}`,
+            [ATTR_OTEL_COMPONENT_TYPE$2]: componentType,
+            [ATTR_OTEL_COMPONENT_NAME$2]: `${componentType}/${counter}`,
         };
         this.collectionDuration = meter.createHistogram(METRIC_OTEL_SDK_METRIC_READER_COLLECTION_DURATION, {
             unit: 's',
@@ -46941,7 +47376,7 @@ class MetricReaderMetrics {
     }
     recordCollection(durationSecs, error) {
         const attrs = error
-            ? { ...this.standardAttrs, [ATTR_ERROR_TYPE]: error }
+            ? { ...this.standardAttrs, [ATTR_ERROR_TYPE$1]: error }
             : this.standardAttrs;
         this.collectionDuration.record(durationSecs, attrs);
     }
@@ -46952,7 +47387,7 @@ class MetricReaderMetrics {
  * SPDX-License-Identifier: Apache-2.0
  */
 // this is autogenerated file, see scripts/version-update.js
-const VERSION$2 = '2.8.0';
+const VERSION$2 = '2.11.0';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -47092,6 +47527,84 @@ class MetricReader {
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
+ * Splits a ResourceMetrics object into smaller ResourceMetrics objects
+ * such that no batch exceeds maxExportBatchSize data points.
+ * @param resourceMetrics The metrics to split.
+ * @param maxExportBatchSize The maximum number of data points per batch.
+ * @internal
+ */
+function splitMetricData(resourceMetrics, maxExportBatchSize) {
+    if (!Number.isInteger(maxExportBatchSize) || maxExportBatchSize <= 0) {
+        throw new Error('maxExportBatchSize must be a positive integer');
+    }
+    const batches = [];
+    let currentBatchPoints = 0;
+    let currentScopeMetrics = [];
+    function flush() {
+        if (currentScopeMetrics.length > 0) {
+            batches.push({
+                resource: resourceMetrics.resource,
+                scopeMetrics: currentScopeMetrics,
+            });
+            currentScopeMetrics = [];
+            currentBatchPoints = 0;
+        }
+    }
+    // Iterate through all scopes in the input metrics
+    for (const scopeMetric of resourceMetrics.scopeMetrics) {
+        let scopeMetricCopy = null;
+        // Iterate through all metrics within the current scope
+        for (const metric of scopeMetric.metrics) {
+            const dataPoints = metric.dataPoints;
+            // If a metric has no data points, add it directly to the current batch
+            if (dataPoints.length === 0) {
+                if (!scopeMetricCopy) {
+                    scopeMetricCopy = { scope: scopeMetric.scope, metrics: [] };
+                    currentScopeMetrics.push(scopeMetricCopy);
+                }
+                scopeMetricCopy.metrics.push(metric);
+                continue;
+            }
+            // Chunk the data points of the current metric across batches. We iterate
+            // with an offset instead of repeatedly slicing the remaining tail, which
+            // keeps the overall work linear in the number of data points.
+            let offset = 0;
+            while (offset < dataPoints.length) {
+                const spaceLeft = maxExportBatchSize - currentBatchPoints;
+                const take = Math.min(spaceLeft, dataPoints.length - offset);
+                // Ensure we have a ScopeMetrics object in the current batch
+                if (!scopeMetricCopy) {
+                    scopeMetricCopy = { scope: scopeMetric.scope, metrics: [] };
+                    currentScopeMetrics.push(scopeMetricCopy);
+                }
+                // A metric receives exactly one contiguous chunk per batch (after
+                // appending, the batch is either full and flushed, or the metric is
+                // exhausted), so we can slice the data points directly rather than
+                // copying them incrementally.
+                const metricCopy = {
+                    ...metric,
+                    dataPoints: dataPoints.slice(offset, offset + take),
+                };
+                scopeMetricCopy.metrics.push(metricCopy);
+                offset += take;
+                currentBatchPoints += take;
+                // If the current batch is full, flush it and start a new one
+                if (currentBatchPoints === maxExportBatchSize) {
+                    flush();
+                    scopeMetricCopy = null; // Force recreation of scope copy in the next batch
+                }
+            }
+        }
+    }
+    flush();
+    return batches;
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * {@link MetricReader} which collects metrics based on a user-configurable time interval, and passes the metrics to
  * the configured {@link PushMetricExporter}
  */
@@ -47100,8 +47613,10 @@ class PeriodicExportingMetricReader extends MetricReader {
     _exporter;
     _exportInterval;
     _exportTimeout;
+    _maxExportBatchSize;
+    _ongoingExportPromise = null;
     constructor(options) {
-        const { exporter, exportIntervalMillis = 60000, metricProducers, cardinalityLimits, } = options;
+        const { exporter, exportIntervalMillis = 60000, metricProducers, cardinalityLimits, maxExportBatchSize, } = options;
         let { exportTimeoutMillis = 30000 } = options;
         super({
             aggregationSelector: exporter.selectAggregation?.bind(exporter),
@@ -47139,6 +47654,10 @@ class PeriodicExportingMetricReader extends MetricReader {
         if (exportTimeoutMillis <= 0) {
             throw Error('exportTimeoutMillis must be greater than 0');
         }
+        if (maxExportBatchSize !== undefined &&
+            (!Number.isInteger(maxExportBatchSize) || maxExportBatchSize <= 0)) {
+            throw Error('maxExportBatchSize must be a positive integer');
+        }
         if (exportIntervalMillis < exportTimeoutMillis) {
             if ('exportIntervalMillis' in options &&
                 'exportTimeoutMillis' in options) {
@@ -47154,41 +47673,73 @@ class PeriodicExportingMetricReader extends MetricReader {
         this._exportInterval = exportIntervalMillis;
         this._exportTimeout = exportTimeoutMillis;
         this._exporter = exporter;
+        this._maxExportBatchSize = maxExportBatchSize;
     }
     async _runOnce() {
         try {
-            await callWithTimeout(this._doRun(), this._exportTimeout);
+            await this._doRun();
         }
         catch (err) {
-            if (err instanceof TimeoutError) {
-                diag.error('Export took longer than %s milliseconds and timed out.', this._exportTimeout);
-                return;
-            }
             globalErrorHandler(err);
         }
     }
     async _doRun() {
-        const { resourceMetrics, errors } = await this.collect({
-            timeoutMillis: this._exportTimeout,
-        });
-        if (errors.length > 0) {
-            diag.error('PeriodicExportingMetricReader: metrics collection errors', ...errors);
-        }
-        if (resourceMetrics.resource.asyncAttributesPending) {
-            try {
-                await resourceMetrics.resource.waitForAsyncAttributes?.();
-            }
-            catch (e) {
-                diag.debug('Error while resolving async portion of resource: ', e);
-                globalErrorHandler(e);
-            }
-        }
-        if (resourceMetrics.scopeMetrics.length === 0) {
+        if (this._ongoingExportPromise) {
+            diag.debug('PeriodicExportingMetricReader: export already in progress, skipping');
             return;
         }
-        const result = await internal._export(this._exporter, resourceMetrics);
-        if (result.code !== ExportResultCode.SUCCESS) {
-            throw new Error(`PeriodicExportingMetricReader: metrics export failed (error ${result.error})`);
+        const currentRun = async () => {
+            const { resourceMetrics, errors } = await this.collect({
+                timeoutMillis: this._exportTimeout,
+            });
+            if (errors.length > 0) {
+                diag.error('PeriodicExportingMetricReader: metrics collection errors', ...errors);
+            }
+            if (resourceMetrics.resource.asyncAttributesPending) {
+                try {
+                    await resourceMetrics.resource.waitForAsyncAttributes?.();
+                }
+                catch (e) {
+                    diag.debug('Error while resolving async portion of resource: ', e);
+                    globalErrorHandler(e);
+                }
+            }
+            if (resourceMetrics.scopeMetrics.length === 0) {
+                return;
+            }
+            const batches = this._maxExportBatchSize
+                ? splitMetricData(resourceMetrics, this._maxExportBatchSize)
+                : [resourceMetrics];
+            let anyErr = null;
+            for (const batch of batches) {
+                try {
+                    const result = await callWithTimeout(internal._export(this._exporter, batch), this._exportTimeout);
+                    if (result.code !== ExportResultCode.SUCCESS) {
+                        const err = new Error(`PeriodicExportingMetricReader: metrics export failed (error ${result.error})`);
+                        anyErr = err;
+                    }
+                }
+                catch (e) {
+                    if (e instanceof TimeoutError) {
+                        diag.error(`PeriodicExportingMetricReader: metrics export timed out after ${this._exportTimeout}ms`);
+                        break;
+                    }
+                    else {
+                        diag.error('PeriodicExportingMetricReader: metrics export threw error', e);
+                        anyErr = e instanceof Error ? e : new Error(String(e));
+                    }
+                }
+            }
+            if (anyErr) {
+                throw anyErr;
+            }
+        };
+        this._ongoingExportPromise = currentRun();
+        try {
+            await this._ongoingExportPromise;
+        }
+        finally {
+            this._ongoingExportPromise = null;
         }
     }
     onInitialized() {
@@ -47203,8 +47754,35 @@ class PeriodicExportingMetricReader extends MetricReader {
         }
     }
     async onForceFlush() {
-        await this._runOnce();
+        // Wait for any in-progress export to finish first so that we never run
+        // collect + export concurrently with it.
+        await this._awaitOngoingExport();
+        // forceFlush SHOULD collect and export the latest metrics. If a concurrent
+        // caller already started a fresh export while we were waiting above, await
+        // that one instead of starting yet another collect + export cycle;
+        // otherwise run our own.
+        if (this._ongoingExportPromise) {
+            await this._awaitOngoingExport();
+        }
+        else {
+            await this._runOnce();
+        }
         await this._exporter.forceFlush();
+    }
+    /**
+     * Helper function to wait for an ongoing export to complete.
+     * Errors are swallowed and handled by the original _runOnce().
+     */
+    async _awaitOngoingExport() {
+        if (this._ongoingExportPromise) {
+            diag.debug('PeriodicExportingMetricReader: export already in progress, awaiting ongoing export');
+            try {
+                await this._ongoingExportPromise;
+            }
+            catch {
+                // Error is handled by the _runOnce() that initiated the export.
+            }
+        }
     }
     async onShutdown() {
         if (this._interval) {
@@ -47469,7 +48047,7 @@ class SyncInstrument {
         this._writableMetricStorage = writableMetricStorage;
         this._descriptor = descriptor;
     }
-    _record(value, attributes = {}, context$1 = context.active()) {
+    _record(value, attributes = {}, context) {
         if (typeof value !== 'number') {
             diag.warn(`non-number value provided to metric ${this._descriptor.name}: ${value}`);
             return;
@@ -47483,7 +48061,7 @@ class SyncInstrument {
                 return;
             }
         }
-        this._writableMetricStorage.record(value, attributes, context$1, millisToHrTime(Date.now()));
+        this._writableMetricStorage.record(value, attributes, context, Date.now());
     }
 }
 /**
@@ -47771,15 +48349,16 @@ class DeltaMetricProcessor {
         this._cardinalityLimit = (aggregationCardinalityLimit ?? 2000) - 1;
         this._overflowHashCode = hashAttributes(this._overflowAttributes);
     }
-    record(value, attributes, _context, collectionTime) {
+    record(value, attributes, collectionTime) {
         let accumulation = this._activeCollectionStorage.get(attributes);
         if (!accumulation) {
+            const hrTime = millisToHrTime(collectionTime);
             if (this._activeCollectionStorage.size >= this._cardinalityLimit) {
-                const overflowAccumulation = this._activeCollectionStorage.getOrDefault(this._overflowAttributes, () => this._aggregator.createAccumulation(collectionTime));
+                const overflowAccumulation = this._activeCollectionStorage.getOrDefault(this._overflowAttributes, () => this._aggregator.createAccumulation(hrTime));
                 overflowAccumulation?.record(value);
                 return;
             }
-            accumulation = this._aggregator.createAccumulation(collectionTime);
+            accumulation = this._aggregator.createAccumulation(hrTime);
             this._activeCollectionStorage.set(attributes, accumulation);
         }
         accumulation?.record(value);
@@ -47990,6 +48569,10 @@ class AsyncMetricStorage extends MetricStorage {
         this._attributesProcessor = attributesProcessor;
     }
     record(measurements, observationTime) {
+        if (this._attributesProcessor === undefined) {
+            this._deltaMetricStorage.batchCumulate(measurements, observationTime);
+            return;
+        }
         const processed = new AttributeHashMap();
         for (const [attributes, value] of measurements.entries()) {
             processed.set(this._attributesProcessor.process(attributes), value);
@@ -48177,13 +48760,18 @@ class MetricStorageRegistry {
  */
 class MultiMetricStorage {
     _backingStorages;
+    hasAttributeProcessor;
     constructor(backingStorages) {
         this._backingStorages = backingStorages;
+        this.hasAttributeProcessor = backingStorages.some(s => s.hasAttributeProcessor);
     }
-    record(value, attributes, context, recordTime) {
+    record(value, attributes, context$1, recordTime) {
+        if (this.hasAttributeProcessor && context$1 === undefined) {
+            context$1 = context.active();
+        }
         const storages = this._backingStorages;
         for (let i = 0; i < storages.length; i++) {
-            storages[i].record(value, attributes, context, recordTime);
+            storages[i].record(value, attributes, context$1, recordTime);
         }
     }
 }
@@ -48391,10 +48979,14 @@ class SyncMetricStorage extends MetricStorage {
         this._deltaMetricStorage = new DeltaMetricProcessor(aggregator, this._aggregationCardinalityLimit);
         this._temporalMetricStorage = new TemporalMetricProcessor(aggregator, collectorHandles);
         this._attributesProcessor = attributesProcessor;
+        this.hasAttributeProcessor = attributesProcessor !== undefined;
     }
-    record(value, attributes, context, recordTime) {
-        attributes = this._attributesProcessor.process(attributes, context);
-        this._deltaMetricStorage.record(value, attributes, context, recordTime);
+    hasAttributeProcessor;
+    record(value, attributes, context$1, recordTime) {
+        if (this._attributesProcessor !== undefined) {
+            attributes = this._attributesProcessor.process(attributes, context$1 ?? context.active());
+        }
+        this._deltaMetricStorage.record(value, attributes, recordTime);
     }
     /**
      * Collects the metrics from this storage.
@@ -48407,48 +48999,6 @@ class SyncMetricStorage extends MetricStorage {
         return this._temporalMetricStorage.buildMetrics(collector, this._instrumentDescriptor, accumulations, collectionTime);
     }
 }
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-class NoopAttributesProcessor {
-    process(incoming, _context) {
-        return incoming;
-    }
-}
-class MultiAttributesProcessor {
-    _processors;
-    constructor(processors) {
-        this._processors = processors;
-    }
-    process(incoming, context) {
-        let filteredAttributes = incoming;
-        for (const processor of this._processors) {
-            filteredAttributes = processor.process(filteredAttributes, context);
-        }
-        return filteredAttributes;
-    }
-}
-/**
- * @internal
- *
- * Create an {@link IAttributesProcessor} that acts as a simple pass-through for attributes.
- */
-function createNoopAttributesProcessor() {
-    return NOOP;
-}
-/**
- * @internal
- *
- * Create an {@link IAttributesProcessor} that applies all processors from the provided list in order.
- *
- * @param processors Processors to apply in order.
- */
-function createMultiAttributesProcessor(processors) {
-    return new MultiAttributesProcessor(processors);
-}
-const NOOP = new NoopAttributesProcessor();
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -48538,7 +49088,7 @@ class MeterSharedState {
                 }
                 const aggregator = aggregation.createAggregator(descriptor);
                 const cardinalityLimit = collector.selectCardinalityLimit(descriptor.type);
-                const storage = new MetricStorageType(descriptor, aggregator, createNoopAttributesProcessor(), [collector], cardinalityLimit);
+                const storage = new MetricStorageType(descriptor, aggregator, undefined, [collector], cardinalityLimit);
                 this.metricStorageRegistry.registerForCollector(collector, storage);
                 return storage;
             });
@@ -48705,6 +49255,48 @@ class ExactPredicate {
         return false;
     }
 }
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+class NoopAttributesProcessor {
+    process(incoming, _context) {
+        return incoming;
+    }
+}
+class MultiAttributesProcessor {
+    _processors;
+    constructor(processors) {
+        this._processors = processors;
+    }
+    process(incoming, context) {
+        let filteredAttributes = incoming;
+        for (const processor of this._processors) {
+            filteredAttributes = processor.process(filteredAttributes, context);
+        }
+        return filteredAttributes;
+    }
+}
+/**
+ * @internal
+ *
+ * Create an {@link IAttributesProcessor} that acts as a simple pass-through for attributes.
+ */
+function createNoopAttributesProcessor() {
+    return NOOP;
+}
+/**
+ * @internal
+ *
+ * Create an {@link IAttributesProcessor} that applies all processors from the provided list in order.
+ *
+ * @param processors Processors to apply in order.
+ */
+function createMultiAttributesProcessor(processors) {
+    return new MultiAttributesProcessor(processors);
+}
+const NOOP = new NoopAttributesProcessor();
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -48986,6 +49578,9 @@ class OTLPExporterBase {
     shutdown() {
         return this._delegate.shutdown();
     }
+    setMetrics(metrics) {
+        this._delegate.setMetrics(metrics);
+    }
 }
 
 /*
@@ -49118,13 +49713,14 @@ function createLoggingPartialSuccessResponseHandler() {
  * SPDX-License-Identifier: Apache-2.0
  */
 class OTLPExportDelegate {
+    _metrics;
     _diagLogger;
     _transport;
     _serializer;
     _responseHandler;
     _promiseQueue;
     _timeout;
-    constructor(transport, serializer, responseHandler, promiseQueue, timeout) {
+    constructor(transport, serializer, responseHandler, promiseQueue, metrics, timeout) {
         this._transport = transport;
         this._serializer = serializer;
         this._responseHandler = responseHandler;
@@ -49133,6 +49729,7 @@ class OTLPExportDelegate {
         this._diagLogger = diag.createComponentLogger({
             namespace: 'OTLPExportDelegate',
         });
+        this._metrics = metrics;
     }
     export(internalRepresentation, resultCallback) {
         this._diagLogger.debug('items to be sent', internalRepresentation);
@@ -49152,8 +49749,10 @@ class OTLPExportDelegate {
             });
             return;
         }
+        const finishExport = this._metrics.startExport(internalRepresentation);
         this._promiseQueue.pushPromise(this._transport.send(serializedRequest, this._timeout).then(response => {
             if (response.status === 'success') {
+                finishExport(undefined);
                 if (response.data != null) {
                     try {
                         this._responseHandler.handleResponse(this._serializer.deserializeResponse(response.data));
@@ -49169,6 +49768,7 @@ class OTLPExportDelegate {
                 return;
             }
             else if (response.status === 'failure' && response.error) {
+                finishExport(response.error);
                 resultCallback({
                     code: ExportResultCode.FAILED,
                     error: response.error,
@@ -49176,6 +49776,7 @@ class OTLPExportDelegate {
                 return;
             }
             else if (response.status === 'retryable') {
+                finishExport('export_max_retries');
                 resultCallback({
                     code: ExportResultCode.FAILED,
                     error: response.error ??
@@ -49183,18 +49784,25 @@ class OTLPExportDelegate {
                 });
             }
             else {
+                finishExport('export_failed');
                 resultCallback({
                     code: ExportResultCode.FAILED,
                     error: new OTLPExporterError('Export failed with unknown error'),
                 });
             }
-        }, reason => resultCallback({
-            code: ExportResultCode.FAILED,
-            error: reason,
-        })));
+        }, reason => {
+            finishExport(reason);
+            resultCallback({
+                code: ExportResultCode.FAILED,
+                error: reason,
+            });
+        }));
     }
     forceFlush() {
         return this._promiseQueue.awaitAll();
+    }
+    setMetrics(metrics) {
+        this._metrics = metrics;
     }
     async shutdown() {
         this._diagLogger.debug('shutdown started');
@@ -49207,7 +49815,214 @@ class OTLPExportDelegate {
  * signals.
  */
 function createOtlpExportDelegate(components, settings) {
-    return new OTLPExportDelegate(components.transport, components.serializer, createLoggingPartialSuccessResponseHandler(), components.promiseHandler, settings.timeout);
+    return new OTLPExportDelegate(components.transport, components.serializer, createLoggingPartialSuccessResponseHandler(), components.promiseHandler, components.metrics, settings.timeout);
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * [HTTP response status code](https://tools.ietf.org/html/rfc7231#section-6).
+ *
+ * @example 200
+ */
+const ATTR_HTTP_RESPONSE_STATUS_CODE = 'http.response.status_code';
+/**
+ * A name uniquely identifying the instance of the OpenTelemetry component within its containing SDK instance.
+ *
+ * @example otlp_grpc_span_exporter/0
+ * @example custom-name
+ *
+ * @note Implementations **SHOULD** ensure a low cardinality for this attribute, even across application or SDK restarts.
+ * E.g. implementations **MUST NOT** use UUIDs as values for this attribute.
+ *
+ * Implementations **MAY** achieve these goals by following a `<otel.component.type>/<instance-counter>` pattern, e.g. `batching_span_processor/0`.
+ * Hereby `otel.component.type` refers to the corresponding attribute value of the component.
+ *
+ * The value of `instance-counter` **MAY** be automatically assigned by the component and uniqueness within the enclosing SDK instance **MUST** be guaranteed.
+ * For example, `<instance-counter>` **MAY** be implemented by using a monotonically increasing counter (starting with `0`), which is incremented every time an
+ * instance of the given component type is started.
+ *
+ * With this implementation, for example the first Batching Span Processor would have `batching_span_processor/0`
+ * as `otel.component.name`, the second one `batching_span_processor/1` and so on.
+ * These values will therefore be reused in the case of an application restart.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_NAME$1 = 'otel.component.name';
+/**
+ * A name identifying the type of the OpenTelemetry component.
+ *
+ * @example batching_span_processor
+ * @example com.example.MySpanExporter
+ *
+ * @note If none of the standardized values apply, implementations **SHOULD** use the language-defined name of the type.
+ * E.g. for Java the fully qualified classname **SHOULD** be used in this case.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_TYPE$1 = 'otel.component.type';
+/**
+ * Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name.
+ *
+ * @example example.com
+ * @example 10.1.2.80
+ * @example /tmp/my.sock
+ *
+ * @note When observed from the client side, and when communicating through an intermediary, `server.address` **SHOULD** represent the server address behind any intermediaries, for example proxies, if it's available.
+ */
+const ATTR_SERVER_ADDRESS = 'server.address';
+/**
+ * Server port number.
+ *
+ * @example 80
+ * @example 8080
+ * @example 443
+ *
+ * @note When observed from the client side, and when communicating through an intermediary, `server.port` **SHOULD** represent the server port behind any intermediaries, for example proxies, if it's available.
+ */
+const ATTR_SERVER_PORT = 'server.port';
+/**
+ * Describes a class of error the operation ended with.
+ *
+ * @example timeout
+ * @example java.net.UnknownHostException
+ * @example server_certificate_invalid
+ * @example 500
+ *
+ * @note The `error.type` **SHOULD** be predictable, and **SHOULD** have low cardinality.
+ *
+ * When `error.type` is set to a type (e.g., an exception type), its
+ * canonical class name identifying the type within the artifact **SHOULD** be used.
+ *
+ * Instrumentations **SHOULD** document the list of errors they report.
+ *
+ * The cardinality of `error.type` within one instrumentation library **SHOULD** be low.
+ * Telemetry consumers that aggregate data from multiple instrumentation libraries and applications
+ * should be prepared for `error.type` to have high cardinality at query time when no
+ * additional filters are applied.
+ *
+ * If the operation has completed successfully, instrumentations **SHOULD NOT** set `error.type`.
+ *
+ * If a specific domain defines its own set of error identifiers (such as HTTP or RPC status codes),
+ * it's **RECOMMENDED** to:
+ *
+ *   - Use a domain-specific attribute
+ *   - Set `error.type` to capture all errors, regardless of whether they are defined within the domain-specific set or not.
+ */
+const ATTR_ERROR_TYPE = 'error.type';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// this is autogenerated file, see scripts/version-update.js
+const VERSION$1 = '0.222.0';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+const componentCounter$1 = new Map();
+/**
+ * Generates `otel.sdk.exporter.*` metrics.
+ * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics
+ */
+class ExporterMetrics {
+    inflight;
+    exported;
+    duration;
+    standardAttrs;
+    responseAttributesFromError;
+    helper;
+    constructor(options) {
+        const { componentType, metricsHelper, meterProvider, url, responseAttributesFromError, } = options;
+        this.responseAttributesFromError = responseAttributesFromError;
+        const meter = meterProvider
+            ? meterProvider.getMeter('@opentelemetry/otlp-exporter', VERSION$1)
+            : createNoopMeter();
+        const counter = componentCounter$1.get(componentType) ?? 0;
+        componentCounter$1.set(componentType, counter + 1);
+        this.standardAttrs = {
+            [ATTR_OTEL_COMPONENT_TYPE$1]: componentType,
+            [ATTR_OTEL_COMPONENT_NAME$1]: `${componentType}/${counter}`,
+        };
+        if (url) {
+            // URLs may exclude scheme for gRPC endpoints, but in this case they always
+            // have a port number. Because the URL constructor requires a scheme, we
+            // can still handle gRPC endpoints by prepending an arbitrary scheme.
+            let urlToParse = url;
+            if (!url.includes('://')) {
+                urlToParse = `http://${url}`;
+            }
+            try {
+                const parsedUrl = new URL(urlToParse);
+                this.standardAttrs[ATTR_SERVER_ADDRESS] = parsedUrl.hostname;
+                let port = undefined;
+                if (parsedUrl.port) {
+                    port = Number(parsedUrl.port);
+                }
+                else if (parsedUrl.protocol === 'http:') {
+                    port = 80;
+                }
+                else if (parsedUrl.protocol === 'https:') {
+                    port = 443;
+                }
+                if (typeof port === 'number') {
+                    this.standardAttrs[ATTR_SERVER_PORT] = port;
+                }
+            }
+            catch {
+                // In practice, URLs will be valid or something else will break. Better to let that
+                // inform the user than an exception in this internal code and proceed best-effort
+                // here.
+            }
+        }
+        this.helper = metricsHelper;
+        this.inflight = meter.createUpDownCounter(`otel.sdk.exporter.${this.helper.name}.inflight`, {
+            unit: `{${this.helper.name}}`,
+            description: `The number of ${this.helper.name}s which were passed to the exporter, but that have not been exported yet (neither successful, nor failed).`,
+        });
+        this.exported = meter.createCounter(`otel.sdk.exporter.${this.helper.name}.exported`, {
+            unit: `{${this.helper.name}}`,
+            description: `The number of ${this.helper.name}s for which the export has finished, either successful or failed.`,
+        });
+        this.duration = meter.createHistogram('otel.sdk.exporter.operation.duration', {
+            unit: 's',
+            description: 'The duration of exporting a batch of telemetry records.',
+            advice: {
+                explicitBucketBoundaries: [],
+            },
+        });
+    }
+    startExport(request) {
+        const numItems = this.helper.countItems(request);
+        const startTime = hrTime();
+        this.inflight.add(numItems, this.standardAttrs);
+        return (error) => {
+            const endTime = hrTime();
+            this.inflight.add(-numItems, this.standardAttrs);
+            const exportedAttrs = error
+                ? {
+                    ...this.standardAttrs,
+                    [ATTR_ERROR_TYPE]: error instanceof Error ? error.name : 'export_failed',
+                }
+                : this.standardAttrs;
+            this.exported.add(numItems, exportedAttrs);
+            const durationAttrs = {
+                ...exportedAttrs,
+                ...this.responseAttributesFromError(error),
+            };
+            const duration = hrTimeToMilliseconds(hrTimeDuration(startTime, endTime)) / 1000;
+            this.duration.record(duration, durationAttrs);
+        };
+    }
 }
 
 /*
@@ -49290,6 +50105,32 @@ class OTLPMetricExporterBase extends OTLPExporterBase {
         return this._aggregationTemporalitySelector(instrumentType);
     }
 }
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+const MetricsExporterMetricsHelper = {
+    name: 'metric_data_point',
+    countItems: (request) => {
+        let count = 0;
+        for (const scopeMetrics of request.scopeMetrics) {
+            for (const metric of scopeMetrics.metrics) {
+                count += metric.dataPoints.length;
+            }
+        }
+        return count;
+    },
+};
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+const TraceExporterMetricsHelper = {
+    name: 'span',
+    countItems: (request) => request.length,
+};
 
 function createResource(resource, encoder) {
     const result = {
@@ -49897,13 +50738,6 @@ function parseRetryAfterToMills(retryAfter) {
     return 0;
 }
 
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-// this is autogenerated file, see scripts/version-update.js
-const VERSION$1 = '0.219.0';
-
 const DEFAULT_USER_AGENT = `OTel-OTLP-Exporter-JavaScript/${VERSION$1}`;
 /**
  * Maximum response body size (4 MB) that the HTTP transport will read.
@@ -50175,13 +51009,39 @@ function createRetryingTransport(options) {
     return new RetryingTransport(options.transport);
 }
 
-function createOtlpHttpExportDelegate(options, serializer) {
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+function createOtlpHttpExporterMetrics(metricsComponentType, exporterMetricsHelper, url, meterProvider) {
+    return new ExporterMetrics({
+        componentType: metricsComponentType,
+        metricsHelper: exporterMetricsHelper,
+        url,
+        meterProvider,
+        responseAttributesFromError: (error) => {
+            if (!error) {
+                return {
+                    [ATTR_HTTP_RESPONSE_STATUS_CODE]: 200,
+                };
+            }
+            if (!(error instanceof OTLPExporterError)) {
+                return {};
+            }
+            return {
+                [ATTR_HTTP_RESPONSE_STATUS_CODE]: error.code,
+            };
+        },
+    });
+}
+function createOtlpHttpExportDelegate(options, serializer, metricsComponentType, exporterMetricsHelper, meterProvider) {
     return createOtlpExportDelegate({
         transport: createRetryingTransport({
             transport: createHttpExporterTransport(options),
         }),
         serializer: serializer,
         promiseHandler: createBoundedQueueExportPromiseHandler(options),
+        metrics: createOtlpHttpExporterMetrics(metricsComponentType, exporterMetricsHelper, options.url, meterProvider),
     }, { timeout: options.timeoutMillis });
 }
 
@@ -50389,16 +51249,61 @@ function convertLegacyHttpOptions(config, signalIdentifier, signalResourcePath, 
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * Enum value "otlp_http_metric_exporter" for attribute {@link ATTR_OTEL_COMPONENT_TYPE}.
+ *
+ * OTLP metric exporter over HTTP with protobuf serialization
+ *
+ * @experimental This enum value is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const OTEL_COMPONENT_TYPE_VALUE_OTLP_HTTP_METRIC_EXPORTER = 'otlp_http_metric_exporter';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /**
  * OTLP Metric Exporter for Node.js
  */
 class OTLPMetricExporter extends OTLPMetricExporterBase {
+    _url;
     constructor(config) {
         super(createOtlpHttpExportDelegate(convertLegacyHttpOptions(config ?? {}, 'METRICS', 'v1/metrics', {
             'Content-Type': 'application/json',
-        }), JsonMetricsSerializer), config);
+        }), JsonMetricsSerializer, OTEL_COMPONENT_TYPE_VALUE_OTLP_HTTP_METRIC_EXPORTER, MetricsExporterMetricsHelper, config?.selfObsMeterProvider), config);
+        this._url = config?.url;
+    }
+    /**
+     * Sets the meter provider to use to collect metrics for the exporter itself.
+     * @experimental This method is experimental and is subject to breaking changes in minor releases.
+     */
+    setSelfObsMeterProvider(meterProvider) {
+        this.setMetrics(createOtlpHttpExporterMetrics(OTEL_COMPONENT_TYPE_VALUE_OTLP_HTTP_METRIC_EXPORTER, MetricsExporterMetricsHelper, this._url, meterProvider));
     }
 }
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * Enum value "otlp_http_span_exporter" for attribute {@link ATTR_OTEL_COMPONENT_TYPE}.
+ *
+ * OTLP span exporter over HTTP with protobuf serialization
+ *
+ * @experimental This enum value is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const OTEL_COMPONENT_TYPE_VALUE_OTLP_HTTP_SPAN_EXPORTER = 'otlp_http_span_exporter';
 
 /*
  * Copyright The OpenTelemetry Authors
@@ -50411,7 +51316,7 @@ class OTLPTraceExporter extends OTLPExporterBase {
     constructor(config = {}) {
         super(createOtlpHttpExportDelegate(convertLegacyHttpOptions(config, 'TRACES', 'v1/traces', {
             'Content-Type': 'application/json',
-        }), JsonTraceSerializer));
+        }), JsonTraceSerializer, OTEL_COMPONENT_TYPE_VALUE_OTLP_HTTP_SPAN_EXPORTER, TraceExporterMetricsHelper, config.selfObsMeterProvider));
     }
 }
 
@@ -50908,6 +51813,365 @@ var SamplingDecision;
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * This file contains a copy of unstable semantic convention definitions
+ * used by this package.
+ * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
+ */
+/**
+ * A name uniquely identifying the instance of the OpenTelemetry component within its containing SDK instance.
+ *
+ * @example otlp_grpc_span_exporter/0
+ * @example custom-name
+ *
+ * @note Implementations **SHOULD** ensure a low cardinality for this attribute, even across application or SDK restarts.
+ * E.g. implementations **MUST NOT** use UUIDs as values for this attribute.
+ *
+ * Implementations **MAY** achieve these goals by following a `<otel.component.type>/<instance-counter>` pattern, e.g. `batching_span_processor/0`.
+ * Hereby `otel.component.type` refers to the corresponding attribute value of the component.
+ *
+ * The value of `instance-counter` **MAY** be automatically assigned by the component and uniqueness within the enclosing SDK instance **MUST** be guaranteed.
+ * For example, `<instance-counter>` **MAY** be implemented by using a monotonically increasing counter (starting with `0`), which is incremented every time an
+ * instance of the given component type is started.
+ *
+ * With this implementation, for example the first Batching Span Processor would have `batching_span_processor/0`
+ * as `otel.component.name`, the second one `batching_span_processor/1` and so on.
+ * These values will therefore be reused in the case of an application restart.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_NAME = 'otel.component.name';
+/**
+ * A name identifying the type of the OpenTelemetry component.
+ *
+ * @example batching_span_processor
+ * @example com.example.MySpanExporter
+ *
+ * @note If none of the standardized values apply, implementations **SHOULD** use the language-defined name of the type.
+ * E.g. for Java the fully qualified classname **SHOULD** be used in this case.
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_COMPONENT_TYPE = 'otel.component.type';
+/**
+ * Determines whether the span has a parent span, and if so, [whether it is a remote parent](https://opentelemetry.io/docs/specs/otel/trace/api/#isremote)
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_SPAN_PARENT_ORIGIN = 'otel.span.parent.origin';
+/**
+ * The result value of the sampler for this span
+ *
+ * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const ATTR_OTEL_SPAN_SAMPLING_RESULT = 'otel.span.sampling_result';
+/**
+ * The number of spans for which the processing has finished, either successful or failed.
+ *
+ * @note For successful processing, `error.type` **MUST NOT** be set. For failed processing, `error.type` **MUST** contain the failure cause.
+ * For the SDK Simple and Batching Span Processor a span is considered to be processed already when it has been submitted to the exporter, not when the corresponding export call has finished.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_PROCESSOR_SPAN_PROCESSED = 'otel.sdk.processor.span.processed';
+/**
+ * The maximum number of spans the queue of a given instance of an SDK span processor can hold.
+ *
+ * @note Only applies to span processors which use a queue, e.g. the SDK Batching Span Processor.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_PROCESSOR_SPAN_QUEUE_CAPACITY = 'otel.sdk.processor.span.queue.capacity';
+/**
+ * The number of spans in the queue of a given instance of an SDK span processor.
+ *
+ * @note Only applies to span processors which use a queue, e.g. the SDK Batching Span Processor.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_PROCESSOR_SPAN_QUEUE_SIZE = 'otel.sdk.processor.span.queue.size';
+/**
+ * The number of created spans with `recording=true` for which the end operation has not been called yet.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_SPAN_LIVE = 'otel.sdk.span.live';
+/**
+ * The number of created spans.
+ *
+ * @note Implementations **MUST** record this metric for all spans, even for non-recording ones.
+ *
+ * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const METRIC_OTEL_SDK_SPAN_STARTED = 'otel.sdk.span.started';
+/**
+ * Enum value "batching_span_processor" for attribute {@link ATTR_OTEL_COMPONENT_TYPE}.
+ *
+ * The builtin SDK batching span processor
+ *
+ * @experimental This enum value is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+const OTEL_COMPONENT_TYPE_VALUE_BATCHING_SPAN_PROCESSOR = 'batching_span_processor';
+
+/**
+ * Generates `otel.sdk.span.*` metrics.
+ * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/#span-metrics
+ */
+class TracerMetrics {
+    startedSpans;
+    liveSpans;
+    constructor(meter) {
+        this.startedSpans = meter.createCounter(METRIC_OTEL_SDK_SPAN_STARTED, {
+            unit: '{span}',
+            description: 'The number of created spans.',
+        });
+        this.liveSpans = meter.createUpDownCounter(METRIC_OTEL_SDK_SPAN_LIVE, {
+            unit: '{span}',
+            description: 'The number of currently live spans.',
+        });
+    }
+    startSpan(parentSpanCtx, samplingDecision) {
+        const samplingDecisionStr = samplingDecisionToString(samplingDecision);
+        this.startedSpans.add(1, {
+            [ATTR_OTEL_SPAN_PARENT_ORIGIN]: parentOrigin(parentSpanCtx),
+            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
+        });
+        if (samplingDecision === SamplingDecision.NOT_RECORD) {
+            return () => { };
+        }
+        const liveSpanAttributes = {
+            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
+        };
+        this.liveSpans.add(1, liveSpanAttributes);
+        return () => {
+            this.liveSpans.add(-1, liveSpanAttributes);
+        };
+    }
+}
+function parentOrigin(parentSpanContext) {
+    if (!parentSpanContext) {
+        return 'none';
+    }
+    if (parentSpanContext.isRemote) {
+        return 'remote';
+    }
+    return 'local';
+}
+function samplingDecisionToString(decision) {
+    switch (decision) {
+        case SamplingDecision.RECORD_AND_SAMPLED:
+            return 'RECORD_AND_SAMPLE';
+        case SamplingDecision.RECORD:
+            return 'RECORD_ONLY';
+        case SamplingDecision.NOT_RECORD:
+            return 'DROP';
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// this is autogenerated file, see scripts/version-update.js
+const VERSION = '2.11.0';
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * This class represents a basic tracer.
+ */
+class Tracer {
+    _sampler;
+    _spanLimits;
+    _idGenerator;
+    instrumentationScope;
+    _resource;
+    _spanProcessor;
+    _tracerMetrics;
+    /**
+     * Constructs a new Tracer instance.
+     */
+    constructor(instrumentationScope, options) {
+        this.instrumentationScope = instrumentationScope;
+        this._sampler = options.sampler;
+        this._spanLimits = options.spanLimits;
+        this._resource = options.resource;
+        this._idGenerator = options.idGenerator;
+        this._spanProcessor = options.spanProcessor;
+        const meter = options.meterProvider.getMeter('@opentelemetry/sdk-trace', VERSION);
+        this._tracerMetrics = new TracerMetrics(meter);
+    }
+    /**
+     * Starts a new Span or returns the default NoopSpan based on the sampling
+     * decision.
+     */
+    startSpan(name, options = {}, context$1 = context.active()) {
+        // remove span from context in case a root span is requested via options
+        if (options.root) {
+            context$1 = trace.deleteSpan(context$1);
+        }
+        const parentSpan = trace.getSpan(context$1);
+        if (isTracingSuppressed(context$1)) {
+            diag.debug('Instrumentation suppressed, returning Noop Span');
+            const nonRecordingSpan = trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
+            return nonRecordingSpan;
+        }
+        const parentSpanContext = parentSpan?.spanContext();
+        const spanId = this._idGenerator.generateSpanId();
+        let validParentSpanContext;
+        let traceId;
+        let traceState;
+        if (!parentSpanContext ||
+            !trace.isSpanContextValid(parentSpanContext)) {
+            // New root span.
+            traceId = this._idGenerator.generateTraceId();
+        }
+        else {
+            // New child span.
+            traceId = parentSpanContext.traceId;
+            traceState = parentSpanContext.traceState;
+            validParentSpanContext = parentSpanContext;
+        }
+        const spanKind = options.kind ?? SpanKind.INTERNAL;
+        const links = (options.links ?? []).map(link => {
+            return {
+                context: link.context,
+                attributes: sanitizeAttributes(link.attributes),
+            };
+        });
+        const attributes = sanitizeAttributes(options.attributes);
+        // make sampling decision
+        const samplingResult = this._sampler.shouldSample(context$1, traceId, name, spanKind, attributes, links);
+        const recordEndMetrics = this._tracerMetrics.startSpan(parentSpanContext, samplingResult.decision);
+        traceState = samplingResult.traceState ?? traceState;
+        const traceFlags = samplingResult.decision === SamplingDecision$1.RECORD_AND_SAMPLED
+            ? TraceFlags.SAMPLED
+            : TraceFlags.NONE;
+        const spanContext = { traceId, spanId, traceFlags, traceState };
+        if (samplingResult.decision === SamplingDecision$1.NOT_RECORD) {
+            diag.debug('Recording is off, propagating context in a non-recording span');
+            const nonRecordingSpan = trace.wrapSpanContext(spanContext);
+            return nonRecordingSpan;
+        }
+        // Set initial span attributes. The attributes object may have been mutated
+        // by the sampler, so we sanitize the merged attributes before setting them.
+        const initAttributes = sanitizeAttributes(Object.assign(attributes, samplingResult.attributes));
+        const span = new SpanImpl({
+            resource: this._resource,
+            scope: this.instrumentationScope,
+            context: context$1,
+            spanContext,
+            name,
+            kind: spanKind,
+            links,
+            parentSpanContext: validParentSpanContext,
+            attributes: initAttributes,
+            startTime: options.startTime,
+            spanProcessor: this._spanProcessor,
+            spanLimits: this._spanLimits,
+            recordEndMetrics,
+        });
+        return span;
+    }
+    startActiveSpan(name, arg2, arg3, arg4) {
+        let opts;
+        let ctx;
+        let fn;
+        if (arguments.length < 2) {
+            return;
+        }
+        else if (arguments.length === 2) {
+            fn = arg2;
+        }
+        else if (arguments.length === 3) {
+            opts = arg2;
+            fn = arg3;
+        }
+        else {
+            opts = arg2;
+            ctx = arg3;
+            fn = arg4;
+        }
+        const parentContext = ctx ?? context.active();
+        const span = this.startSpan(name, opts, parentContext);
+        const contextWithSpanSet = trace.setSpan(parentContext, span);
+        return context.with(contextWithSpanSet, fn, undefined, span);
+    }
+    [inspectCustom](depth, options, inspect) {
+        const payload = {
+            instrumentationScope: this.instrumentationScope,
+            resource: { attributes: settledResourceAttributes(this._resource) },
+            spanLimits: this._spanLimits,
+        };
+        return formatInspect('Tracer', payload, depth, options, inspect);
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * Implementation of the {@link SpanProcessor} that simply forwards all
+ * received events to a list of {@link SpanProcessor}s.
+ */
+class MultiSpanProcessor {
+    _spanProcessors;
+    constructor(spanProcessors) {
+        this._spanProcessors = spanProcessors;
+    }
+    forceFlush() {
+        const promises = [];
+        for (const spanProcessor of this._spanProcessors) {
+            promises.push(spanProcessor.forceFlush());
+        }
+        return new Promise(resolve => {
+            Promise.all(promises)
+                .then(() => {
+                resolve();
+            })
+                .catch(error => {
+                globalErrorHandler(error || new Error('MultiSpanProcessor: forceFlush failed'));
+                resolve();
+            });
+        });
+    }
+    onStart(span, context) {
+        for (const spanProcessor of this._spanProcessors) {
+            spanProcessor.onStart(span, context);
+        }
+    }
+    onEnding(span) {
+        for (const spanProcessor of this._spanProcessors) {
+            if (spanProcessor.onEnding) {
+                spanProcessor.onEnding(span);
+            }
+        }
+    }
+    onEnd(span) {
+        for (const spanProcessor of this._spanProcessors) {
+            spanProcessor.onEnd(span);
+        }
+    }
+    shutdown() {
+        const promises = [];
+        for (const spanProcessor of this._spanProcessors) {
+            promises.push(spanProcessor.shutdown());
+        }
+        return new Promise((resolve, reject) => {
+            Promise.all(promises).then(() => {
+                resolve();
+            }, reject);
+        });
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /** Sampler that samples no traces. */
 class AlwaysOffSampler {
     shouldSample() {
@@ -50990,13 +52254,436 @@ class ParentBasedSampler {
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
+const componentCounter = new Map();
+class SpanProcessorMetrics {
+    processedSpans;
+    queueSize;
+    queueSizeCallback;
+    standardAttrs;
+    droppedAttrs;
+    constructor(componentType, meter, queueConfig) {
+        const counter = componentCounter.get(componentType) ?? 0;
+        componentCounter.set(componentType, counter + 1);
+        this.standardAttrs = {
+            [ATTR_OTEL_COMPONENT_TYPE]: componentType,
+            [ATTR_OTEL_COMPONENT_NAME]: `${componentType}/${counter}`,
+        };
+        this.droppedAttrs = {
+            ...this.standardAttrs,
+            [ATTR_ERROR_TYPE$2]: 'queue_full',
+        };
+        this.processedSpans = meter.createCounter(METRIC_OTEL_SDK_PROCESSOR_SPAN_PROCESSED, {
+            unit: '{span}',
+            description: 'The number of spans for which the processing has finished, either successful or failed.',
+        });
+        if (queueConfig) {
+            const { capacity, getQueueSize } = queueConfig;
+            const queueCapacity = meter.createUpDownCounter(METRIC_OTEL_SDK_PROCESSOR_SPAN_QUEUE_CAPACITY, {
+                unit: '{span}',
+                description: 'The maximum number of spans the queue of a given instance of an SDK span processor can hold.',
+            });
+            queueCapacity.add(capacity, this.standardAttrs);
+            this.queueSize = meter.createObservableUpDownCounter(METRIC_OTEL_SDK_PROCESSOR_SPAN_QUEUE_SIZE, {
+                unit: '{span}',
+                description: 'The number of spans in the queue of a given instance of an SDK span processor.',
+            });
+            this.queueSizeCallback = result => result.observe(getQueueSize(), this.standardAttrs);
+            this.queueSize.addCallback(this.queueSizeCallback);
+        }
+    }
+    dropSpans(count) {
+        this.processedSpans.add(count, this.droppedAttrs);
+    }
+    finishSpans(count, error) {
+        if (!error) {
+            this.processedSpans.add(count, this.standardAttrs);
+            return;
+        }
+        const attrs = {
+            ...this.standardAttrs,
+            [ATTR_ERROR_TYPE$2]: error.name,
+        };
+        this.processedSpans.add(count, attrs);
+    }
+    shutdown() {
+        if (this.queueSize && this.queueSizeCallback) {
+            this.queueSize.removeCallback(this.queueSizeCallback);
+        }
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * Implementation of the {@link SpanProcessor} that batches spans exported by
+ * the SDK then pushes them to the exporter pipeline.
+ */
+class BatchSpanProcessorBase {
+    _maxExportBatchSize;
+    _maxQueueSize;
+    _scheduledDelayMillis;
+    _exportTimeoutMillis;
+    _exporter;
+    _metrics;
+    _isExporting = false;
+    _finishedSpans = [];
+    _timer;
+    _shutdownOnce;
+    _droppedSpansCount = 0;
+    constructor(options) {
+        this._exporter = options.exporter;
+        this._maxExportBatchSize = options.maxExportBatchSize ?? 512;
+        this._maxQueueSize = options.maxQueueSize ?? 2048;
+        this._scheduledDelayMillis = options.scheduledDelayMillis ?? 5000;
+        this._exportTimeoutMillis = options.exportTimeoutMillis ?? 30000;
+        this._shutdownOnce = new BindOnceFuture(this._shutdown, this);
+        if (this._maxExportBatchSize > this._maxQueueSize) {
+            diag.warn('BatchSpanProcessor: maxExportBatchSize must be smaller or equal to maxQueueSize, setting maxExportBatchSize to match maxQueueSize');
+            this._maxExportBatchSize = this._maxQueueSize;
+        }
+        const meter = options.selfObsMeterProvider
+            ? options.selfObsMeterProvider.getMeter('@opentelemetry/sdk-trace')
+            : createNoopMeter();
+        this._metrics = new SpanProcessorMetrics(OTEL_COMPONENT_TYPE_VALUE_BATCHING_SPAN_PROCESSOR, meter, {
+            capacity: this._maxQueueSize,
+            getQueueSize: () => this._finishedSpans.length,
+        });
+    }
+    forceFlush() {
+        if (this._shutdownOnce.isCalled) {
+            return this._shutdownOnce.promise;
+        }
+        return this._flushAll();
+    }
+    // does nothing.
+    onStart(_span, _parentContext) { }
+    onEnd(span) {
+        if (this._shutdownOnce.isCalled) {
+            return;
+        }
+        if ((span.spanContext().traceFlags & TraceFlags.SAMPLED) === 0) {
+            return;
+        }
+        this._addToBuffer(span);
+    }
+    shutdown() {
+        return this._shutdownOnce.call();
+    }
+    _shutdown() {
+        return Promise.resolve()
+            .then(() => {
+            return this.onShutdown();
+        })
+            .then(() => {
+            return this._flushAll();
+        })
+            .then(() => {
+            this._metrics.shutdown();
+            return this._exporter.shutdown();
+        });
+    }
+    /** Add a span in the buffer. */
+    _addToBuffer(span) {
+        if (this._finishedSpans.length >= this._maxQueueSize) {
+            // limit reached, drop span
+            if (this._droppedSpansCount === 0) {
+                diag.debug('maxQueueSize reached, dropping spans');
+            }
+            this._droppedSpansCount++;
+            this._metrics.dropSpans(1);
+            return;
+        }
+        if (this._droppedSpansCount > 0) {
+            // some spans were dropped, log once with count of spans dropped
+            diag.warn(`Dropped ${this._droppedSpansCount} spans because maxQueueSize reached`);
+            this._droppedSpansCount = 0;
+        }
+        this._finishedSpans.push(span);
+        this._maybeStartTimer();
+    }
+    /**
+     * Send all spans to the exporter respecting the batch size limit
+     * This function is used only on forceFlush or shutdown,
+     * for all other cases _flush should be used
+     * */
+    _flushAll() {
+        return new Promise((resolve, reject) => {
+            const promises = [];
+            // calculate number of batches
+            const count = Math.ceil(this._finishedSpans.length / this._maxExportBatchSize);
+            for (let i = 0, j = count; i < j; i++) {
+                promises.push(this._flushOneBatch());
+            }
+            Promise.all(promises)
+                .then(() => {
+                resolve();
+            })
+                .catch(reject);
+        });
+    }
+    _flushOneBatch() {
+        this._clearTimer();
+        if (this._finishedSpans.length === 0) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                // don't wait anymore for export, this way the next batch can start
+                reject(new Error('Timeout'));
+            }, this._exportTimeoutMillis);
+            // prevent downstream exporter calls from generating spans
+            context.with(suppressTracing(context.active()), () => {
+                // Reset the finished spans buffer here because the next invocations of the _flush method
+                // could pass the same finished spans to the exporter if the buffer is cleared
+                // outside the execution of this callback.
+                let spans;
+                if (this._finishedSpans.length <= this._maxExportBatchSize) {
+                    spans = this._finishedSpans;
+                    this._finishedSpans = [];
+                }
+                else {
+                    spans = this._finishedSpans.splice(0, this._maxExportBatchSize);
+                }
+                const doExport = () => this._exporter.export(spans, result => {
+                    clearTimeout(timer);
+                    this._metrics.finishSpans(spans.length, result.error);
+                    if (result.code === ExportResultCode.SUCCESS) {
+                        resolve();
+                    }
+                    else {
+                        reject(result.error ??
+                            new Error('BatchSpanProcessor: span export failed'));
+                    }
+                });
+                let pendingResources = null;
+                for (let i = 0, len = spans.length; i < len; i++) {
+                    const span = spans[i];
+                    if (span.resource.asyncAttributesPending &&
+                        span.resource.waitForAsyncAttributes) {
+                        pendingResources ??= [];
+                        pendingResources.push(span.resource.waitForAsyncAttributes());
+                    }
+                }
+                // Avoid scheduling a promise to make the behavior more predictable and easier to test
+                if (pendingResources === null) {
+                    doExport();
+                }
+                else {
+                    Promise.all(pendingResources).then(doExport, err => {
+                        globalErrorHandler(err);
+                        reject(err);
+                    });
+                }
+            });
+        });
+    }
+    _maybeStartTimer() {
+        if (this._isExporting)
+            return;
+        const flush = () => {
+            this._isExporting = true;
+            this._flushOneBatch()
+                .finally(() => {
+                this._isExporting = false;
+                if (this._finishedSpans.length > 0) {
+                    this._clearTimer();
+                    this._maybeStartTimer();
+                }
+            })
+                .catch(e => {
+                this._isExporting = false;
+                globalErrorHandler(e);
+            });
+        };
+        // we only wait if the queue doesn't have enough elements yet
+        if (this._finishedSpans.length >= this._maxExportBatchSize) {
+            return flush();
+        }
+        if (this._timer !== undefined)
+            return;
+        this._timer = setTimeout(() => flush(), this._scheduledDelayMillis);
+        // depending on runtime, this may be a 'number' or NodeJS.Timeout
+        if (typeof this._timer !== 'number') {
+            this._timer.unref();
+        }
+    }
+    _clearTimer() {
+        if (this._timer !== undefined) {
+            clearTimeout(this._timer);
+            this._timer = undefined;
+        }
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+let BatchSpanProcessor$1 = class BatchSpanProcessor extends BatchSpanProcessorBase {
+    onShutdown() { }
+};
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+const SPAN_ID_BYTES = 8;
+const TRACE_ID_BYTES = 16;
+class RandomIdGenerator {
+    /**
+     * Returns a random 16-byte trace ID formatted/encoded as a 32 lowercase hex
+     * characters corresponding to 128 bits.
+     */
+    generateTraceId = getIdGenerator(TRACE_ID_BYTES);
+    /**
+     * Returns a random 8-byte span ID formatted/encoded as a 16 lowercase hex
+     * characters corresponding to 64 bits.
+     */
+    generateSpanId = getIdGenerator(SPAN_ID_BYTES);
+}
+const SHARED_BUFFER = Buffer.allocUnsafe(TRACE_ID_BYTES);
+function getIdGenerator(bytes) {
+    return function generateId() {
+        for (let i = 0; i < bytes / 4; i++) {
+            // unsigned right shift drops decimal part of the number
+            // it is required because if a number between 2**32 and 2**32 - 1 is generated, an out of range error is thrown by writeUInt32BE
+            SHARED_BUFFER.writeUInt32BE((Math.random() * 2 ** 32) >>> 0, i * 4);
+        }
+        // If buffer is all 0, set the last byte to 1 to guarantee a valid w3c id is generated
+        for (let i = 0; i < bytes; i++) {
+            if (SHARED_BUFFER[i] > 0) {
+                break;
+            }
+            else if (i === bytes - 1) {
+                SHARED_BUFFER[bytes - 1] = 1;
+            }
+        }
+        return SHARED_BUFFER.toString('hex', 0, bytes);
+    };
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+var ForceFlushState;
+(function (ForceFlushState) {
+    ForceFlushState[ForceFlushState["resolved"] = 0] = "resolved";
+    ForceFlushState[ForceFlushState["timeout"] = 1] = "timeout";
+    ForceFlushState[ForceFlushState["error"] = 2] = "error";
+    ForceFlushState[ForceFlushState["unresolved"] = 3] = "unresolved";
+})(ForceFlushState || (ForceFlushState = {}));
+/**
+ * This class represents a basic tracer provider which platform libraries can extend
+ */
+class TracerProvider {
+    _resource;
+    _activeSpanProcessor;
+    _forceFlushTimeoutMillis;
+    _tracerOptions;
+    _tracers = new Map();
+    constructor(options = {}) {
+        this._forceFlushTimeoutMillis = options.forceFlushTimeoutMillis ?? 30000;
+        this._resource = options.resource ?? defaultResource();
+        const spanProcessors = options.spanProcessors ?? [];
+        this._activeSpanProcessor = new MultiSpanProcessor(spanProcessors);
+        this._tracerOptions = {
+            resource: this._resource,
+            sampler: options.sampler ??
+                new ParentBasedSampler({
+                    root: new AlwaysOnSampler(),
+                }),
+            spanLimits: {
+                attributeCountLimit: options.spanLimits?.attributeCountLimit ?? 128,
+                attributeValueLengthLimit: options.spanLimits?.attributeValueLengthLimit ?? Infinity,
+                eventCountLimit: options.spanLimits?.eventCountLimit ?? 128,
+                linkCountLimit: options.spanLimits?.linkCountLimit ?? 128,
+                attributePerEventCountLimit: options.spanLimits?.attributePerEventCountLimit ?? 128,
+                attributePerLinkCountLimit: options.spanLimits?.attributePerLinkCountLimit ?? 128,
+            },
+            idGenerator: options.idGenerator || new RandomIdGenerator(),
+            spanProcessor: this._activeSpanProcessor,
+            meterProvider: options.meterProvider ?? {
+                getMeter() {
+                    return createNoopMeter();
+                },
+            },
+        };
+    }
+    getTracer(name, version, options) {
+        const key = `${name}@${version || ''}:${options?.schemaUrl || ''}`;
+        if (!this._tracers.has(key)) {
+            this._tracers.set(key, new Tracer({ name, version, schemaUrl: options?.schemaUrl }, this._tracerOptions));
+        }
+        return this._tracers.get(key);
+    }
+    forceFlush(options) {
+        const timeout = options?.timeoutMillis ?? this._forceFlushTimeoutMillis;
+        const promises = this._activeSpanProcessor['_spanProcessors'].map((spanProcessor) => {
+            return new Promise(resolve => {
+                let state;
+                const timeoutInterval = setTimeout(() => {
+                    resolve(new Error(`Span processor did not completed within timeout period of ${timeout} ms`));
+                    state = ForceFlushState.timeout;
+                }, timeout);
+                spanProcessor
+                    .forceFlush()
+                    .then(() => {
+                    clearTimeout(timeoutInterval);
+                    if (state !== ForceFlushState.timeout) {
+                        state = ForceFlushState.resolved;
+                        resolve(state);
+                    }
+                })
+                    .catch(error => {
+                    clearTimeout(timeoutInterval);
+                    state = ForceFlushState.error;
+                    resolve(error);
+                });
+            });
+        });
+        return new Promise((resolve, reject) => {
+            Promise.all(promises)
+                .then(results => {
+                const errors = results.filter(result => result !== ForceFlushState.resolved);
+                if (errors.length > 0) {
+                    reject(errors);
+                }
+                else {
+                    resolve();
+                }
+            })
+                .catch(error => reject([error]));
+        });
+    }
+    shutdown() {
+        return this._activeSpanProcessor.shutdown();
+    }
+    [inspectCustom](depth, options, inspect) {
+        const processors = this._activeSpanProcessor['_spanProcessors'];
+        const payload = {
+            resource: { attributes: settledResourceAttributes(this._resource) },
+            tracers: Array.from(this._tracers.keys()),
+            spanProcessors: processors.map(p => p.constructor?.name ?? 'SpanProcessor'),
+        };
+        return formatInspect('TracerProvider', payload, depth, options, inspect);
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /** Sampler that samples a given fraction of traces based of trace id deterministically. */
 class TraceIdRatioBasedSampler {
     _ratio;
     _upperBound;
     constructor(ratio = 0) {
         this._ratio = this._normalize(ratio);
-        this._upperBound = Math.floor(this._ratio * 0xffffffff);
+        this._upperBound =
+            this._ratio === 1 ? 0x100000000 : Math.floor(this._ratio * 0xffffffff);
     }
     shouldSample(context, traceId) {
         return {
@@ -51121,20 +52808,6 @@ function getSamplerProbabilityFromEnv() {
 const DEFAULT_ATTRIBUTE_COUNT_LIMIT = 128;
 const DEFAULT_ATTRIBUTE_VALUE_LENGTH_LIMIT = Infinity;
 /**
- * Function to merge Default configuration (as specified in './config') with
- * user provided configurations.
- */
-function mergeConfig(userConfig) {
-    const perInstanceDefaults = {
-        sampler: buildSamplerFromEnv(),
-    };
-    const DEFAULT_CONFIG = loadDefaultConfig();
-    const target = Object.assign({}, DEFAULT_CONFIG, perInstanceDefaults, userConfig);
-    target.generalLimits = Object.assign({}, DEFAULT_CONFIG.generalLimits, userConfig.generalLimits || {});
-    target.spanLimits = Object.assign({}, DEFAULT_CONFIG.spanLimits, userConfig.spanLimits || {});
-    return target;
-}
-/**
  * When general limits are provided and model specific limits are not,
  * configures the model specific limits by using the values from the general ones.
  * @param userConfig User provided tracer configuration
@@ -51167,647 +52840,46 @@ function reconfigureLimits(userConfig) {
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
- * Implementation of the {@link SpanProcessor} that batches spans exported by
- * the SDK then pushes them to the exporter pipeline.
+ * A TracerProvider implementation that reads configuration defaults from
+ * OTEL_* environment variables per
+ * https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
  */
-class BatchSpanProcessorBase {
-    _maxExportBatchSize;
-    _maxQueueSize;
-    _scheduledDelayMillis;
-    _exportTimeoutMillis;
-    _exporter;
-    _isExporting = false;
-    _finishedSpans = [];
-    _timer;
-    _shutdownOnce;
-    _droppedSpansCount = 0;
-    constructor(exporter, config) {
-        this._exporter = exporter;
-        this._maxExportBatchSize =
-            typeof config?.maxExportBatchSize === 'number'
-                ? config.maxExportBatchSize
-                : (getNumberFromEnv('OTEL_BSP_MAX_EXPORT_BATCH_SIZE') ?? 512);
-        this._maxQueueSize =
-            typeof config?.maxQueueSize === 'number'
-                ? config.maxQueueSize
-                : (getNumberFromEnv('OTEL_BSP_MAX_QUEUE_SIZE') ?? 2048);
-        this._scheduledDelayMillis =
-            typeof config?.scheduledDelayMillis === 'number'
-                ? config.scheduledDelayMillis
-                : (getNumberFromEnv('OTEL_BSP_SCHEDULE_DELAY') ?? 5000);
-        this._exportTimeoutMillis =
-            typeof config?.exportTimeoutMillis === 'number'
-                ? config.exportTimeoutMillis
-                : (getNumberFromEnv('OTEL_BSP_EXPORT_TIMEOUT') ?? 30000);
-        this._shutdownOnce = new BindOnceFuture(this._shutdown, this);
-        if (this._maxExportBatchSize > this._maxQueueSize) {
-            diag.warn('BatchSpanProcessor: maxExportBatchSize must be smaller or equal to maxQueueSize, setting maxExportBatchSize to match maxQueueSize');
-            this._maxExportBatchSize = this._maxQueueSize;
-        }
-    }
-    forceFlush() {
-        if (this._shutdownOnce.isCalled) {
-            return this._shutdownOnce.promise;
-        }
-        return this._flushAll();
-    }
-    // does nothing.
-    onStart(_span, _parentContext) { }
-    onEnd(span) {
-        if (this._shutdownOnce.isCalled) {
-            return;
-        }
-        if ((span.spanContext().traceFlags & TraceFlags.SAMPLED) === 0) {
-            return;
-        }
-        this._addToBuffer(span);
-    }
-    shutdown() {
-        return this._shutdownOnce.call();
-    }
-    _shutdown() {
-        return Promise.resolve()
-            .then(() => {
-            return this.onShutdown();
-        })
-            .then(() => {
-            return this._flushAll();
-        })
-            .then(() => {
-            return this._exporter.shutdown();
-        });
-    }
-    /** Add a span in the buffer. */
-    _addToBuffer(span) {
-        if (this._finishedSpans.length >= this._maxQueueSize) {
-            // limit reached, drop span
-            if (this._droppedSpansCount === 0) {
-                diag.debug('maxQueueSize reached, dropping spans');
-            }
-            this._droppedSpansCount++;
-            return;
-        }
-        if (this._droppedSpansCount > 0) {
-            // some spans were dropped, log once with count of spans dropped
-            diag.warn(`Dropped ${this._droppedSpansCount} spans because maxQueueSize reached`);
-            this._droppedSpansCount = 0;
-        }
-        this._finishedSpans.push(span);
-        this._maybeStartTimer();
-    }
-    /**
-     * Send all spans to the exporter respecting the batch size limit
-     * This function is used only on forceFlush or shutdown,
-     * for all other cases _flush should be used
-     * */
-    _flushAll() {
-        return new Promise((resolve, reject) => {
-            const promises = [];
-            // calculate number of batches
-            const count = Math.ceil(this._finishedSpans.length / this._maxExportBatchSize);
-            for (let i = 0, j = count; i < j; i++) {
-                promises.push(this._flushOneBatch());
-            }
-            Promise.all(promises)
-                .then(() => {
-                resolve();
-            })
-                .catch(reject);
-        });
-    }
-    _flushOneBatch() {
-        this._clearTimer();
-        if (this._finishedSpans.length === 0) {
-            return Promise.resolve();
-        }
-        return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-                // don't wait anymore for export, this way the next batch can start
-                reject(new Error('Timeout'));
-            }, this._exportTimeoutMillis);
-            // prevent downstream exporter calls from generating spans
-            context.with(suppressTracing(context.active()), () => {
-                // Reset the finished spans buffer here because the next invocations of the _flush method
-                // could pass the same finished spans to the exporter if the buffer is cleared
-                // outside the execution of this callback.
-                let spans;
-                if (this._finishedSpans.length <= this._maxExportBatchSize) {
-                    spans = this._finishedSpans;
-                    this._finishedSpans = [];
-                }
-                else {
-                    spans = this._finishedSpans.splice(0, this._maxExportBatchSize);
-                }
-                const doExport = () => this._exporter.export(spans, result => {
-                    clearTimeout(timer);
-                    if (result.code === ExportResultCode.SUCCESS) {
-                        resolve();
-                    }
-                    else {
-                        reject(result.error ??
-                            new Error('BatchSpanProcessor: span export failed'));
-                    }
-                });
-                let pendingResources = null;
-                for (let i = 0, len = spans.length; i < len; i++) {
-                    const span = spans[i];
-                    if (span.resource.asyncAttributesPending &&
-                        span.resource.waitForAsyncAttributes) {
-                        pendingResources ??= [];
-                        pendingResources.push(span.resource.waitForAsyncAttributes());
-                    }
-                }
-                // Avoid scheduling a promise to make the behavior more predictable and easier to test
-                if (pendingResources === null) {
-                    doExport();
-                }
-                else {
-                    Promise.all(pendingResources).then(doExport, err => {
-                        globalErrorHandler(err);
-                        reject(err);
-                    });
-                }
-            });
-        });
-    }
-    _maybeStartTimer() {
-        if (this._isExporting)
-            return;
-        const flush = () => {
-            this._isExporting = true;
-            this._flushOneBatch()
-                .finally(() => {
-                this._isExporting = false;
-                if (this._finishedSpans.length > 0) {
-                    this._clearTimer();
-                    this._maybeStartTimer();
-                }
-            })
-                .catch(e => {
-                this._isExporting = false;
-                globalErrorHandler(e);
-            });
-        };
-        // we only wait if the queue doesn't have enough elements yet
-        if (this._finishedSpans.length >= this._maxExportBatchSize) {
-            return flush();
-        }
-        if (this._timer !== undefined)
-            return;
-        this._timer = setTimeout(() => flush(), this._scheduledDelayMillis);
-        // depending on runtime, this may be a 'number' or NodeJS.Timeout
-        if (typeof this._timer !== 'number') {
-            this._timer.unref();
-        }
-    }
-    _clearTimer() {
-        if (this._timer !== undefined) {
-            clearTimeout(this._timer);
-            this._timer = undefined;
-        }
-    }
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-class BatchSpanProcessor extends BatchSpanProcessorBase {
-    onShutdown() { }
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-const SPAN_ID_BYTES = 8;
-const TRACE_ID_BYTES = 16;
-class RandomIdGenerator {
-    /**
-     * Returns a random 16-byte trace ID formatted/encoded as a 32 lowercase hex
-     * characters corresponding to 128 bits.
-     */
-    generateTraceId = getIdGenerator(TRACE_ID_BYTES);
-    /**
-     * Returns a random 8-byte span ID formatted/encoded as a 16 lowercase hex
-     * characters corresponding to 64 bits.
-     */
-    generateSpanId = getIdGenerator(SPAN_ID_BYTES);
-}
-const SHARED_BUFFER = Buffer.allocUnsafe(TRACE_ID_BYTES);
-function getIdGenerator(bytes) {
-    return function generateId() {
-        for (let i = 0; i < bytes / 4; i++) {
-            // unsigned right shift drops decimal part of the number
-            // it is required because if a number between 2**32 and 2**32 - 1 is generated, an out of range error is thrown by writeUInt32BE
-            SHARED_BUFFER.writeUInt32BE((Math.random() * 2 ** 32) >>> 0, i * 4);
-        }
-        // If buffer is all 0, set the last byte to 1 to guarantee a valid w3c id is generated
-        for (let i = 0; i < bytes; i++) {
-            if (SHARED_BUFFER[i] > 0) {
-                break;
-            }
-            else if (i === bytes - 1) {
-                SHARED_BUFFER[bytes - 1] = 1;
-            }
-        }
-        return SHARED_BUFFER.toString('hex', 0, bytes);
-    };
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-/*
- * This file contains a copy of unstable semantic convention definitions
- * used by this package.
- * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
- */
-/**
- * Determines whether the span has a parent span, and if so, [whether it is a remote parent](https://opentelemetry.io/docs/specs/otel/trace/api/#isremote)
- *
- * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
- */
-const ATTR_OTEL_SPAN_PARENT_ORIGIN = 'otel.span.parent.origin';
-/**
- * The result value of the sampler for this span
- *
- * @experimental This attribute is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
- */
-const ATTR_OTEL_SPAN_SAMPLING_RESULT = 'otel.span.sampling_result';
-/**
- * The number of created spans with `recording=true` for which the end operation has not been called yet.
- *
- * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
- */
-const METRIC_OTEL_SDK_SPAN_LIVE = 'otel.sdk.span.live';
-/**
- * The number of created spans.
- *
- * @note Implementations **MUST** record this metric for all spans, even for non-recording ones.
- *
- * @experimental This metric is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
- */
-const METRIC_OTEL_SDK_SPAN_STARTED = 'otel.sdk.span.started';
-
-/**
- * Generates `otel.sdk.span.*` metrics.
- * https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/#span-metrics
- */
-class TracerMetrics {
-    startedSpans;
-    liveSpans;
-    constructor(meter) {
-        this.startedSpans = meter.createCounter(METRIC_OTEL_SDK_SPAN_STARTED, {
-            unit: '{span}',
-            description: 'The number of created spans.',
-        });
-        this.liveSpans = meter.createUpDownCounter(METRIC_OTEL_SDK_SPAN_LIVE, {
-            unit: '{span}',
-            description: 'The number of currently live spans.',
-        });
-    }
-    startSpan(parentSpanCtx, samplingDecision) {
-        const samplingDecisionStr = samplingDecisionToString(samplingDecision);
-        this.startedSpans.add(1, {
-            [ATTR_OTEL_SPAN_PARENT_ORIGIN]: parentOrigin(parentSpanCtx),
-            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
-        });
-        if (samplingDecision === SamplingDecision.NOT_RECORD) {
-            return () => { };
-        }
-        const liveSpanAttributes = {
-            [ATTR_OTEL_SPAN_SAMPLING_RESULT]: samplingDecisionStr,
-        };
-        this.liveSpans.add(1, liveSpanAttributes);
-        return () => {
-            this.liveSpans.add(-1, liveSpanAttributes);
-        };
-    }
-}
-function parentOrigin(parentSpanContext) {
-    if (!parentSpanContext) {
-        return 'none';
-    }
-    if (parentSpanContext.isRemote) {
-        return 'remote';
-    }
-    return 'local';
-}
-function samplingDecisionToString(decision) {
-    switch (decision) {
-        case SamplingDecision.RECORD_AND_SAMPLED:
-            return 'RECORD_AND_SAMPLE';
-        case SamplingDecision.RECORD:
-            return 'RECORD_ONLY';
-        case SamplingDecision.NOT_RECORD:
-            return 'DROP';
-    }
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-// this is autogenerated file, see scripts/version-update.js
-const VERSION = '2.8.0';
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-/**
- * This class represents a basic tracer.
- */
-class Tracer {
-    _sampler;
-    _generalLimits;
-    _spanLimits;
-    _idGenerator;
-    instrumentationScope;
-    _resource;
-    _spanProcessor;
-    _tracerMetrics;
-    /**
-     * Constructs a new Tracer instance.
-     */
-    constructor(instrumentationScope, config, resource, spanProcessor) {
-        const localConfig = mergeConfig(config);
-        this._sampler = localConfig.sampler;
-        this._generalLimits = localConfig.generalLimits;
-        this._spanLimits = localConfig.spanLimits;
-        this._idGenerator = config.idGenerator || new RandomIdGenerator();
-        this._resource = resource;
-        this._spanProcessor = spanProcessor;
-        this.instrumentationScope = instrumentationScope;
-        const meter = localConfig.meterProvider
-            ? localConfig.meterProvider.getMeter('@opentelemetry/sdk-trace', VERSION)
-            : createNoopMeter();
-        this._tracerMetrics = new TracerMetrics(meter);
-    }
-    /**
-     * Starts a new Span or returns the default NoopSpan based on the sampling
-     * decision.
-     */
-    startSpan(name, options = {}, context$1 = context.active()) {
-        // remove span from context in case a root span is requested via options
-        if (options.root) {
-            context$1 = trace.deleteSpan(context$1);
-        }
-        const parentSpan = trace.getSpan(context$1);
-        if (isTracingSuppressed(context$1)) {
-            diag.debug('Instrumentation suppressed, returning Noop Span');
-            const nonRecordingSpan = trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
-            return nonRecordingSpan;
-        }
-        const parentSpanContext = parentSpan?.spanContext();
-        const spanId = this._idGenerator.generateSpanId();
-        let validParentSpanContext;
-        let traceId;
-        let traceState;
-        if (!parentSpanContext ||
-            !trace.isSpanContextValid(parentSpanContext)) {
-            // New root span.
-            traceId = this._idGenerator.generateTraceId();
-        }
-        else {
-            // New child span.
-            traceId = parentSpanContext.traceId;
-            traceState = parentSpanContext.traceState;
-            validParentSpanContext = parentSpanContext;
-        }
-        const spanKind = options.kind ?? SpanKind.INTERNAL;
-        const links = (options.links ?? []).map(link => {
-            return {
-                context: link.context,
-                attributes: sanitizeAttributes(link.attributes),
-            };
-        });
-        const attributes = sanitizeAttributes(options.attributes);
-        // make sampling decision
-        const samplingResult = this._sampler.shouldSample(context$1, traceId, name, spanKind, attributes, links);
-        const recordEndMetrics = this._tracerMetrics.startSpan(parentSpanContext, samplingResult.decision);
-        traceState = samplingResult.traceState ?? traceState;
-        const traceFlags = samplingResult.decision === SamplingDecision$1.RECORD_AND_SAMPLED
-            ? TraceFlags.SAMPLED
-            : TraceFlags.NONE;
-        const spanContext = { traceId, spanId, traceFlags, traceState };
-        if (samplingResult.decision === SamplingDecision$1.NOT_RECORD) {
-            diag.debug('Recording is off, propagating context in a non-recording span');
-            const nonRecordingSpan = trace.wrapSpanContext(spanContext);
-            return nonRecordingSpan;
-        }
-        // Set initial span attributes. The attributes object may have been mutated
-        // by the sampler, so we sanitize the merged attributes before setting them.
-        const initAttributes = sanitizeAttributes(Object.assign(attributes, samplingResult.attributes));
-        const span = new SpanImpl({
-            resource: this._resource,
-            scope: this.instrumentationScope,
-            context: context$1,
-            spanContext,
-            name,
-            kind: spanKind,
-            links,
-            parentSpanContext: validParentSpanContext,
-            attributes: initAttributes,
-            startTime: options.startTime,
-            spanProcessor: this._spanProcessor,
-            spanLimits: this._spanLimits,
-            recordEndMetrics,
-        });
-        return span;
-    }
-    startActiveSpan(name, arg2, arg3, arg4) {
-        let opts;
-        let ctx;
-        let fn;
-        if (arguments.length < 2) {
-            return;
-        }
-        else if (arguments.length === 2) {
-            fn = arg2;
-        }
-        else if (arguments.length === 3) {
-            opts = arg2;
-            fn = arg3;
-        }
-        else {
-            opts = arg2;
-            ctx = arg3;
-            fn = arg4;
-        }
-        const parentContext = ctx ?? context.active();
-        const span = this.startSpan(name, opts, parentContext);
-        const contextWithSpanSet = trace.setSpan(parentContext, span);
-        return context.with(contextWithSpanSet, fn, undefined, span);
-    }
-    /** Returns the active {@link GeneralLimits}. */
-    getGeneralLimits() {
-        return this._generalLimits;
-    }
-    /** Returns the active {@link SpanLimits}. */
-    getSpanLimits() {
-        return this._spanLimits;
-    }
-    [inspectCustom](depth, options, inspect) {
-        const payload = {
-            instrumentationScope: this.instrumentationScope,
-            resource: { attributes: settledResourceAttributes(this._resource) },
-            spanLimits: this._spanLimits,
-            generalLimits: this._generalLimits,
-        };
-        return formatInspect('Tracer', payload, depth, options, inspect);
-    }
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-/**
- * Implementation of the {@link SpanProcessor} that simply forwards all
- * received events to a list of {@link SpanProcessor}s.
- */
-class MultiSpanProcessor {
-    _spanProcessors;
-    constructor(spanProcessors) {
-        this._spanProcessors = spanProcessors;
-    }
-    forceFlush() {
-        const promises = [];
-        for (const spanProcessor of this._spanProcessors) {
-            promises.push(spanProcessor.forceFlush());
-        }
-        return new Promise(resolve => {
-            Promise.all(promises)
-                .then(() => {
-                resolve();
-            })
-                .catch(error => {
-                globalErrorHandler(error || new Error('MultiSpanProcessor: forceFlush failed'));
-                resolve();
-            });
-        });
-    }
-    onStart(span, context) {
-        for (const spanProcessor of this._spanProcessors) {
-            spanProcessor.onStart(span, context);
-        }
-    }
-    onEnding(span) {
-        for (const spanProcessor of this._spanProcessors) {
-            if (spanProcessor.onEnding) {
-                spanProcessor.onEnding(span);
-            }
-        }
-    }
-    onEnd(span) {
-        for (const spanProcessor of this._spanProcessors) {
-            spanProcessor.onEnd(span);
-        }
-    }
-    shutdown() {
-        const promises = [];
-        for (const spanProcessor of this._spanProcessors) {
-            promises.push(spanProcessor.shutdown());
-        }
-        return new Promise((resolve, reject) => {
-            Promise.all(promises).then(() => {
-                resolve();
-            }, reject);
-        });
-    }
-}
-
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-var ForceFlushState;
-(function (ForceFlushState) {
-    ForceFlushState[ForceFlushState["resolved"] = 0] = "resolved";
-    ForceFlushState[ForceFlushState["timeout"] = 1] = "timeout";
-    ForceFlushState[ForceFlushState["error"] = 2] = "error";
-    ForceFlushState[ForceFlushState["unresolved"] = 3] = "unresolved";
-})(ForceFlushState || (ForceFlushState = {}));
-/**
- * This class represents a basic tracer provider which platform libraries can extend
- */
-class BasicTracerProvider {
-    _config;
-    _tracers = new Map();
-    _resource;
-    _activeSpanProcessor;
+class BasicTracerProvider extends TracerProvider {
     constructor(config = {}) {
         const mergedConfig = merge({}, loadDefaultConfig(), reconfigureLimits(config));
-        this._resource = mergedConfig.resource ?? defaultResource();
-        this._config = Object.assign({}, mergedConfig, {
-            resource: this._resource,
-        });
-        const spanProcessors = [];
-        if (config.spanProcessors?.length) {
-            spanProcessors.push(...config.spanProcessors);
+        delete mergedConfig.generalLimits;
+        super(mergedConfig);
+    }
+}
+
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * A BatchSpanProcessor that applies `OTEL_*` environment variable fallbacks per
+ * https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
+ */
+class BatchSpanProcessor extends BatchSpanProcessor$1 {
+    constructor(exporter, config) {
+        if (!config) {
+            config = {};
         }
-        this._activeSpanProcessor = new MultiSpanProcessor(spanProcessors);
-    }
-    getTracer(name, version, options) {
-        const key = `${name}@${version || ''}:${options?.schemaUrl || ''}`;
-        if (!this._tracers.has(key)) {
-            this._tracers.set(key, new Tracer({ name, version, schemaUrl: options?.schemaUrl }, this._config, this._resource, this._activeSpanProcessor));
+        const envFallbacks = [
+            ['maxExportBatchSize', 'OTEL_BSP_MAX_EXPORT_BATCH_SIZE'],
+            ['maxQueueSize', 'OTEL_BSP_MAX_QUEUE_SIZE'],
+            ['scheduledDelayMillis', 'OTEL_BSP_SCHEDULE_DELAY'],
+            ['exportTimeoutMillis', 'OTEL_BSP_EXPORT_TIMEOUT'],
+        ];
+        for (const [configName, envName] of envFallbacks) {
+            if (config[configName] === undefined) {
+                const envFallback = getNumberFromEnv(envName);
+                if (envFallback !== undefined) {
+                    config[configName] = envFallback;
+                }
+            }
         }
-        return this._tracers.get(key);
-    }
-    forceFlush() {
-        const timeout = this._config.forceFlushTimeoutMillis;
-        const promises = this._activeSpanProcessor['_spanProcessors'].map((spanProcessor) => {
-            return new Promise(resolve => {
-                let state;
-                const timeoutInterval = setTimeout(() => {
-                    resolve(new Error(`Span processor did not completed within timeout period of ${timeout} ms`));
-                    state = ForceFlushState.timeout;
-                }, timeout);
-                spanProcessor
-                    .forceFlush()
-                    .then(() => {
-                    clearTimeout(timeoutInterval);
-                    if (state !== ForceFlushState.timeout) {
-                        state = ForceFlushState.resolved;
-                        resolve(state);
-                    }
-                })
-                    .catch(error => {
-                    clearTimeout(timeoutInterval);
-                    state = ForceFlushState.error;
-                    resolve(error);
-                });
-            });
-        });
-        return new Promise((resolve, reject) => {
-            Promise.all(promises)
-                .then(results => {
-                const errors = results.filter(result => result !== ForceFlushState.resolved);
-                if (errors.length > 0) {
-                    reject(errors);
-                }
-                else {
-                    resolve();
-                }
-            })
-                .catch(error => reject([error]));
-        });
-    }
-    shutdown() {
-        return this._activeSpanProcessor.shutdown();
-    }
-    [inspectCustom](depth, options, inspect) {
-        const processors = this._activeSpanProcessor['_spanProcessors'];
-        const payload = {
-            resource: { attributes: settledResourceAttributes(this._resource) },
-            tracers: Array.from(this._tracers.keys()),
-            spanProcessors: processors.map(p => p.constructor?.name ?? 'SpanProcessor'),
-        };
-        return formatInspect('BasicTracerProvider', payload, depth, options, inspect);
+        super({ exporter, ...config });
     }
 }
 
