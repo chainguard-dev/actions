@@ -45,8 +45,12 @@ jobs:
         include:
         # Knative installs multiple components with one version, so only fully
         # coordinated releases work; Knative >= 1.22 also requires k8s >= 1.34.
+        #
+        # One leg deliberately uses the `MAJOR.MINOR.x` form so that branch of
+        # setup-knative's version resolution gets exercised at all -- every
+        # other leg pins an exact version, so it otherwise has no coverage.
         - k8s-version: 1.33.x
-          knative-version: 1.17.0
+          knative-version: 1.17.x
         - k8s-version: 1.34.x
           knative-version: 1.19.0
         - k8s-version: 1.35.x
