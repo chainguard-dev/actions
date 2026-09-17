@@ -190,14 +190,18 @@ jobs:
         persist-credentials: false
 
     - name: setup-kind
-      uses: ./setup-kind
+      # zizmor wants GitHub's `$/` self-repository syntax here, but actionlint
+      # 1.7.12 -- the version CI pins -- rejects `$/` outright, and it is the
+      # newest release (rhysd/actionlint#711 is still open). Every local action
+      # ref in this repo uses `./` for that reason.
+      uses: ./setup-kind # zizmor: ignore[self-repository]
       with:
         # `latest` tracks whatever Knative just released, so this needs to be
         # the newest k8s we support -- Knative >= 1.22 requires k8s >= 1.34.
         k8s-version: 1.36.x
 
     - name: Test spinning up Knative at latest
-      uses: ./setup-knative
+      uses: ./setup-knative # zizmor: ignore[self-repository]
       with:
         version: latest
 

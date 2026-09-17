@@ -13,7 +13,3 @@ rules:
     disable: true
   concurrency-limits:
     disable: true
-  # `$/` self-repository refs are rejected by actionlint 1.7.12, which this
-  # repo runs in CI, so local actions stay on `./`.
-  self-repository:
-    disable: true
