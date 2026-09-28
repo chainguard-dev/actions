@@ -1,10 +1,10 @@
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
-import typescript from '@rollup/plugin-typescript';
+import esbuild from 'rollup-plugin-esbuild';
 
 const shared = {
   plugins: [
-    typescript({ tsconfig: './tsconfig.json' }),
+    esbuild({ tsconfig: './tsconfig.json', target: 'es2022' }),
     commonjs(),
     nodeResolve({ preferBuiltins: true }),
   ],
