@@ -50,6 +50,13 @@ updates:
       default-days: 3
     directories:
       - "/otel-export"
+    ignore:
+      # TypeScript 7 is the native (Go) compiler and drops the JS compiler
+      # API that @rollup/plugin-typescript needs to build dist/. Hold at 5.x
+      # until the rollup plugin supports it.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "gomod"
     schedule:
