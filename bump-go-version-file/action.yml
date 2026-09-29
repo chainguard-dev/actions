@@ -131,7 +131,9 @@ runs:
         echo "${STEP_CREATE_PR_UPDATE_DIFF}" >> "$GITHUB_STEP_SUMMARY"
         echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Create Pull Request
+    # gh pr create does not cover what we rely on here: creating/updating the
+    # branch, committing, and updating an existing PR in place.
+    - name: Create Pull Request # zizmor: ignore[superfluous-actions]
       uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
       if: steps.create_pr_update.outputs.create_pr_update == 'true' && inputs.dry-run != 'true'
       id: pull_request
