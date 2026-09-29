@@ -45,6 +45,7 @@ runs:
       with:
         fetch-depth: 0
         ref: ${{ inputs.branch_name }}
+        persist-credentials: false
 
     - name: Generate Notes
       shell: bash
