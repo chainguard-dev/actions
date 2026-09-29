@@ -49,6 +49,7 @@ updates:
     cooldown:
       default-days: 3
     directories:
+      - "/githubapp-token"
       - "/otel-export"
 
   - package-ecosystem: "gomod"
