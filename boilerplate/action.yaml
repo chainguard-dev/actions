@@ -35,7 +35,6 @@ runs:
   using: "composite"
   steps:
   # Go is an implementation detail of this action (go get below)
-  # TODO(mattmoor): Cut a release of `boilerplate-check` we can use instead.
   - name: Set up Go
     uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
     with:

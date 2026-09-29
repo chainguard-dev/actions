@@ -1,5 +1,10 @@
 # APKO Build
 
+> **Deprecated**
+> This action is deprecated and will be removed. Use
+> [`chainguard-images/actions/apko-publish`](https://github.com/chainguard-images/actions/tree/main/apko-publish)
+> instead.
+
 This action builds an image with APKO given a config file and tag to use.
 
 ## Usage
