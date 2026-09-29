@@ -141,9 +141,15 @@ runs:
       env:
         INPUTS_REGISTRY_AUTHORITY: ${{ inputs.registry-authority }}
       shell: bash
-      run: |
-        REGISTRY_NAME=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 1 | tr -d '\n')
-        REGISTRY_PORT=$(echo "${INPUTS_REGISTRY_AUTHORITY}" | cut -d':' -f 2 | tr -d '\n')
+      run: | # zizmor: ignore[github-env]
+        # Only accept {hostname}:{port}, so nothing but a hostname and a port
+        # number can land in GITHUB_ENV.
+        if [[ ! "${INPUTS_REGISTRY_AUTHORITY}" =~ ^([A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?):([0-9]{1,5})$ ]]; then
+          echo "::error::registry-authority must be in the form {hostname}:{port}"
+          exit 1
+        fi
+        REGISTRY_NAME="${BASH_REMATCH[1]}"
+        REGISTRY_PORT="${BASH_REMATCH[3]}"
         echo "REGISTRY_NAME=${REGISTRY_NAME}" >> "$GITHUB_ENV"
         echo "REGISTRY_PORT=${REGISTRY_PORT}" >> "$GITHUB_ENV"
 
