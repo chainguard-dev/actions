@@ -40,7 +40,7 @@ inputs:
   registry-mirror:
     description: |
       The hostname of a registry mirror to configure KinD to use (to avoid DockerHub rate limits).
-    required: true # TODO(mattmoor): Make this optional
+    required: false
     default: mirror.gcr.io
 
   registry-username:

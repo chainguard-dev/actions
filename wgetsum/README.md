@@ -5,7 +5,7 @@ This action downloads a file using wget and verifies its checksum.
 ## Usage
 
 ```yaml
-- uses: chainguard-dev/actions/wgetsum@main
+- uses: chainguard-dev/actions/wgetsum@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
   with:
     # URL is the URL to download.
     # Required.
@@ -31,7 +31,7 @@ This action downloads a file using wget and verifies its checksum.
 Single checksum (sha256 assumed):
 ```yaml
 steps:
-- uses: chainguard-dev/actions/wgetsum@main
+- uses: chainguard-dev/actions/wgetsum@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
   with:
     url: https://example.com/release.tar.gz
     checksum: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
@@ -40,7 +40,7 @@ steps:
 With explicit algorithm prefix:
 ```yaml
 steps:
-- uses: chainguard-dev/actions/wgetsum@main
+- uses: chainguard-dev/actions/wgetsum@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
   with:
     url: https://example.com/release.tar.gz
     checksum: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
@@ -49,7 +49,7 @@ steps:
 Multiple checksums (all must match):
 ```yaml
 steps:
-- uses: chainguard-dev/actions/wgetsum@main
+- uses: chainguard-dev/actions/wgetsum@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
   with:
     url: https://example.com/release.tar.gz
     checksum: |
