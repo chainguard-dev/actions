@@ -28,7 +28,7 @@ runs:
     - name: Build hugo2confluence binary
       shell: bash
       id: build-conformance
-      run: |
+      run: | # zizmor: ignore[github-env] -- adds this action's own bin dir
         set -x
 
         # Enter the directory containing the checkout of this action

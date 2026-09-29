@@ -112,9 +112,9 @@ runs:
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: printf '%s\n' "$HOME/.gitsign" >> "$GITHUB_PATH"
+      run: printf '%s\n' "$HOME/.gitsign" >> "$GITHUB_PATH" # zizmor: ignore[github-env]
       shell: bash
 
     - if: ${{ runner.os == 'Windows' }}
-      run: echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      run: echo "$HOME/.gitsign" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append # zizmor: ignore[github-env]
       shell: pwsh

@@ -39,7 +39,7 @@ runs:
         PACKAGES: ${{ inputs.packages }}
         IDENTITY: ${{ inputs.identity }}
         ORG: ${{ inputs.org }}
-      run: |
+      run: | # zizmor: ignore[github-env] -- PATH gets our wrapper dir; ENV gets the chainctl-minted HTTP_AUTH
         set -euo pipefail
 
         # =============================================================================
