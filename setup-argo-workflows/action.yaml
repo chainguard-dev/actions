@@ -147,5 +147,5 @@ runs:
         chmod +x argo
 
     - if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
-      run: printf '%s\n' "$HOME/.argo-cli" >> "$GITHUB_PATH"
+      run: printf '%s\n' "$HOME/.argo-cli" >> "$GITHUB_PATH" # zizmor: ignore[github-env]
       shell: bash
