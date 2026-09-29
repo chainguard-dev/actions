@@ -54,7 +54,7 @@ jobs:
         persist-credentials: false
 
     - name: Install Gitsign
-      uses: ./setup-gitsign
+      uses: ./setup-gitsign # zizmor: ignore[self-repository]
 
     - name: Check install!
       run: gitsign --version

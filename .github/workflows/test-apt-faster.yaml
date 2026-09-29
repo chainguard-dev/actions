@@ -36,7 +36,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: "./apt-faster"
+      - uses: "./apt-faster" # zizmor: ignore[self-repository]
 
       - name: show apt sources
         shell: bash

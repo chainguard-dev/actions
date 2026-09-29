@@ -47,7 +47,7 @@ jobs:
       with:
         persist-credentials: false
 
-    - uses: ./setup-melange
+    - uses: ./setup-melange # zizmor: ignore[self-repository]
       with:
         version: ${{matrix.version}}
 
@@ -84,7 +84,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./melange-build
+      - uses: ./melange-build # zizmor: ignore[self-repository]
         with:
           config: setup-melange/example/melange.yaml
           archs: x86_64

@@ -63,7 +63,7 @@ jobs:
           good-script.sh
           EOF
 
-      - uses: "./shellcheck"
+      - uses: "./shellcheck" # zizmor: ignore[self-repository]
         with:
           subcommand: "find"
           config_json: |

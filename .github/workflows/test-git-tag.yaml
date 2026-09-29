@@ -33,7 +33,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./git-tag
+      - uses: ./git-tag # zizmor: ignore[self-repository]
         with:
           git_tag_prefix: "v"
           bump_level: major

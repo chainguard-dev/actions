@@ -34,10 +34,10 @@ jobs:
           persist-credentials: false
 
       - name: setup-kind
-        uses: ./setup-kind
+        uses: ./setup-kind # zizmor: ignore[self-repository]
 
       - name: setup-monitoring
-        uses: ./setup-monitoring
+        uses: ./setup-monitoring # zizmor: ignore[self-repository]
 
       - name: Check install!
         run: |
