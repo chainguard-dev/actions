@@ -1,6 +1,6 @@
 module github.com/chainguard-dev/actions/hugo2confluence
 
-go 1.25
+go 1.26
 
 require (
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
