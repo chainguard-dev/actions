@@ -36,8 +36,12 @@ runs:
     with:
       # actions/github-script requires Node v24
       node-version: 24
-  - run: npm install -g @octokit/app@16.1.2
+  # Install from the committed lockfile so every run gets the same,
+  # integrity-checked dependency tree.
+  - run: npm ci --prefix "${ACTION_PATH}" --ignore-scripts --no-audit --no-fund
     shell: bash
+    env:
+      ACTION_PATH: ${{ github.action_path }}
   - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
     id: get-token
     name: Get GitHub App token
@@ -45,9 +49,11 @@ runs:
       APP_ID: ${{ inputs.app_id }}
       INSTALLATION_ID: ${{ inputs.installation_id }}
       PRIVATE_KEY: ${{ inputs.private_key }}
+      # GITHUB_ACTION_PATH points at github-script inside this step.
+      ACTION_PATH: ${{ github.action_path }}
     with:
       script: |
-        const {App} = require('@octokit/app');
+        const {App} = require(`${process.env.ACTION_PATH}/node_modules/@octokit/app`);
 
         const { APP_ID, INSTALLATION_ID, PRIVATE_KEY } = process.env
 

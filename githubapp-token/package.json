@@ -1,0 +1,9 @@
+{
+  "name": "githubapp-token",
+  "private": true,
+  "description": "Dependencies for the githubapp-token composite action",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@octokit/app": "16.1.2"
+  }
+}
