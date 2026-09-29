@@ -88,11 +88,12 @@ jobs:
       with:
         persist-credentials: false
 
-    - uses: ./whereami # Log where I am.
+    # Log where I am.
+    - uses: ./whereami # zizmor: ignore[self-repository]
       if: ${{ runner.arch == 'X64' }} # not worth figuring this out for ARM64
 
     - name: setup-kind
-      uses: ./setup-kind
+      uses: ./setup-kind # zizmor: ignore[self-repository]
       with:
         k8s-version: ${{ matrix.k8s-version }}
         cluster-suffix: ${{ matrix.cluster-suffix }}
@@ -142,7 +143,7 @@ jobs:
         fi
 
     - name: Test spinning up Knative
-      uses: ./setup-knative
+      uses: ./setup-knative # zizmor: ignore[self-repository]
       with:
         version: ${{ matrix.knative-version || 'latest' }}
 
@@ -281,7 +282,7 @@ jobs:
         ls -la /dev/kvm
 
     - name: setup-kind
-      uses: ./setup-kind
+      uses: ./setup-kind # zizmor: ignore[self-repository]
       with:
         k8s-version: 1.36.x
 
@@ -344,7 +345,7 @@ jobs:
         echo "OK: /dev/kvm absent on host"
 
     - name: setup-kind
-      uses: ./setup-kind
+      uses: ./setup-kind # zizmor: ignore[self-repository]
       with:
         k8s-version: 1.36.x
 

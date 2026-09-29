@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
 
       # install an old version, and check that we got the expected version
-      - uses: "./setup-eksctl"
+      - uses: "./setup-eksctl" # zizmor: ignore[self-repository]
         with:
           version: "v0.209.0"
 
@@ -54,7 +54,7 @@ jobs:
           }
           echo "verified version $expected was installed"
 
-      - uses: "./setup-eksctl"
+      - uses: "./setup-eksctl" # zizmor: ignore[self-repository]
 
       # install latest (no 'release' input needed) and check that
       # we have a version other than the one above.

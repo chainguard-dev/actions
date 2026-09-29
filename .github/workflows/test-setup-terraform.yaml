@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Terraform
-        uses: ./setup-terraform
+        uses: ./setup-terraform # zizmor: ignore[self-repository]
         with:
           terraform-version-file: './hack/.terraform-version'
 
@@ -85,7 +85,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Terraform Docs
-        uses: ./setup-terraform
+        uses: ./setup-terraform # zizmor: ignore[self-repository]
         with:
           terraform-version-file: './honk/.terraform-version'
 

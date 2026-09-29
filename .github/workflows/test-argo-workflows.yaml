@@ -44,7 +44,7 @@ jobs:
         uses: chainguard-dev/actions/setup-kind@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
 
       - name: Install Argo Workflows
-        uses: ./setup-argo-workflows
+        uses: ./setup-argo-workflows # zizmor: ignore[self-repository]
 
       - name: Check install!
         run: argo lint --help
@@ -81,7 +81,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Argo Workflows
-        uses: ./setup-argo-workflows
+        uses: ./setup-argo-workflows # zizmor: ignore[self-repository]
         with:
           install-argo-cli-only: 'true'
 

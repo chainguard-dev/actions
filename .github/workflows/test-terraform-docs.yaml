@@ -53,7 +53,7 @@ jobs:
         persist-credentials: false
 
     - name: Install Terraform Docs
-      uses: ./setup-terraform-docs
+      uses: ./setup-terraform-docs # zizmor: ignore[self-repository]
 
     - name: Check install!
       run: terraform-docs version

@@ -33,10 +33,10 @@ jobs:
           persist-credentials: false
 
       - name: setup-kind
-        uses: ./setup-kind
+        uses: ./setup-kind # zizmor: ignore[self-repository]
 
       - name: setup-hakn
-        uses: ./setup-hakn
+        uses: ./setup-hakn # zizmor: ignore[self-repository]
 
       - name: Check install!
         run: |

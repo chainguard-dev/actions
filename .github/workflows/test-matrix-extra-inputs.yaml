@@ -26,7 +26,7 @@ jobs:
         persist-credentials: false
 
     - id: extra-inputs
-      uses: ./matrix-extra-inputs
+      uses: ./matrix-extra-inputs # zizmor: ignore[self-repository]
       with:
         matrix-json: '{"x":1,"y":2}'
       env:

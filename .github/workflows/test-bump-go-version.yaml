@@ -37,7 +37,7 @@ jobs:
 
       - name: Test action in dry-run mode
         id: test-dry-run
-        uses: ./bump-go-version-file
+        uses: ./bump-go-version-file # zizmor: ignore[self-repository]
         with:
           go-version-file: '.go-version'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Test action with up-to-date version
         id: test-uptodate
-        uses: ./bump-go-version-file
+        uses: ./bump-go-version-file # zizmor: ignore[self-repository]
         with:
           go-version-file: '.go-version'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -158,7 +158,7 @@ jobs:
 
       - name: Test action with custom file path
         id: test-custom
-        uses: ./bump-go-version-file
+        uses: ./bump-go-version-file # zizmor: ignore[self-repository]
         with:
           go-version-file: '.github/go-version'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -201,7 +201,7 @@ jobs:
       - name: Test action with missing file (should fail)
         id: test-missing
         continue-on-error: true
-        uses: ./bump-go-version-file
+        uses: ./bump-go-version-file # zizmor: ignore[self-repository]
         with:
           go-version-file: '.go-version-missing'
           token: ${{ secrets.GITHUB_TOKEN }}

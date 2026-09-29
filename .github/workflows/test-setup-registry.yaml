@@ -38,7 +38,7 @@ jobs:
       with:
         persist-credentials: false
 
-    - uses: ./setup-registry
+    - uses: ./setup-registry # zizmor: ignore[self-repository]
       with:
         port: 8081
 
@@ -81,7 +81,7 @@ jobs:
         check-latest: true
         cache: false
 
-    - uses: ./setup-registry
+    - uses: ./setup-registry # zizmor: ignore[self-repository]
       with:
         port: 8081
         disk: true
