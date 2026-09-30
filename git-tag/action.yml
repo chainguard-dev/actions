@@ -155,7 +155,11 @@ runs:
             exit 1
           else
             git tag -a "$git_tag" -m "$git_tag"
-            git push origin "$git_tag"
+            # Authenticate the push with the token input for this command only,
+            # the same way actions/checkout does, so callers can keep
+            # persist-credentials: false on their checkout.
+            auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+            git -c "http.${GITHUB_SERVER_URL}/.extraheader=${auth_header}" push origin "$git_tag"
             if [ $? -eq 0 ]; then
               echo "✅ Tag '$git_tag' pushed successfully."
             else
