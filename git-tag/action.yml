@@ -155,7 +155,18 @@ runs:
             exit 1
           else
             git tag -a "$git_tag" -m "$git_tag"
-            git push origin "$git_tag"
+            # Push with the token input rather than credentials persisted by
+            # actions/checkout, so callers can use persist-credentials: false.
+            # The empty extraheader drops any header checkout saved (GitHub
+            # rejects a request carrying two Authorization headers), the empty
+            # credential.helper clears any other helpers, and the helper reads
+            # GITHUB_TOKEN from the environment, so the token never appears in
+            # config or on a command line.
+            # shellcheck disable=SC2016 # $1 and $GITHUB_TOKEN expand in the helper's shell
+            git -c "http.${GITHUB_SERVER_URL}/.extraheader=" \
+              -c credential.helper= \
+              -c 'credential.helper=!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GITHUB_TOKEN"; }; f' \
+              push origin "$git_tag"
             if [ $? -eq 0 ]; then
               echo "✅ Tag '$git_tag' pushed successfully."
             else

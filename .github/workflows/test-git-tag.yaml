@@ -39,3 +39,91 @@ jobs:
           bump_level: major
           dry_run: true
           forced_version: 2.0.0
+
+  test_git_tag_push:
+    # Exercise the real push path, including authentication to github.com,
+    # without creating a tag: a pre-push hook, which git runs only after the
+    # remote has accepted the credentials, records the refs and aborts the push.
+    # Fork and Dependabot PRs get a read-only token, which GitHub rejects for
+    # push before the hook can run, so those are skipped.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # GitHub only accepts a push connection from a token that can write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        persist-credentials: [true, false]
+        # default: rely on the token input's default (github.token).
+        # explicit: pass the token input, as callers using octo-sts do.
+        token-input: [default, explicit]
+
+    name: Test Git Tag push (persist-credentials ${{ matrix.persist-credentials }}, ${{ matrix.token-input }} token)
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            *.githubapp.com:443
+            api.github.com:443
+            github.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: ${{ matrix.persist-credentials }}
+
+      - name: Install a pre-push hook that aborts the push
+        run: |
+          cat > .git/hooks/pre-push <<'EOF'
+          #!/bin/sh
+          # git runs this only after the remote has accepted the credentials.
+          cat > "$RUNNER_TEMP/pre-push-refs"
+          exit 1
+          EOF
+          chmod +x .git/hooks/pre-push
+
+      # One step per token-input value: the default case must leave the token
+      # input unset, which a single step with an expression cannot do.
+      - uses: ./git-tag # zizmor: ignore[self-repository]
+        if: matrix.token-input == 'default'
+        id: tag_default
+        continue-on-error: true # the hook aborts the push, so this step fails
+        with:
+          git_tag_prefix: "v"
+          bump_level: major
+          dry_run: false
+          use-gitsign: false
+          # Tag deletion is blocked in this repo. If the hook ever fails to stop
+          # the push, this fixed tag is left behind and every later run fails
+          # with "already exists" instead of quietly piling up tags.
+          forced_version: 0.0.0-push-test
+
+      - uses: ./git-tag # zizmor: ignore[self-repository]
+        if: matrix.token-input == 'explicit'
+        id: tag_explicit
+        continue-on-error: true # the hook aborts the push, so this step fails
+        with:
+          token: ${{ github.token }}
+          git_tag_prefix: "v"
+          bump_level: major
+          dry_run: false
+          use-gitsign: false
+          forced_version: 0.0.0-push-test # see the comment on the step above
+
+      - name: Check the push authenticated and was stopped by the hook
+        env:
+          OUTCOME: ${{ matrix.token-input == 'explicit' && steps.tag_explicit.outcome || steps.tag_default.outcome }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/pre-push-refs" ]; then
+            echo "::error::The push never reached the pre-push hook (git-tag outcome: $OUTCOME). Check the git-tag step log for the authentication error."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/pre-push-refs"
+          grep -q ' refs/tags/v0.0.0-push-test ' "$RUNNER_TEMP/pre-push-refs"

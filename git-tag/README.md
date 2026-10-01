@@ -62,6 +62,13 @@ When using `bump_level: build`, the version includes build metadata based on the
 ```
 This provides a sortable, unique identifier for CI-generated builds.
 
+### Authentication
+
+The tag is pushed with the `token` input, not with credentials saved by
+`actions/checkout`. The checkout can therefore use `persist-credentials: false`,
+and when checkout does save credentials they are ignored for the push. The token
+needs `contents: write` on the repository.
+
 ### Edge Cases
 
 - No tags found in the repo ➝ Action fails unless forced_version is used
