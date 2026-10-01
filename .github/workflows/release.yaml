@@ -68,8 +68,9 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all tags and branches
           token: ${{ steps.octo-sts.outputs.token }}
-          # persist-credentials is required to allow git-tag action to fetch tags and push the new tag back to the repo
-          persist-credentials: true
+          # git-tag pushes with its token input (since v1.6.38), and the tag
+          # fetch below needs no credentials, so nothing needs them persisted.
+          persist-credentials: false
 
       - name: Check if any changes since last tag
         id: check
@@ -85,7 +86,7 @@ jobs:
 
       - name: Bump and push Git tag
         id: tag
-        uses: chainguard-dev/actions/git-tag@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
+        uses: chainguard-dev/actions/git-tag@0a46f704c0232e638d9189d9e9aac01e41f6f420 # v1.6.38
         if: steps.check.outputs.bump == 'yes'
         with:
           token: ${{ steps.octo-sts.outputs.token }}
