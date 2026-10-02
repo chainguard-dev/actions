@@ -60,7 +60,7 @@ runs:
         echo "verify download against ${cksum_url}"
         curl -o checksums.txt -fsL --retry 5 --retry-delay 1 --retry-all-errors "${cksum_url}" ||
           fail "failed to download checksums from $cksum_url"
-        grep "$fname" checksums.txt > checksums.platform || {
+        awk -v name="$fname" '$2 == name { print; found = 1 } END { exit !found }' checksums.txt > checksums.platform || {
           cat checksums.txt
           fail "$fname was not found in checksums.txt (content above)"
         }
