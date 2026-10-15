@@ -122,7 +122,7 @@ runs:
         fi
 
     # Configure signed commits
-    - uses: chainguard-dev/actions/setup-gitsign@84b1be4c638f12d4256ddddef17af98853b6d0d9 # v1.6.40
+    - uses: chainguard-dev/actions/setup-gitsign@3403a578b543fd3f0debdaef9dd989ae54e3fcef # v1.6.41
       if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
 
     # gh pr create does not cover what we rely on here: creating/updating the
