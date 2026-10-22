@@ -28,24 +28,17 @@ interface GitHubJob {
 }
 
 export function findCurrentJob(jobs: GitHubJob[], currentJobName: string): GitHubJob {
-  // RUNNER_NAME uniquely identifies the current job regardless of how GitHub
-  // formats the display name (reusable workflows, matrix expansions, etc.).
+  if (jobs.length === 0) throw new Error('No jobs found for this workflow run');
+  const exact = jobs.filter((job) => job.name === currentJobName);
+  if (exact.length === 1) return exact[0]!;
+  const candidates = exact.length ? exact : jobs.filter((job) => job.name.startsWith(currentJobName + ' ('));
   const runnerName = process.env.RUNNER_NAME;
   if (runnerName) {
-    const byRunner = jobs.find((j) => j.runner_name === runnerName);
-    if (byRunner) return byRunner;
+    const byRunner = (candidates.length ? candidates : jobs).filter((job) => job.runner_name === runnerName);
+    if (byRunner.length === 1) return byRunner[0]!;
   }
-
-  const exactMatch = jobs.find((job) => job.name === currentJobName);
-  if (exactMatch) return exactMatch;
-
-  const matrixMatch = jobs.find((job) => job.name.startsWith(currentJobName + ' ('));
-  if (matrixMatch) return matrixMatch;
-
-  const job = jobs[0];
-  if (!job) throw new Error('No jobs found for this workflow run');
-  core.warning(`Could not match job name "${currentJobName}", falling back to "${job.name}"`);
-  return job;
+  if (candidates.length === 1) return candidates[0]!;
+  throw new Error(`Cannot uniquely identify job "${currentJobName}"; set job-name to its expanded display name`);
 }
 
 export function parseSteps(rawSteps: GitHubJob['steps']): StepMetrics[] {
@@ -125,13 +118,15 @@ async function fetchJobWithStableSteps(
   let previousSnapshot = '';
 
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
-    const { data } = await octokit.rest.actions.listJobsForWorkflowRun({
+    const jobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
       owner,
       repo,
       run_id: runId,
+      attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT || '1'),
+      per_page: 100,
     });
 
-    const job = findCurrentJob(data.jobs as GitHubJob[], currentJobName);
+    const job = findCurrentJob(jobs as GitHubJob[], currentJobName);
     const snapshot = stepConclusionSnapshot(job.steps);
 
     // A terminal conclusion means the API has caught up with the failure.
@@ -160,13 +155,11 @@ async function fetchJobWithStableSteps(
   throw new Error('Unexpected: exhausted poll loop without returning');
 }
 
-export async function collectMetrics(octokit: Octokit, context: Context): Promise<WorkflowMetrics> {
+export async function collectMetrics(octokit: Octokit, context: Context, currentJobName = process.env.GITHUB_JOB ?? 'unknown'): Promise<WorkflowMetrics> {
   const { owner, repo } = context.repo;
   const runId = context.runId;
 
   core.info(`Collecting metrics for run ${runId} in ${owner}/${repo}`);
-
-  const currentJobName = process.env.GITHUB_JOB ?? 'unknown';
 
   const job = await fetchJobWithStableSteps(octokit, owner, repo, runId, currentJobName);
 
@@ -210,7 +203,7 @@ export async function collectMetrics(octokit: Octokit, context: Context): Promis
       attempt: process.env.GITHUB_RUN_ATTEMPT || '1',
     },
     git: {
-      sha: context.sha || process.env.GITHUB_SHA || '',
+      sha: context.payload.pull_request?.head.sha || context.sha || process.env.GITHUB_SHA || '',
       ref: context.ref || process.env.GITHUB_REF || '',
       refName: process.env.GITHUB_REF_NAME || null,
       headBranch: (context.payload?.pull_request?.head?.ref as string) || null,

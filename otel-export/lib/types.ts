@@ -54,6 +54,7 @@ export interface WorkflowMetrics {
 }
 
 export interface OtelConfig {
+  resourceAttributes?: Record<string, string>;
   serviceName: string;
   serviceNamespace: string;
   metricPrefix: string;

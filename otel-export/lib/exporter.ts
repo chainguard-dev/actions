@@ -12,13 +12,12 @@ import { COLLECTOR_HTTP_ENDPOINT } from './otelcol.js';
 
 // Incubating in the semconv package — not yet in the stable export.
 const ATTR_SERVICE_NAMESPACE = 'service.namespace';
-const ATTR_SERVICE_INSTANCE_ID = 'service.instance.id';
 
 function buildResource(config: OtelConfig) {
   return resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.serviceName,
     [ATTR_SERVICE_NAMESPACE]: config.serviceNamespace,
-    [ATTR_SERVICE_INSTANCE_ID]: process.env.GITHUB_RUN_ID || 'unknown',
+    ...config.resourceAttributes,
   });
 }
 
