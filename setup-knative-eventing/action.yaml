@@ -9,9 +9,9 @@ description: |
 inputs:
   version:
     description: |
-      The version of Knative to install, e.g. 1.22.2
+      The version of Knative to install, e.g. 1.23.1
     required: false
-    default: 1.22.2
+    default: 1.23.1
 
 runs:
   using: "composite"
