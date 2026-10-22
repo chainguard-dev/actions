@@ -1,0 +1,197 @@
+name: test-setup-spdx
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'setup-spdx/**'
+      - '.github/workflows/test-setup-spdx.yaml'
+
+permissions: {}
+
+jobs:
+  test-github-action:
+    name: test (${{ matrix.spdx-tools-version }})
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        spdx-tools-version:
+          - 1.1.8
+          - 2.0.7
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            *.githubapp.com:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            spdx.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write test SBOMs
+        shell: bash
+        run: |
+          cat > valid.spdx.json <<'EOF'
+          {
+            "spdxVersion": "SPDX-2.3",
+            "dataLicense": "CC0-1.0",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "test",
+            "documentNamespace": "https://example.com/spdx/test-json",
+            "creationInfo": {
+              "created": "2026-10-22T00:00:00Z",
+              "creators": ["Tool: test-setup-spdx"]
+            },
+            "packages": [{
+              "name": "pkg",
+              "SPDXID": "SPDXRef-Package-pkg",
+              "versionInfo": "1.0.0",
+              "downloadLocation": "NOASSERTION",
+              "filesAnalyzed": false,
+              "licenseConcluded": "Apache-2.0",
+              "licenseDeclared": "Apache-2.0",
+              "copyrightText": "NOASSERTION"
+            }],
+            "relationships": [{
+              "spdxElementId": "SPDXRef-DOCUMENT",
+              "relationshipType": "DESCRIBES",
+              "relatedSpdxElement": "SPDXRef-Package-pkg"
+            }]
+          }
+          EOF
+
+          cat > valid.spdx <<'EOF'
+          SPDXVersion: SPDX-2.3
+          DataLicense: CC0-1.0
+          SPDXID: SPDXRef-DOCUMENT
+          DocumentName: test
+          DocumentNamespace: https://example.com/spdx/test-tag-value
+          Creator: Tool: test-setup-spdx
+          Created: 2026-10-22T00:00:00Z
+
+          PackageName: pkg
+          SPDXID: SPDXRef-Package-pkg
+          PackageVersion: 1.0.0
+          PackageDownloadLocation: NOASSERTION
+          FilesAnalyzed: false
+          PackageLicenseConcluded: Apache-2.0
+          PackageLicenseDeclared: Apache-2.0
+          PackageCopyrightText: NOASSERTION
+
+          Relationship: SPDXRef-DOCUMENT DESCRIBES SPDXRef-Package-pkg
+          EOF
+
+          sed 's/"SPDX-2.3"/"SPDX-9.9"/' valid.spdx.json > invalid.spdx.json
+
+      # Download once, then validate several documents with download: false,
+      # the way the README shows running more than one validation.
+      - uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          spdx-tools-version: ${{ matrix.spdx-tools-version }}
+
+      - name: Validate JSON
+        uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          download: false
+          spdx-tools-version: ${{ matrix.spdx-tools-version }}
+          sbom-path: valid.spdx.json
+
+      - name: Validate JSON with an explicit format
+        uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          download: false
+          spdx-tools-version: ${{ matrix.spdx-tools-version }}
+          sbom-path: valid.spdx.json
+          sbom-format: JSON
+
+      - name: Validate tag-value
+        uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          download: false
+          spdx-tools-version: ${{ matrix.spdx-tools-version }}
+          sbom-path: valid.spdx
+
+      - name: Validate an invalid document
+        id: invalid
+        continue-on-error: true
+        uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          download: false
+          spdx-tools-version: ${{ matrix.spdx-tools-version }}
+          sbom-path: invalid.spdx.json
+
+      - name: Check the invalid document was rejected
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.invalid.outcome }}
+        run: |
+          [ "$OUTCOME" = "failure" ] || {
+            echo "FATAL: expected validating invalid.spdx.json to fail, got '$OUTCOME'"
+            exit 1
+          }
+          echo "invalid document was rejected"
+
+  test-defaults:
+    name: test (defaults)
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            *.githubapp.com:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            spdx.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write test SBOM
+        shell: bash
+        run: |
+          cat > valid.spdx <<'EOF'
+          SPDXVersion: SPDX-2.3
+          DataLicense: CC0-1.0
+          SPDXID: SPDXRef-DOCUMENT
+          DocumentName: test
+          DocumentNamespace: https://example.com/spdx/test-defaults
+          Creator: Tool: test-setup-spdx
+          Created: 2026-10-22T00:00:00Z
+
+          PackageName: pkg
+          SPDXID: SPDXRef-Package-pkg
+          PackageVersion: 1.0.0
+          PackageDownloadLocation: NOASSERTION
+          FilesAnalyzed: false
+          PackageLicenseConcluded: Apache-2.0
+          PackageLicenseDeclared: Apache-2.0
+          PackageCopyrightText: NOASSERTION
+
+          Relationship: SPDXRef-DOCUMENT DESCRIBES SPDXRef-Package-pkg
+          EOF
+
+      # Only sbom-path set: downloads the default version and validates.
+      - uses: "./setup-spdx" # zizmor: ignore[self-repository]
+        with:
+          sbom-path: valid.spdx
