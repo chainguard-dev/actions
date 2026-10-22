@@ -139,13 +139,24 @@ jobs:
             [ -f "$f" ] && [ ! -s "$f" ]
           }
 
+          # Runner images since 20261004 disable DEP-11 themselves via
+          # /etc/apt/apt.conf.d/90-index-targets, which leaves these
+          # entries behind. They still mean DEP-11 is off, so ignore them.
+          # shellcheck disable=SC2317,SC2329
+          no_dep11() {
+            grep -v -x \
+                -e 'Acquire::IndexTargets::deb::DEP-11 "";' \
+                -e 'Acquire::IndexTargets::deb::DEP-11::DefaultEnabled "false";' \
+                apt-config.out > apt-config.dep11.out
+            grep_is "IndexTargets::deb::DEP-11" apt-config.dep11.out ""
+          }
+
           t() {
             local msg="$1"
             shift
             tests=$((tests+1))
             "$@" && tpass "$msg" && return
             tfail "$msg"
-            fails=$((fails+1))
           }
 
           apt-config dump > apt-config.out 2>apt-config.err ||
@@ -158,9 +169,9 @@ jobs:
             [ /usr/bin/apt-get -ef /usr/bin/apt-get.aptfaster ]
 
           t "apt-config does not have DEP-11 entries" \
-            grep_is "IndexTargets::deb::DEP-11" apt-config.out ""
+            no_dep11
 
-          t "apt-config does not have DEP-11 entries" \
+          t "apt-config does not have CNF entries" \
             grep_is "IndexTargets::deb::CNF" apt-config.out ""
 
           t "apt-config has on only Acquire::Languages:: none" \
