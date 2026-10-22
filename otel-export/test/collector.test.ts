@@ -85,6 +85,19 @@ describe('findCurrentJob', () => {
     });
   });
 
+  it('rejects ambiguous matrix jobs instead of attributing the first shard', () => {
+    withoutRunner(() => {
+      expect(() => findCurrentJob([makeJob({ name: 'build (a)' }), makeJob({ name: 'build (b)' })], 'build')).toThrow(/uniquely identify/);
+      expect(() => findCurrentJob([makeJob()], 'missing')).toThrow(/uniquely identify/);
+    });
+  });
+
+  it('uses the configured name when a self-hosted runner has served multiple jobs', () => {
+    withRunner('shared', () => {
+      expect(findCurrentJob([makeJob({ name: 'old', runner_name: 'shared' }), makeJob({ name: 'build', runner_name: 'shared', id: 2 })], 'build').id).toBe(2);
+    });
+  });
+
   it('throws when no jobs exist', () => {
     expect(() => findCurrentJob([], 'build')).toThrow(/No jobs found/);
   });

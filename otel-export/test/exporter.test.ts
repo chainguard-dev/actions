@@ -26,7 +26,7 @@ function makeMetrics(overrides: Partial<WorkflowMetrics> = {}): WorkflowMetrics 
     ],
     repository: { owner: 'org', repo: 'repo', fullName: 'org/repo' },
     run: { id: 1234, number: 42, attempt: '1' },
-    git: { sha: 'abc123', ref: 'refs/heads/main', refName: 'main' },
+    git: { sha: 'abc123', ref: 'refs/heads/main', refName: 'main', headBranch: null },
     event: { name: 'push', actor: 'user', prNumber: null },
     runner: { os: 'Linux', arch: 'X64', name: 'runner-1', groupName: null, labels: ['ubuntu-latest'] },
     ...overrides,

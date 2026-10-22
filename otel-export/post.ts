@@ -74,10 +74,11 @@ async function run(): Promise<void> {
       }
     }
 
-    const config = { serviceName, serviceNamespace, metricPrefix };
+    const resourceAttributes = JSON.parse(core.getState('resource-attributes') || '{}');
+    const config = { serviceName, serviceNamespace, metricPrefix, resourceAttributes };
 
     const octokit = github.getOctokit(token);
-    const metrics = await collectMetrics(octokit, github.context);
+    const metrics = await collectMetrics(octokit, github.context, jobName);
 
     const { meterProvider: mp, meter } = createMeterProvider(config);
     meterProvider = mp;

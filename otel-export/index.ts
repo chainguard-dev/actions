@@ -1,7 +1,8 @@
 import * as core from '@actions/core';
 import * as fs from 'node:fs';
+import { captureResource, checkoutAttributes, serializeResource } from './lib/resource.js';
 import * as path from 'node:path';
-import { downloadCollector, startCollector, waitForCollector, COLLECTOR_HTTP_ENDPOINT, COLLECTOR_GRPC_ENDPOINT, type ResourceAttributes } from './lib/otelcol.js';
+import { downloadCollector, startCollector, waitForCollector, COLLECTOR_HTTP_ENDPOINT, COLLECTOR_GRPC_ENDPOINT } from './lib/otelcol.js';
 import { generateTraceId, generateRootSpanId, generateJobSpanId } from './lib/exporter.js';
 
 async function run(): Promise<void> {
@@ -26,13 +27,19 @@ async function run(): Promise<void> {
 
     const serviceName = core.getInput('service-name');
     const serviceNamespace = core.getInput('service-namespace');
-    const resourceAttrs: ResourceAttributes = {
-      serviceName,
-      serviceNamespace,
-      serviceInstanceId: process.env.GITHUB_RUN_ID || 'unknown',
+    const [owner = '', repo = ''] = (process.env.GITHUB_REPOSITORY || '').split('/');
+    const event = {
+      runId: Number(process.env.GITHUB_RUN_ID || '0'),
+      sha: process.env.GITHUB_SHA || '',
+      repo: { owner, repo },
+      payload: process.env.GITHUB_EVENT_PATH ? JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {},
     };
+    const resourceAttrs = captureResource(serviceName, serviceNamespace, event, checkoutAttributes(workspace));
+    const serializedResource = serializeResource(resourceAttrs);
+    core.saveState('resource-attributes', JSON.stringify(resourceAttrs));
+    core.exportVariable('OTEL_RESOURCE_ATTRIBUTES', serializedResource);
 
-    const { pid, logPath } = startCollector(binaryPath, configPath, resourceAttrs);
+    const { pid, logPath } = startCollector(binaryPath, configPath);
 
     core.saveState('collector-pid', pid.toString());
     core.saveState('collector-log', logPath);

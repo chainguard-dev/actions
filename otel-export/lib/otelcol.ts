@@ -64,16 +64,9 @@ export interface CollectorHandle {
   logPath: string;
 }
 
-export interface ResourceAttributes {
-  serviceName: string;
-  serviceNamespace: string;
-  serviceInstanceId: string;
-}
-
 export function startCollector(
   binaryPath: string,
   configPath: string,
-  resourceAttrs?: ResourceAttributes,
 ): CollectorHandle {
   const tempDir = process.env.RUNNER_TEMP || '/tmp';
   const logPath = path.join(tempDir, 'otelcol.log');
@@ -87,17 +80,6 @@ export function startCollector(
   // SDK-sent OTLP data already carries its own resource attributes which the
   // detector will not override (override defaults to false).
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
-  if (resourceAttrs) {
-    const attrs = [
-      `service.name=${resourceAttrs.serviceName}`,
-      `service.namespace=${resourceAttrs.serviceNamespace}`,
-      `service.instance.id=${resourceAttrs.serviceInstanceId}`,
-    ].join(',');
-    env.OTEL_RESOURCE_ATTRIBUTES = env.OTEL_RESOURCE_ATTRIBUTES
-      ? `${env.OTEL_RESOURCE_ATTRIBUTES},${attrs}`
-      : attrs;
-    core.info(`Collector OTEL_RESOURCE_ATTRIBUTES: ${env.OTEL_RESOURCE_ATTRIBUTES}`);
-  }
 
   const proc = spawn(binaryPath, ['--config', configPath], {
     detached: true,

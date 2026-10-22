@@ -37,10 +37,11 @@ import require$$5$3 from 'string_decoder';
 import * as child from 'child_process';
 import { setTimeout as setTimeout$1 } from 'timers';
 import * as fs$1 from 'node:fs';
+import * as crypto$1 from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
 import * as path$1 from 'node:path';
 import * as stream from 'stream';
-import * as crypto$1 from 'node:crypto';
-import { spawn } from 'node:child_process';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -30310,6 +30311,24 @@ var ExitCode;
      */
     ExitCode[ExitCode["Failure"] = 1] = "Failure";
 })(ExitCode || (ExitCode = {}));
+//-----------------------------------------------------------------------
+// Variables
+//-----------------------------------------------------------------------
+/**
+ * Sets env variable for this action and future actions in the job
+ * @param name the name of the variable to set
+ * @param val the value of the variable. Non-string values will be converted to a string via JSON.stringify
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function exportVariable(name, val) {
+    const convertedVal = toCommandValue(val);
+    process.env[name] = convertedVal;
+    const filePath = process.env['GITHUB_ENV'] || '';
+    if (filePath) {
+        return issueFileCommand('ENV', prepareKeyValueMessage(name, val));
+    }
+    issueCommand('set-env', { name }, convertedVal);
+}
 /**
  * Gets the value of an input.
  * Unless trimWhitespace is set to false in InputOptions, the value is also trimmed.
@@ -30411,6 +30430,49 @@ function saveState(name, value) {
         return issueFileCommand('STATE', prepareKeyValueMessage(name, value));
     }
     issueCommand('save-state', { name }, toCommandValue(value));
+}
+
+function checkoutAttributes(workspace) {
+  try {
+    const revision = execFileSync("git", ["rev-parse", "--verify", "HEAD"], { cwd: workspace, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const tree = execFileSync("git", ["rev-parse", "--verify", "HEAD^{tree}"], { cwd: workspace, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return { "git.checkout.revision": revision, "git.checkout.tree": tree };
+  } catch {
+    return {};
+  }
+}
+function captureResource(serviceName, serviceNamespace, event, checkout, inherited = process.env.OTEL_RESOURCE_ATTRIBUTES || "") {
+  const attributes = {};
+  for (const pair of inherited.split(",")) {
+    const separator = pair.indexOf("=");
+    if (separator > 0) attributes[pair.slice(0, separator).trim()] = pair.slice(separator + 1).trim();
+  }
+  const pr = event.payload.pull_request;
+  return {
+    ...attributes,
+    "service.name": serviceName,
+    "service.namespace": serviceNamespace,
+    // One setup invocation owns the collector, downstream SDKs and post-action.
+    "service.instance.id": randomUUID(),
+    "cicd.pipeline.run.id": String(event.runId),
+    "github.run.attempt": process.env.GITHUB_RUN_ATTEMPT || "1",
+    "github.repository": `${event.repo.owner}/${event.repo.repo}`,
+    "github.sha": event.sha,
+    ...pr ? {
+      "github.pr.number": String(pr.number),
+      "git.pr.head.revision": pr.head.sha,
+      "git.base.revision": pr.base.sha
+    } : {},
+    ...checkout
+  };
+}
+function serializeResource(attributes) {
+  for (const [key, value] of Object.entries(attributes)) {
+    if (/[,=\r\n]/.test(key) || /[,\r\n]/.test(value)) {
+      throw new Error(`Resource attribute ${key} cannot be represented in OTEL_RESOURCE_ATTRIBUTES`);
+    }
+  }
+  return Object.entries(attributes).map(([key, value]) => `${key}=${value}`).join(",");
 }
 
 var re = {exports: {}};
@@ -33674,22 +33736,13 @@ async function downloadCollector() {
   info(`Collector cached at: ${binaryPath}`);
   return binaryPath;
 }
-function startCollector(binaryPath, configPath, resourceAttrs) {
+function startCollector(binaryPath, configPath) {
   const tempDir = process.env.RUNNER_TEMP || "/tmp";
   const logPath = path$1.join(tempDir, "otelcol.log");
   const logFd = fs$1.openSync(logPath, "a");
   info(`Starting collector with config: ${configPath}`);
   info(`Collector logs: ${logPath}`);
   const env = { ...process.env };
-  if (resourceAttrs) {
-    const attrs = [
-      `service.name=${resourceAttrs.serviceName}`,
-      `service.namespace=${resourceAttrs.serviceNamespace}`,
-      `service.instance.id=${resourceAttrs.serviceInstanceId}`
-    ].join(",");
-    env.OTEL_RESOURCE_ATTRIBUTES = env.OTEL_RESOURCE_ATTRIBUTES ? `${env.OTEL_RESOURCE_ATTRIBUTES},${attrs}` : attrs;
-    info(`Collector OTEL_RESOURCE_ATTRIBUTES: ${env.OTEL_RESOURCE_ATTRIBUTES}`);
-  }
   const proc = spawn(binaryPath, ["--config", configPath], {
     detached: true,
     stdio: ["ignore", logFd, logFd],
@@ -33752,12 +33805,18 @@ async function run() {
     const binaryPath = await downloadCollector();
     const serviceName = getInput("service-name");
     const serviceNamespace = getInput("service-namespace");
-    const resourceAttrs = {
-      serviceName,
-      serviceNamespace,
-      serviceInstanceId: process.env.GITHUB_RUN_ID || "unknown"
+    const [owner = "", repo = ""] = (process.env.GITHUB_REPOSITORY || "").split("/");
+    const event = {
+      runId: Number(process.env.GITHUB_RUN_ID || "0"),
+      sha: process.env.GITHUB_SHA || "",
+      repo: { owner, repo },
+      payload: process.env.GITHUB_EVENT_PATH ? JSON.parse(fs$1.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")) : {}
     };
-    const { pid, logPath } = startCollector(binaryPath, configPath, resourceAttrs);
+    const resourceAttrs = captureResource(serviceName, serviceNamespace, event, checkoutAttributes(workspace));
+    const serializedResource = serializeResource(resourceAttrs);
+    saveState("resource-attributes", JSON.stringify(resourceAttrs));
+    exportVariable("OTEL_RESOURCE_ATTRIBUTES", serializedResource);
+    const { pid, logPath } = startCollector(binaryPath, configPath);
     saveState("collector-pid", pid.toString());
     saveState("collector-log", logPath);
     await waitForCollector();
