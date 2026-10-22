@@ -71,8 +71,10 @@ needs `contents: write` on the repository.
 ### Tagger identity
 
 git takes a tag's tagger from the committer identity, so the `committer` input
-sets the tagger. It is split into name and email and passed to `git tag` only;
-the job's git config is not changed. The `author` input has no effect.
+sets the tagger. It is split into name and email and passed to `git tag` only,
+so git-tag itself does not change the job's git config. (`setup-gitsign`, used
+when `use-gitsign` is `true`, still sets a global `user.name` and `user.email`.)
+The `author` input has no effect.
 
 ### Edge Cases
 
