@@ -17,6 +17,7 @@ It uses [fsaintjacques/semver-tool](https://github.com/fsaintjacques/semver-tool
 | Name            | Description                                                                                 | Required | Default |
 |-----------------|---------------------------------------------------------------------------------------------|----------|---------|
 | `bump_level`    | Which part of the SemVer version to increment: `major`, `minor`, `patch`, `prerelease`, or `build`. | ✅       | `build` |
+| `prerelease_label` | Label for prerelease versions, used with `bump_level: prerelease`                        | ❌       | `rc`    |
 | `git_tag_prefix`| Git tag prefix (e.g. `v`)                                                                   | ✅       | `v`     |
 | `forced_version`| A SemVer-compatible version to force instead of bumping                                     | ❌       |         |
 | `dry_run`       | If `true`, do not push any tags (for testing purposes)                                      | ✅       | `false` |
@@ -61,6 +62,21 @@ When using `bump_level: build`, the version includes build metadata based on the
 1.0.0+202504111030
 ```
 This provides a sortable, unique identifier for CI-generated builds.
+
+### Prerelease Versions
+
+A prerelease sorts before the release it belongs to ([SemVer 2.0.0 §11](https://semver.org/#spec-item-11)),
+so `prerelease` and `patch` handle prerelease tags as follows:
+
+| Latest tag     | `bump_level`  | Result         |
+|----------------|---------------|----------------|
+| `v0.2.66`      | `prerelease`  | `v0.2.67-rc.1` |
+| `v0.2.67-rc.1` | `prerelease`  | `v0.2.67-rc.2` |
+| `v0.2.67-rc.2` | `patch`       | `v0.2.67`      |
+
+Set `prerelease_label` to use a label other than `rc`. Before this behavior,
+`prerelease` produced `v0.2.66-1` from `v0.2.66`; use `forced_version` if you
+need a specific prerelease version.
 
 ### Authentication
 
