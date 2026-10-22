@@ -36,7 +36,7 @@ jobs:
       # install an old version, and check that we got the expected version
       - uses: "./setup-eksctl" # zizmor: ignore[self-repository]
         with:
-          version: "v0.231.0"
+          version: "v0.209.0"
 
       - name: verify version
         shell: bash
