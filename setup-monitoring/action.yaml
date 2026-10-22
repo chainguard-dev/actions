@@ -15,9 +15,9 @@ inputs:
 
   prometheus-chart-version:
     description: |
-      kube-prometheus-stack helm chart version to be installed (default 86.2.3)
+      kube-prometheus-stack helm chart version to be installed (default 92.11.0)
     required: false
-    default: 86.2.3
+    default: 92.11.0
 
   monitoring-namespace:
     description: |
