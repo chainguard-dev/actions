@@ -21,8 +21,8 @@ It uses [fsaintjacques/semver-tool](https://github.com/fsaintjacques/semver-tool
 | `forced_version`| A SemVer-compatible version to force instead of bumping                                     | ❌       |         |
 | `dry_run`       | If `true`, do not push any tags (for testing purposes)                                      | ✅       | `false` |
 | `token`         | GitHub token required to authenticate and push the tag                                      | ❌       |  `GITHUB_TOKEN`       |
-| `author`        | The author name and email address (format: `Display Name <email@address.com>`)              | ❌       | `$github.actor <$github.actor_id+$github.actor@users.noreply.github.com>` |
-| `committer`     | The committer name and email address (format: `Display Name <email@address.com>`)           | ❌       | github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>  |
+| `author`        | Deprecated and unused: a tag has only a tagger, taken from `committer`                      | ❌       | `$github.actor <$github.actor_id+$github.actor@users.noreply.github.com>` |
+| `committer`     | The tagger name and email address (format: `Display Name <email@address.com>`)              | ❌       | github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>  |
 | `use-gitsign`   | Use gitsign to sign commits                                                                 | ❌       |   `true`      |
 
 ## 📦 Outputs
@@ -47,7 +47,6 @@ jobs:
           git_tag_prefix: v
           dry_run: false
           token: ${{ steps.octo-sts.outputs.token }}
-          author: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
           committer: "octo-sts[bot] <157150467+octo-sts[bot]@users.noreply.github.com>"
 ```
 
@@ -68,6 +67,14 @@ The tag is pushed with the `token` input, not with credentials saved by
 `actions/checkout`. The checkout can therefore use `persist-credentials: false`,
 and when checkout does save credentials they are ignored for the push. The token
 needs `contents: write` on the repository.
+
+### Tagger identity
+
+git takes a tag's tagger from the committer identity, so the `committer` input
+sets the tagger. It is split into name and email and passed to `git tag` only,
+so git-tag itself does not change the job's git config. (`setup-gitsign`, used
+when `use-gitsign` is `true`, still sets a global `user.name` and `user.email`.)
+The `author` input has no effect.
 
 ### Edge Cases
 
