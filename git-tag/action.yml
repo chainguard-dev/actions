@@ -9,6 +9,10 @@ inputs:
     description: "Specifies which part of the SemVer version to increment: major, minor, bugfix, prerelease, or build."
     required: true
     default: 'build'
+  prerelease_label:
+    description: "Label for prerelease versions, used with bump_level prerelease (rc by default)."
+    required: false
+    default: "rc"
   git_tag_prefix:
     description: "Git tag prefix (v by default)"
     required: true
@@ -87,6 +91,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
         INPUTS_BUMP_LEVEL: ${{ inputs.bump_level }}
         INPUTS_FORCED_VERSION: ${{ inputs.forced_version }}
+        INPUTS_PRERELEASE_LABEL: ${{ inputs.prerelease_label }}
         INPUTS_GIT_TAG_PREFIX: ${{ inputs.git_tag_prefix }}
         INPUTS_DRY_RUN: ${{ inputs.dry_run }}
         INPUTS_COMMITTER: ${{ inputs.committer }}
@@ -99,6 +104,7 @@ runs:
 
         bump_level="${INPUTS_BUMP_LEVEL}"
         forced_version="${INPUTS_FORCED_VERSION}"
+        prerelease_label="${INPUTS_PRERELEASE_LABEL}"
         git_tag_prefix="${INPUTS_GIT_TAG_PREFIX}"
         dry_run="${INPUTS_DRY_RUN}"
 
@@ -117,14 +123,50 @@ runs:
           latest_version="${latest_tag#"$git_tag_prefix"}"
           echo "ℹ️ Version extracted: $latest_version"
 
-          # Use YYYYMMDDHHMM format as build metadata.
-          # This approach helps for maintaining clarity, uniqueness, and chronological order.
-          if [[ "$bump_level" == "build" ]]; then
+          latest_prerel=$(semver get prerel "$latest_version")
+
+          # If the release this prerelease belongs to is already tagged (for
+          # example v0.2.66-1 after v0.2.66, made by the old prerelease
+          # behavior or a forced_version), bump from that release instead.
+          if [[ -n "$latest_prerel" ]]; then
+            latest_release=$(semver bump release "$latest_version")
+            if git rev-parse -q --verify "refs/tags/${git_tag_prefix}${latest_release}" >/dev/null; then
+              echo "ℹ️ Release '${git_tag_prefix}${latest_release}' already exists, bumping from it."
+              latest_version="$latest_release"
+              latest_prerel=""
+            fi
+          fi
+
+          case "$bump_level" in
+            build)
+              # Use YYYYMMDDHHMM format as build metadata.
+              # This approach helps for maintaining clarity, uniqueness, and chronological order.
               build_metadata=$(date +%Y%m%d%H%M)
               bumped_version=$(semver bump build "$build_metadata" "$latest_version")
-          else
+              ;;
+            prerelease|prerel)
+              # A prerelease sorts before its release (SemVer 2.0.0 §11), so
+              # from a release, bump patch first: 0.2.66 -> 0.2.67-rc.1.
+              # From a prerelease, bump its number: 0.2.67-rc.1 -> 0.2.67-rc.2.
+              base_version="$latest_version"
+              if [[ -z "$latest_prerel" ]]; then
+                base_version=$(semver bump patch "$latest_version")
+              fi
+              bumped_version=$(semver bump prerel "${prerelease_label}.." "$base_version")
+              ;;
+            patch)
+              # From a prerelease, release the version it was for:
+              # 0.2.67-rc.2 -> 0.2.67, not 0.2.68.
+              if [[ -n "$latest_prerel" ]]; then
+                bumped_version=$(semver bump release "$latest_version")
+              else
+                bumped_version=$(semver bump patch "$latest_version")
+              fi
+              ;;
+            *)
               bumped_version=$(semver bump "$bump_level" "$latest_version")
-          fi
+              ;;
+          esac
         # Force a specific version instead of bumping from the latest version
         else
           bumped_version=$forced_version

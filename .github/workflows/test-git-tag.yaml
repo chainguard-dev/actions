@@ -40,6 +40,74 @@ jobs:
           dry_run: true
           forced_version: 2.0.0
 
+  test_git_tag_bump:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { latest: v0.2.66, bump_level: prerelease, expected: v0.2.67-rc.1 }
+          - { latest: v0.2.67-rc.1, bump_level: prerelease, expected: v0.2.67-rc.2 }
+          - { latest: v0.2.67-rc.2, bump_level: patch, expected: v0.2.67 }
+          - { latest: v0.2.66, bump_level: patch, expected: v0.2.67 }
+          - { latest: v0.2.67-rc.1, bump_level: minor, expected: v0.3.0 }
+          # An old-style prerelease made after its release already shipped.
+          - { previous: v0.2.66, latest: v0.2.66-1, bump_level: patch, expected: v0.2.67 }
+          - { previous: v0.2.66, latest: v0.2.66-1, bump_level: prerelease, expected: v0.2.67-rc.1 }
+
+    name: Test Git Tag bump (${{ matrix.previous && format('{0}, ', matrix.previous) || '' }}${{ matrix.latest }}, ${{ matrix.bump_level }})
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            *.githubapp.com:443
+            api.github.com:443
+            github.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create the tags
+        env:
+          PREVIOUS: ${{ matrix.previous }}
+          LATEST: ${{ matrix.latest }}
+        run: |
+          # Far-future dates (2096) make these the newest tags by creatordate,
+          # with LATEST newer than PREVIOUS.
+          if [ -n "$PREVIOUS" ]; then
+            GIT_COMMITTER_DATE="3999999000 +0000" \
+              git -c user.name=test -c user.email=test@example.com tag -a "$PREVIOUS" -m "$PREVIOUS"
+          fi
+          GIT_COMMITTER_DATE="4000000000 +0000" \
+            git -c user.name=test -c user.email=test@example.com tag -a "$LATEST" -m "$LATEST"
+
+      - uses: ./git-tag # zizmor: ignore[self-repository]
+        id: bump
+        with:
+          git_tag_prefix: "v"
+          bump_level: ${{ matrix.bump_level }}
+          dry_run: true
+          use-gitsign: false
+
+      - name: Check the bumped tag
+        env:
+          EXPECTED: ${{ matrix.expected }}
+          GOT: ${{ steps.bump.outputs.git_tag }}
+        run: |
+          if [ "$GOT" != "$EXPECTED" ]; then
+            echo "::error::Expected '$EXPECTED', got '$GOT'."
+            exit 1
+          fi
+
   test_git_tag_push:
     # Exercise the real push path, including authentication to github.com,
     # without creating a tag: a pre-push hook, which git runs only after the
