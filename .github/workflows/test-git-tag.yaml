@@ -77,8 +77,8 @@ jobs:
         env:
           LATEST: ${{ matrix.latest }}
         run: |
-          # A far-future date makes this the newest tag by creatordate.
-          GIT_COMMITTER_DATE="2100-01-01T00:00:00Z" \
+          # A far-future date (2096) makes this the newest tag by creatordate.
+          GIT_COMMITTER_DATE="4000000000 +0000" \
             git -c user.name=test -c user.email=test@example.com tag -a "$LATEST" -m "$LATEST"
 
       - uses: ./git-tag # zizmor: ignore[self-repository]
