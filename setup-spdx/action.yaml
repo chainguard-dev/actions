@@ -18,8 +18,8 @@ inputs:
 
   spdx-tools-version:
     description: |
-      Version of the SPDX tools (eg.: 1.1.8, 1.1.3, 1.1.0).
-    default: 1.1.8
+      Version of the SPDX tools (eg.: 2.0.7, 1.1.8).
+    default: 2.0.7
 
   download:
     description: |
