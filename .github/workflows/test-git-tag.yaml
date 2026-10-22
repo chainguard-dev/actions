@@ -55,8 +55,11 @@ jobs:
           - { latest: v0.2.67-rc.2, bump_level: patch, expected: v0.2.67 }
           - { latest: v0.2.66, bump_level: patch, expected: v0.2.67 }
           - { latest: v0.2.67-rc.1, bump_level: minor, expected: v0.3.0 }
+          # An old-style prerelease made after its release already shipped.
+          - { previous: v0.2.66, latest: v0.2.66-1, bump_level: patch, expected: v0.2.67 }
+          - { previous: v0.2.66, latest: v0.2.66-1, bump_level: prerelease, expected: v0.2.67-rc.1 }
 
-    name: Test Git Tag bump (${{ matrix.latest }}, ${{ matrix.bump_level }})
+    name: Test Git Tag bump (${{ matrix.previous && format('{0}, ', matrix.previous) || '' }}${{ matrix.latest }}, ${{ matrix.bump_level }})
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -73,11 +76,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create the latest tag
+      - name: Create the tags
         env:
+          PREVIOUS: ${{ matrix.previous }}
           LATEST: ${{ matrix.latest }}
         run: |
-          # A far-future date (2096) makes this the newest tag by creatordate.
+          # Far-future dates (2096) make these the newest tags by creatordate,
+          # with LATEST newer than PREVIOUS.
+          if [ -n "$PREVIOUS" ]; then
+            GIT_COMMITTER_DATE="3999999000 +0000" \
+              git -c user.name=test -c user.email=test@example.com tag -a "$PREVIOUS" -m "$PREVIOUS"
+          fi
           GIT_COMMITTER_DATE="4000000000 +0000" \
             git -c user.name=test -c user.email=test@example.com tag -a "$LATEST" -m "$LATEST"
 

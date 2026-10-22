@@ -126,6 +126,18 @@ runs:
 
           latest_prerel=$(semver get prerel "$latest_version")
 
+          # If the release this prerelease belongs to is already tagged (for
+          # example v0.2.66-1 after v0.2.66, made by the old prerelease
+          # behavior or a forced_version), bump from that release instead.
+          if [[ -n "$latest_prerel" ]]; then
+            latest_release=$(semver bump release "$latest_version")
+            if git rev-parse -q --verify "refs/tags/${git_tag_prefix}${latest_release}" >/dev/null; then
+              echo "ℹ️ Release '${git_tag_prefix}${latest_release}' already exists, bumping from it."
+              latest_version="$latest_release"
+              latest_prerel=""
+            fi
+          fi
+
           case "$bump_level" in
             build)
               # Use YYYYMMDDHHMM format as build metadata.
