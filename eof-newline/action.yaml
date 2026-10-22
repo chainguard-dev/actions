@@ -15,7 +15,7 @@ inputs:
     description: |
       The version of reviewdog to use.
     required: false
-    default: "v0.18.1"
+    default: "v0.21.2"
 
 runs:
   using: "composite"

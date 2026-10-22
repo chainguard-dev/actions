@@ -15,9 +15,9 @@ inputs:
 
   istio-version:
     description: |
-      The version of Istio to install, e.g. 1.30.1
+      The version of Istio to install, e.g. 1.30.7
     required: false
-    default: 1.30.1
+    default: 1.30.7
 
   enable-auto-injection:
     description: |
