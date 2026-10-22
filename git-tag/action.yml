@@ -31,12 +31,12 @@ inputs:
     default: ${{ github.token }}
   author:
     description: >
-      The author name and email address in the format `Display Name <email@address.com>`.
-      Defaults to the user who triggered the workflow run.
+      Deprecated and unused. A tag has only a tagger, which git takes from the
+      committer identity, so set `committer` instead.
     default: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
   committer:
     description: >
-      The committer name and email address in the format `Display Name <email@address.com>`.
+      The tagger name and email address in the format `Display Name <email@address.com>`.
       Defaults to the GitHub Actions bot user.
     default: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
 
@@ -90,7 +90,6 @@ runs:
         INPUTS_GIT_TAG_PREFIX: ${{ inputs.git_tag_prefix }}
         INPUTS_DRY_RUN: ${{ inputs.dry_run }}
         INPUTS_COMMITTER: ${{ inputs.committer }}
-        INPUTS_AUTHOR: ${{ inputs.author }}
       run: |
         set -e
 
@@ -145,16 +144,24 @@ runs:
         if [[ "$dry_run" == 'true' ]]; then
           echo "ℹ️ dry-run mode is enabled. No git tags pushed."
         else
-          # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
-          git config --global user.email "${INPUTS_COMMITTER}"
-          git config --global user.name "${INPUTS_AUTHOR}"
+          # git takes the tagger from the committer identity. Split the
+          # committer input into name and email and set them for the git tag
+          # command only, so the job's git config is left untouched.
+          committer_re='^(.+) <([^<>]+)>$'
+          if [[ ! "${INPUTS_COMMITTER}" =~ $committer_re ]]; then
+            echo "❌ committer '${INPUTS_COMMITTER}' is not in the format 'Display Name <email@address.com>'."
+            exit 1
+          fi
+          tagger_name="${BASH_REMATCH[1]}"
+          tagger_email="${BASH_REMATCH[2]}"
 
           # check if the Git tag already exists
           if git show-ref --tags --verify --quiet -- "refs/tags/$git_tag"; then
             echo "❌ A tag '$git_tag' already exists for the version '$bumped_version'."
             exit 1
           else
-            git tag -a "$git_tag" -m "$git_tag"
+            GIT_COMMITTER_NAME="$tagger_name" GIT_COMMITTER_EMAIL="$tagger_email" \
+              git tag -a "$git_tag" -m "$git_tag"
             # Push with the token input rather than credentials persisted by
             # actions/checkout, so callers can use persist-credentials: false.
             # The empty extraheader drops any header checkout saved (GitHub

@@ -127,3 +127,17 @@ jobs:
           fi
           cat "$RUNNER_TEMP/pre-push-refs"
           grep -q ' refs/tags/v0.0.0-push-test ' "$RUNNER_TEMP/pre-push-refs"
+
+      - name: Check the tagger identity and that git config was not changed
+        run: |
+          tagger=$(git for-each-ref refs/tags/v0.0.0-push-test --format='%(taggername) | %(taggeremail)')
+          echo "tagger: $tagger"
+          expected='github-actions[bot] | <41898282+github-actions[bot]@users.noreply.github.com>'
+          if [ "$tagger" != "$expected" ]; then
+            echo "::error::Expected tagger '$expected', got '$tagger'."
+            exit 1
+          fi
+          if git config --global user.name || git config --global user.email; then
+            echo "::error::git-tag changed the global git config."
+            exit 1
+          fi
