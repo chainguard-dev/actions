@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Kind
-        uses: chainguard-dev/actions/setup-kind@53668650c25af6e8864f1d1ddaa69ed4db4cdf09 # v1.6.42
+        uses: chainguard-dev/actions/setup-kind@e94104128fff55b3c5e1831a8bbbf198603156f9 # v1.7.1
 
       - name: Install Argo Workflows
         uses: ./setup-argo-workflows # zizmor: ignore[self-repository]
