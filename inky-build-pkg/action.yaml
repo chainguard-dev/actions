@@ -37,7 +37,7 @@ runs:
       shell: bash
       run: |
         mkdir -p "$GITHUB_WORKSPACE/${INPUTS_PACKAGE_NAME}"
-    - uses: chainguard-dev/actions/melange-build-pkg@3403a578b543fd3f0debdaef9dd989ae54e3fcef # v1.6.41
+    - uses: chainguard-dev/actions/melange-build-pkg@8f31e9482b447ff2c69eca944a09b4b31a4a85d0 # v1.7.2
       with:
         config: ${{ inputs.package-name }}.yaml
         archs: ${{ inputs.archs }}
