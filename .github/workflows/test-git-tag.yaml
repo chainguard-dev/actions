@@ -18,7 +18,7 @@ jobs:
 
     name: Test Git Tag
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -61,7 +61,7 @@ jobs:
 
     name: Test Git Tag bump (${{ matrix.previous && format('{0}, ', matrix.previous) || '' }}${{ matrix.latest }}, ${{ matrix.bump_level }})
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -132,7 +132,7 @@ jobs:
 
     name: Test Git Tag push (persist-credentials ${{ matrix.persist-credentials }}, ${{ matrix.token-input }} token)
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: block
           allowed-endpoints: >
