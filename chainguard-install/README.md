@@ -34,7 +34,7 @@ The `bin` output is automatically added to `$GITHUB_PATH`, but you can also refe
 ### With private repository access
 
 To access private APK repositories, you need a Chainguard assumable identity.
-See [Create an Assumable Identity for a GitHub Actions Workflow](https://edu.chainguard.dev/chainguard/administration/assumable-ids/identity-examples/github-identity/) for setup instructions.
+See [Create an Assumable Identity for a GitHub Actions Workflow](https://www.chainguard.dev/docs/platform/administration/assumable-ids/identity-examples/github-identity) for setup instructions.
 
 ```yaml
 - uses: chainguard-dev/actions/chainguard-install@805da2efdffdc42b8afd8880e575a48b471ef544 # v1.6.37
