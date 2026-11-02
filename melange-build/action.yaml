@@ -113,7 +113,7 @@ runs:
       shell: bash
       run: |
         echo "Warning: the --template flag has been removed from melange and will be ignored."
-    - uses: chainguard-dev/actions/setup-melange@794a2c44abbbd7b3a186db97b359270e4105448f # main
+    - uses: chainguard-dev/actions/setup-melange@794a2c44abbbd7b3a186db97b359270e4105448f # zizmor: ignore[stale-action-refs] Ubuntu 26.04 fix (#1130) is not in a release yet
       with:
         version: ${{ inputs.version }}
     - uses: chainguard-dev/actions/melange-keygen@8f31e9482b447ff2c69eca944a09b4b31a4a85d0 # v1.7.2
