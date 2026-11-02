@@ -6,7 +6,7 @@ const shared = {
   plugins: [
     esbuild({ tsconfig: './tsconfig.json', target: 'es2022' }),
     commonjs(),
-    nodeResolve({ preferBuiltins: true }),
+    nodeResolve({ preferBuiltins: true, exportConditions: ['node'] }),
   ],
   external: [/^node:/],
 };

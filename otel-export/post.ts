@@ -44,7 +44,7 @@ function writeJobSummary(traceId: string, metrics: WorkflowMetrics): void {
 
 async function run(): Promise<void> {
   let meterProvider: import('@opentelemetry/sdk-metrics').MeterProvider | undefined;
-  let tracerProvider: import('@opentelemetry/sdk-trace-base').BasicTracerProvider | undefined;
+  let tracerProvider: import('@opentelemetry/sdk-trace').TracerProvider | undefined;
   const collectorPid = parseInt(core.getState('collector-pid'), 10);
   const collectorLog = core.getState('collector-log');
 
