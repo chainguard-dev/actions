@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MeterProvider, InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality } from '@opentelemetry/sdk-metrics';
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { TracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { recordMetrics, recordTraces, shutdownMeterProvider, generateTraceId, generateRootSpanId, DeterministicIdGenerator } from '../lib/exporter.js';
 import type { WorkflowMetrics } from '../lib/types.js';
@@ -35,8 +35,8 @@ function makeMetrics(overrides: Partial<WorkflowMetrics> = {}): WorkflowMetrics 
 
 function createTestTracer(idGenerator?: DeterministicIdGenerator) {
   const exporter = new InMemorySpanExporter();
-  const provider = new BasicTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  const provider = new TracerProvider({
+    spanProcessors: [new SimpleSpanProcessor({ exporter })],
     ...(idGenerator ? { idGenerator } : {}),
   });
   const tracer = provider.getTracer(PREFIX);

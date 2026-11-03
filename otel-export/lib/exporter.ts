@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { BasicTracerProvider, BatchSpanProcessor, RandomIdGenerator, type IdGenerator } from '@opentelemetry/sdk-trace-base';
+import { TracerProvider, BatchSpanProcessor, RandomIdGenerator, type IdGenerator } from '@opentelemetry/sdk-trace';
 import { context, trace, SpanKind, SpanStatusCode, TraceFlags, type Tracer, type Meter } from '@opentelemetry/api';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
@@ -242,7 +242,7 @@ export function createTracerProvider(
   config: OtelConfig,
   idGenerator?: IdGenerator,
 ): {
-  tracerProvider: BasicTracerProvider;
+  tracerProvider: TracerProvider;
   tracer: Tracer;
 } {
   core.info('Initializing TracerProvider with OTLP HTTP exporter');
@@ -253,9 +253,9 @@ export function createTracerProvider(
     url: `http://${COLLECTOR_HTTP_ENDPOINT}/v1/traces`,
   });
 
-  const tracerProvider = new BasicTracerProvider({
+  const tracerProvider = new TracerProvider({
     resource,
-    spanProcessors: [new BatchSpanProcessor(exporter)],
+    spanProcessors: [new BatchSpanProcessor({ exporter })],
     ...(idGenerator ? { idGenerator } : {}),
   });
 
@@ -344,7 +344,7 @@ export function recordTraces(
   core.info(`Recorded traces for job and ${metrics.steps.length} steps`);
 }
 
-export async function shutdownTracerProvider(tracerProvider: BasicTracerProvider): Promise<void> {
+export async function shutdownTracerProvider(tracerProvider: TracerProvider): Promise<void> {
   // shutdown() already calls forceFlush() internally.
   await tracerProvider.shutdown();
   core.info('TracerProvider shut down');
