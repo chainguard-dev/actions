@@ -341,6 +341,30 @@ runs:
         # this registry, even when pushing $REGISTRY_NAME:$REGISTRY_PORT/some/image
         sudo echo "127.0.0.1 $REGISTRY_NAME" | sudo tee -a /etc/hosts
 
+        # Docker 29+ (containerd image store, e.g. ubuntu-26.04 runners) no
+        # longer treats a hostname that resolves to loopback as insecure, so
+        # `docker push $REGISTRY_NAME:$REGISTRY_PORT/...` would attempt HTTPS.
+        # Mark the registry insecure explicitly. insecure-registries is
+        # live-reloadable, so a SIGHUP is enough and running containers
+        # (including the KinD nodes) are left untouched.
+        DAEMON_JSON=/etc/docker/daemon.json
+        if sudo test -s "${DAEMON_JSON}"; then
+          CURRENT="$(sudo cat "${DAEMON_JSON}")"
+        else
+          CURRENT='{}'
+        fi
+        jq --arg reg "${REGISTRY_NAME}:${REGISTRY_PORT}" \
+          '."insecure-registries" = ((."insecure-registries" // []) + [$reg] | unique)' \
+          <<<"${CURRENT}" | sudo tee "${DAEMON_JSON}" > /dev/null
+        sudo systemctl reload docker
+        # Wait for the daemon to pick up the new configuration.
+        for _ in $(seq 1 30); do
+          if docker info --format '{{json .RegistryConfig.IndexConfigs}}' | grep -qF "\"${REGISTRY_NAME}:${REGISTRY_PORT}\""; then
+            break
+          fi
+          sleep 1
+        done
+
     - name: Set start time output
       id: start-time
       run: echo "kind-start-time=$(echo $(($(date +%s%N)/1000000)))" >> "$GITHUB_OUTPUT"
