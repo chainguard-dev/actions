@@ -116,7 +116,7 @@ runs:
     - uses: chainguard-dev/actions/setup-melange@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
       with:
         version: ${{ inputs.version }}
-    - uses: chainguard-dev/actions/melange-keygen@8f31e9482b447ff2c69eca944a09b4b31a4a85d0 # v1.7.2
+    - uses: chainguard-dev/actions/melange-keygen@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
       if: ${{ inputs.sign-with-temporary-key == 'true' }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
