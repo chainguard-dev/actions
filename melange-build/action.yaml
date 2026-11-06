@@ -120,7 +120,7 @@ runs:
       if: ${{ inputs.sign-with-temporary-key == 'true' }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
-    - uses: chainguard-dev/actions/melange-build-pkg@8f31e9482b447ff2c69eca944a09b4b31a4a85d0 # v1.7.2
+    - uses: chainguard-dev/actions/melange-build-pkg@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
       with:
         config: ${{ inputs.config }}
         multi-config: ${{ inputs.multi-config }}
