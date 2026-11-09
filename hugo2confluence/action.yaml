@@ -7,8 +7,9 @@ runs:
     - name: Check required hugo2confluence env vars
       shell: bash
       id: check-hugo2confluence
+      # No `set -x` here: tracing `${!v}` prints the value of each var,
+      # CONFLUENCE_TOKEN included, and GitHub only masks `secrets.*` values.
       run: |
-        set -x
         required_env_vars=(
           "CONFLUENCE_USER"
           "CONFLUENCE_TOKEN"
@@ -32,7 +33,7 @@ runs:
         set -x
 
         # Enter the directory containing the checkout of this action
-        cd "$(find ~/work/_actions -name hugo2confluence -print -quit)" || exit
+        cd "${GITHUB_ACTION_PATH}" || exit
 
         # Build the binary
         go build -o bin/hugo2confluence .
