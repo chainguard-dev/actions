@@ -67,6 +67,15 @@ runs:
     # Set up go-containerregistry's GitHub keychain.
     GITHUB_ACTOR: ${{ inputs.repository_owner }}
     GITHUB_TOKEN: ${{ inputs.token }}
+    # Inputs reach the script only as env vars, never pasted into its text,
+    # so a value like `x; curl … | sh` stays data.
+    INPUT_CONFIG: ${{ inputs.config }}
+    INPUT_TAG: ${{ inputs.tag }}
+    INPUT_IMAGE_REFS: ${{ inputs.image_refs }}
+    INPUT_KEYRING_APPEND: ${{ inputs.keyring-append }}
+    INPUT_ARCHS: ${{ inputs.archs }}
+    INPUT_SOURCE_DATE_EPOCH: ${{ inputs.source-date-epoch }}
+    INPUT_USE_DOCKER_MEDIATYPES: ${{ inputs.use-docker-mediatypes }}
   entrypoint: /bin/sh
   args:
     - '-c'
@@ -77,11 +86,23 @@ runs:
       echo "This action will be deprecated, please use chainguard-images/actions/apko-publish@main instead"
       echo "***************************************************************************************"
 
-      [ -n "${{ inputs.source-date-epoch }}" ] && export SOURCE_DATE_EPOCH='${{ inputs.source-date-epoch }}'
-      [ -n "${{ inputs.keyring-append }}" ] && keys="-k ${{ inputs.keyring-append }}"
-      [ -n "${{ inputs.archs }}" ] && archs="--arch ${{ inputs.archs }}"
-      /usr/bin/apko publish \
-        ${{ inputs.use-docker-mediatypes && '--use-docker-mediatypes' }} \
-        --image-refs="${{ inputs.image_refs }}" ${{ inputs.config }} ${{ inputs.tag }} $keys $archs
-      echo EXIT CODE: $?
-      echo "digest=$(cat "${{ inputs.image_refs }}")" >> $GITHUB_OUTPUT
+      [ -n "${INPUT_SOURCE_DATE_EPOCH}" ] && export SOURCE_DATE_EPOCH="${INPUT_SOURCE_DATE_EPOCH}"
+
+      set --
+      [ "${INPUT_USE_DOCKER_MEDIATYPES}" = "true" ] && set -- "$@" --use-docker-mediatypes
+      set -- "$@" --image-refs="${INPUT_IMAGE_REFS}"
+
+      # config, tag, keyring-append and archs were always word-split (a
+      # space-separated list of tags is valid), so keep splitting them, but
+      # with globbing off. Splitting never runs code.
+      set -f
+      # shellcheck disable=SC2086
+      set -- "$@" ${INPUT_CONFIG} ${INPUT_TAG}
+      # shellcheck disable=SC2086
+      [ -n "${INPUT_KEYRING_APPEND}" ] && set -- "$@" -k ${INPUT_KEYRING_APPEND}
+      # shellcheck disable=SC2086
+      [ -n "${INPUT_ARCHS}" ] && set -- "$@" --arch ${INPUT_ARCHS}
+      set +f
+
+      /usr/bin/apko publish "$@"
+      echo "digest=$(cat "${INPUT_IMAGE_REFS}")" >> "$GITHUB_OUTPUT"
