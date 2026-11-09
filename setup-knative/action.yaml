@@ -103,6 +103,11 @@ runs:
         # keyless cosign signature from Knative's release signer is checked
         # first, once per release), and prints the verified file's path.
         # Knative has signed its checksums since about v1.11.
+        #
+        # Callers run this as `path="$(fetch_verified ...)"`, and bash turns
+        # errexit off inside command substitution, so every step that can
+        # fail must `return 1` explicitly. Otherwise a failed signature or
+        # checksum check would fall through and still print the path.
         function fetch_verified() {
           local REPO="${1}" TAG="${2}" FILE="${3}"
           local dir="${VERIFY_DIR}/${REPO}/${TAG}"
@@ -113,7 +118,7 @@ runs:
 
           # A marker file, not a variable: this runs in pipeline subshells.
           if [ ! -f "${dir}/.verified" ]; then
-            mkdir -p "${dir}"
+            mkdir -p "${dir}" || return 1
             local f
             for f in checksums.txt checksums.txt.sig checksums.txt.pem; do
               if ! curl "${curl_opts[@]}" -o "${dir}/${f}" "${base}/${f}"; then
@@ -121,23 +126,29 @@ runs:
                 return 1
               fi
             done
-            cosign verify-blob \
+            if ! cosign verify-blob \
               --certificate "${dir}/checksums.txt.pem" \
               --signature "${dir}/checksums.txt.sig" \
               --certificate-identity signer@knative-releases.iam.gserviceaccount.com \
               --certificate-oidc-issuer https://accounts.google.com \
-              "${dir}/checksums.txt" >&2
-            touch "${dir}/.verified"
+              "${dir}/checksums.txt" >&2; then
+              echo "::error::signature check failed for knative/${REPO} ${TAG} checksums.txt" >&2
+              return 1
+            fi
+            touch "${dir}/.verified" || return 1
           fi
 
-          curl "${curl_opts[@]}" -o "${dir}/${FILE}" "${base}/${FILE}"
+          curl "${curl_opts[@]}" -o "${dir}/${FILE}" "${base}/${FILE}" || return 1
           local want
-          want="$(awk -v f="${FILE}" '$2 == f { print $1 }' "${dir}/checksums.txt")"
+          want="$(awk -v f="${FILE}" '$2 == f { print $1 }' "${dir}/checksums.txt")" || return 1
           if [ -z "${want}" ]; then
             echo "::error::no checksum for ${FILE} in knative/${REPO} ${TAG} checksums.txt" >&2
             return 1
           fi
-          echo "${want}  ${dir}/${FILE}" | shasum -a 256 --check --strict >&2
+          if ! echo "${want}  ${dir}/${FILE}" | shasum -a 256 --check --strict >&2; then
+            echo "::error::${FILE} from knative/${REPO} ${TAG} does not match its checksum" >&2
+            return 1
+          fi
           echo "${dir}/${FILE}"
         }
 
