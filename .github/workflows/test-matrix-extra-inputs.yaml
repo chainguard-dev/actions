@@ -32,6 +32,10 @@ jobs:
       env:
         EXTRA_INPUT_THIS_IS_EXAMPLE: hello
         EXTRA_INPUT_THIS_IS_ALSO_EXAMPLE: world
+        # Values that used to break or inject into the jq filter.
+        EXTRA_INPUT_WITH_QUOTE: 'a"b", "injected": "1'
+        EXTRA_INPUT_WITH_EQUALS: 'k=v=w'
+        EXTRA_INPUT_WITH_SPACE: 'hello world'
 
     - id: check-matrix-output
       env:
@@ -43,3 +47,7 @@ jobs:
         [[ "$(jq -r .y input.json)" == "2" ]]
         [[ "$(jq -r .thisIsExample input.json)" == "hello" ]]
         [[ "$(jq -r .thisIsAlsoExample input.json)" == "world" ]]
+        [[ "$(jq -r .withQuote input.json)" == 'a"b", "injected": "1' ]]
+        [[ "$(jq -r 'has("injected")' input.json)" == "false" ]]
+        [[ "$(jq -r .withEquals input.json)" == "k=v=w" ]]
+        [[ "$(jq -r .withSpace input.json)" == "hello world" ]]

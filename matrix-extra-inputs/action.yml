@@ -28,19 +28,20 @@ runs:
         INPUTS_MATRIX_JSON: ${{ inputs.matrix-json }}
       shell: bash
       run: |
-        # Convert env vars beginning with "EXTRA_INPUT_"
-        trap "rm -f inputs.json" EXIT
-        printf '%s\n' "${INPUTS_MATRIX_JSON}" > inputs.json
         echo "Original matrix:"
         echo "----------------"
-        cat inputs.json | jq
-        for kv in `env | grep '^EXTRA_INPUT_' | sed 's/^EXTRA_INPUT_//'`; do
-          k="$(echo "${kv}" | cut -d "=" -f1 | tr '[:upper:]' '[:lower:]' | sed -r 's/(.)_+(.)/\1\U\2/g;s/^[a-z]/\U&/' | sed 's/.*/\l&/')"
-          v="$(echo "${kv}" | cut -d "=" -f2)"
-          cat inputs.json | jq -c '. + {'"${k}"': "'"${v}"'"}' > inputs.json.tmp
-          mv inputs.json.tmp inputs.json
-        done
-        updated_matrix="$(cat inputs.json | tr -d '\n')"
+        printf '%s\n' "${INPUTS_MATRIX_JSON}" | jq
+
+        # Merge in every env var beginning with "EXTRA_INPUT_", camelCasing
+        # the rest of its name (EXTRA_INPUT_FOO_BAR=x -> {"fooBar": "x"}).
+        # jq reads names and values from its own `env`, so they are data,
+        # never filter text, and values keep every '=', quote and space.
+        updated_matrix="$(printf '%s\n' "${INPUTS_MATRIX_JSON}" | jq -c '
+          def camel: ascii_downcase | gsub("(?<a>.)_+(?<b>.)"; .a + (.b | ascii_upcase));
+          . + (env
+               | with_entries(select(.key | startswith("EXTRA_INPUT_"))
+                              | .key |= (ltrimstr("EXTRA_INPUT_") | camel)))
+        ')"
         echo "matrix-json=${updated_matrix}" >> "$GITHUB_OUTPUT"
         echo "Updated matrix:"
         echo "----------------"
