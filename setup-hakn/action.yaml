@@ -13,6 +13,14 @@ inputs:
     required: false
     default: 1.12.2
 
+  sha256:
+    description: |
+      Expected sha256 of the hakn release's serving.yaml. hakn publishes no
+      checksums, so the action pins the sha256 for 1.12.2; set this for any
+      other version.
+    required: false
+    default: ''
+
   istio-version:
     description: |
       The version of Istio to install, e.g. 1.30.7
@@ -72,6 +80,7 @@ runs:
         INPUTS_CLUSTER_DOMAIN: ${{ inputs.cluster-domain }}
         INPUTS_ENABLE_AUTO_INJECTION: ${{ inputs.enable-auto-injection }}
         INPUTS_VERSION: ${{ inputs.version }}
+        INPUTS_SHA256: ${{ inputs.sha256 }}
         INPUTS_SERVING_FEATURES: ${{ inputs.serving-features }}
         INPUTS_SERVING_DEFAULTS: ${{ inputs.serving-defaults }}
         INPUTS_SERVING_AUTOSCALER: ${{ inputs.serving-autoscaler }}
@@ -98,6 +107,9 @@ runs:
           esac
           ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
           wget "$ISTIO_URL" -O istio.tar.gz
+          # Each istio tarball has a "<sha256> <file>" .sha256 next to it.
+          wget "${ISTIO_URL}.sha256" -O istio.tar.gz.sha256
+          echo "$(awk '{ print $1 }' istio.tar.gz.sha256)  istio.tar.gz" | shasum -a 256 --check --strict
           tar xzf istio.tar.gz
         }
 
@@ -160,17 +172,29 @@ runs:
           kubectl delete mutatingwebhookconfigurations -l app=sidecar-injector
         fi
 
+        # hakn publishes no checksums, so pin serving.yaml's sha256 for the
+        # default version and require the sha256 input for any other.
+        case "${INPUTS_VERSION}" in
+        1.12.2) PINNED_SHA256="5264bc7a1c4116e7845e58e206b8c7c2cdbc6202f36158da7315773652b89ca4" ;;
+        *)      PINNED_SHA256="" ;;
+        esac
+        WANT_SHA256="${INPUTS_SHA256:-${PINNED_SHA256}}"
+        if [ -z "${WANT_SHA256}" ]; then
+          echo "::error::hakn ${INPUTS_VERSION} has no pinned sha256. Set sha256 to the sha256 of its serving.yaml."
+          exit 1
+        fi
+
+        SERVING_YAML="$(mktemp)"
+        curl -fsSL "https://github.com/chainguard-dev/hakn/releases/download/v${INPUTS_VERSION}/serving.yaml" -o "${SERVING_YAML}"
+        echo "${WANT_SHA256}  ${SERVING_YAML}" | shasum -a 256 --check --strict
+
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
-          local FILE="${1}"
-          local DOWNLOAD_URL="https://github.com/chainguard-dev/hakn/releases/download/v${INPUTS_VERSION}/${FILE}"
-
-          curl -L -s "$DOWNLOAD_URL" \
-            | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
+          yq e 'del(.spec.template.spec.containers[]?.resources)' "${1}" \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
         }
-        resource_blaster serving.yaml | kubectl apply --validate=false -f -
+        resource_blaster "${SERVING_YAML}" | kubectl apply --validate=false -f -
         kubectl patch configmap/config-network \
           --namespace knative-serving \
           --type merge \
