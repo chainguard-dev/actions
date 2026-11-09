@@ -8,14 +8,19 @@ description: |
   pieces of code they intend to revisit before submitting with
   this string and have CI block the change from merging.
 
-inputs: {}
+inputs:
+  reviewdog_version:
+    description: |
+      The version of reviewdog to use.
+    required: false
+    default: "v0.21.2"
 
 runs:
   using: "composite"
   steps:
   - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
     with:
-      reviewdog_version: latest
+      reviewdog_version: ${{ inputs.reviewdog_version }}
 
   - name: Do Not Submit
     shell: bash

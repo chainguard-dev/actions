@@ -23,6 +23,10 @@ inputs:
     description: 'GITHUB_TOKEN with `contents` and `pull-requests` permissions or a `repo` scoped Personal Access Token (PAT)'
     required: true
     default: ${{ github.token }}
+  release-notes-version:
+    required: false
+    description: 'Version of k8s.io/release release-notes to install'
+    default: 'v0.22.0'
 
 runs:
   using: "composite"
@@ -38,7 +42,9 @@ runs:
     - name: Install Dependencies
       shell: bash
       # https://github.com/kubernetes/release/tree/master/cmd/release-notes
-      run: go install k8s.io/release/cmd/release-notes@latest
+      env:
+        RELEASE_NOTES_VERSION: ${{ inputs.release-notes-version }}
+      run: go install "k8s.io/release/cmd/release-notes@${RELEASE_NOTES_VERSION}"
 
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
