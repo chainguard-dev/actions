@@ -128,7 +128,7 @@ runs:
     # gh pr create does not cover what we rely on here: creating/updating the
     # branch, committing, and updating an existing PR in place.
     - name: Create Pull Request # zizmor: ignore[superfluous-actions]
-      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # v8.1.2
       if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
       with:
         token: ${{ inputs.token }}
