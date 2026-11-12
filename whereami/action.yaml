@@ -8,7 +8,7 @@ description: |
 runs:
   using: "composite"
   steps:
-    - uses: wolfi-dev/wolfi-act@7f6915e256697663d18940570e932e990e6adb93 # zizmor: ignore[stale-action-refs] wolfi-act has no tagged releases; pinned to main commit from May 5, 2025
+    - uses: wolfi-dev/wolfi-act@634e2600f741167ba9e84313f66e144f3661086f # zizmor: ignore[stale-action-refs] wolfi-act has no tagged releases; pinned to main commit from May 5, 2025
       with:
         packages: curl,jq
         command: |
