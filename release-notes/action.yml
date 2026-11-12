@@ -122,13 +122,13 @@ runs:
         fi
 
     # Configure signed commits
-    - uses: chainguard-dev/actions/setup-gitsign@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
+    - uses: chainguard-dev/actions/setup-gitsign@a25ce483d875a46f4c837e85e32e0fda602693f5 # v1.8.1
       if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
 
     # gh pr create does not cover what we rely on here: creating/updating the
     # branch, committing, and updating an existing PR in place.
     - name: Create Pull Request # zizmor: ignore[superfluous-actions]
-      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # v8.1.2
       if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
       with:
         token: ${{ inputs.token }}
