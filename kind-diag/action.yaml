@@ -126,11 +126,17 @@ runs:
           exit 0
         fi
 
+        # Hand curl the credentials as a config on stdin rather than in the
+        # URL, so they never show up in argv (ps, /proc/*/cmdline) or in
+        # curl's error messages. Escape \ and " for the config syntax.
+        escape() { sed 's/[\\"]/\\&/g' <<< "$1"; }
+        curl_auth="user = \"$(escape "${INPUTS_GRAFANA_USERNAME}"):$(escape "${INPUTS_GRAFANA_PASSWORD}")\""
+
         mkdir -p /tmp/graphs
         IFS=',' read -r -a grafs <<< "${INPUTS_GRAFANA_DASHBOARDS}"
         for graf in "${grafs[@]}"
         do
-          curl "http://${INPUTS_GRAFANA_USERNAME}:${INPUTS_GRAFANA_PASSWORD}@localhost:3000/render/d/${graf}?width=2000&height=2000&from=${INPUTS_START_TIME}&to=now" > "/tmp/graphs/${graf#*/}.png"
+          curl --config - "http://localhost:3000/render/d/${graf}?width=2000&height=2000&from=${INPUTS_START_TIME}&to=now" <<< "${curl_auth}" > "/tmp/graphs/${graf#*/}.png"
         done
 
     - name: Package logs
