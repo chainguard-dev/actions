@@ -113,14 +113,14 @@ runs:
       shell: bash
       run: |
         echo "Warning: the --template flag has been removed from melange and will be ignored."
-    - uses: chainguard-dev/actions/setup-melange@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
+    - uses: chainguard-dev/actions/setup-melange@a25ce483d875a46f4c837e85e32e0fda602693f5 # v1.8.1
       with:
         version: ${{ inputs.version }}
-    - uses: chainguard-dev/actions/melange-keygen@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
+    - uses: chainguard-dev/actions/melange-keygen@a25ce483d875a46f4c837e85e32e0fda602693f5 # v1.8.1
       if: ${{ inputs.sign-with-temporary-key == 'true' }}
       with:
         signing-key-path: ${{ inputs.signing-key-path }}
-    - uses: chainguard-dev/actions/melange-build-pkg@794a2c44abbbd7b3a186db97b359270e4105448f # v1.8.0
+    - uses: chainguard-dev/actions/melange-build-pkg@a25ce483d875a46f4c837e85e32e0fda602693f5 # v1.8.1
       with:
         config: ${{ inputs.config }}
         multi-config: ${{ inputs.multi-config }}
