@@ -104,9 +104,14 @@ runs:
         echo "create_pr_update=false" >> "$GITHUB_OUTPUT"
         if [[ $(git diff --stat) != '' ]]; then
           echo "create_pr_update=true" >> "$GITHUB_OUTPUT"
-          echo "diff<<EOF" >> "$GITHUB_OUTPUT"
-          git diff >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          # A random delimiter, so a diff line reading "EOF" can't end the
+          # value early and inject further outputs.
+          delim="EOF_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+          {
+            echo "diff<<${delim}"
+            git diff
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
         fi
 
     - name: Dry-run output

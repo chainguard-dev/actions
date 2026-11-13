@@ -43,8 +43,11 @@ runs:
 
         echo "${MARKDOWN}"
 
-        cat >> "${GITHUB_OUTPUT}" <<EOOUTPUT
-        errors<<EOERRORS
-        ${MARKDOWN}
-        EOERRORS
-        EOOUTPUT
+        # A random delimiter, so a diagnostic line can't end the value early
+        # and inject further outputs.
+        delim="EOERRORS_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+        {
+          echo "errors<<${delim}"
+          echo "${MARKDOWN}"
+          echo "${delim}"
+        } >> "${GITHUB_OUTPUT}"
