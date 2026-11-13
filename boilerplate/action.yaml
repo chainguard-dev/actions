@@ -31,6 +31,19 @@ inputs:
     required: false
     default: ((vendor|third_party)/|.pb(.gw)?.go|.generated.go)
 
+  boilerplate-check-version:
+    description: |
+      The github.com/mattmoor/boilerplate-check version to install. The
+      repo has no tags, so this is a Go pseudo-version.
+    required: false
+    default: "v0.0.0-20251216161805-aaf99571434f"
+
+  reviewdog_version:
+    description: |
+      The version of reviewdog to use.
+    required: false
+    default: "v0.21.2"
+
 runs:
   using: "composite"
   steps:
@@ -44,15 +57,17 @@ runs:
 
   - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
     with:
-      reviewdog_version: latest
+      reviewdog_version: ${{ inputs.reviewdog_version }}
 
   - name: Install Tools
     shell: bash
+    env:
+      BOILERPLATE_CHECK_VERSION: ${{ inputs.boilerplate-check-version }}
     run: |
       cd "$(mktemp -d)" || exit
 
       echo '::group:: Installing boilerplate-check ... https://github.com/mattmoor/boilerplate-check'
-      go install github.com/mattmoor/boilerplate-check/cmd/boilerplate-check@latest
+      go install "github.com/mattmoor/boilerplate-check/cmd/boilerplate-check@${BOILERPLATE_CHECK_VERSION}"
       echo '::endgroup::'
 
   - name: check boilerplate
