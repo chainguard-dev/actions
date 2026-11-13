@@ -8,33 +8,36 @@ branding:
   color: green
 inputs:
   version:
-    description: 'Version of gcsfuse to install (tip, latest-release, v0.5.1, etc.)'
+    description: |
+      Version of gcsfuse to install, e.g. v3.13.0. Versions other than the
+      default need `sha256`. "tip" and "latest-release" are no longer
+      supported: neither can be verified.
     required: true
-    default: 'latest-release'
+    default: 'v3.13.0'
+  sha256:
+    description: |
+      Expected sha256 of gcsfuse_<version>_<arch>.deb for this runner's
+      arch. gcsfuse publishes no checksums on its releases, so the action
+      pins the sha256 of the default version; set this for any other one.
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
   - env:
       INPUTS_VERSION: ${{ inputs.version }}
+      INPUTS_SHA256: ${{ inputs.sha256 }}
     shell: bash
     run: |
       set -ex
 
-      # Install gcsfuse:
-      # - if version is "tip", install from tip of main.
-      # - if version is "latest-release", look up latest release.
-      # - otherwise, install the specified version.
       case "${INPUTS_VERSION}" in
-      tip)
-        echo "Installing gcsfuse using go get"
-        go install github.com/googlecloudplatform/gcsfuse@main
+      tip|latest-release)
+        echo "::error::setup-gcsfuse no longer supports version: ${INPUTS_VERSION}, since it can't be verified. Pin a version (e.g. v3.13.0), with sha256 for anything but the default."
+        exit 1
         ;;
-      latest-release)
-        tag=$(curl -s -u "username:${GITHUB_TOKEN}" https://api.github.com/repos/GoogleCloudPlatform/gcsfuse/releases/latest | jq -r '.tag_name')
-        ;;
-      *)
-        tag="${INPUTS_VERSION}"
       esac
+      tag="v${INPUTS_VERSION#v}"
 
       arch=$(uname -m)
       if [[ "$arch" =~ (aarch64|arm64) ]] ; then
@@ -43,12 +46,30 @@ runs:
         arch=amd64
       fi
 
-      if [[ ! -z ${tag} ]]; then
-        echo "Installing gcsfuse using curl @ ${tag}"
-        v=$(echo "$tag" | sed 's/^v//')
-        deb="gcsfuse_${v}_${arch}.deb"
-        curl -fLO "https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/${tag}/${deb}"
-        sudo apt install -y "./${deb}" && rm -rf "./${deb}"
+      # sha256s of the v3.13.0 .debs. They match the SHA256 fields in
+      # Google's signed apt repo (packages.cloud.google.com, gcsfuse-noble).
+      pinned_version="v3.13.0"
+      declare -A pinned_sha256=(
+        [amd64]="6052b700b0406c7b8579bd7c0d1bbb90d510ca3872167844a6af7294a69c0308"
+        [arm64]="e46bfaaca4d22df59b41ea88cbc9fde9b61861d779e4e39a063bbcb08cb08f30"
+      )
+
+      v="${tag#v}"
+      deb="gcsfuse_${v}_${arch}.deb"
+      if [[ -n "${INPUTS_SHA256}" ]]; then
+        want="${INPUTS_SHA256}"
+      elif [[ "${tag}" == "${pinned_version}" && -n "${pinned_sha256[${arch}]:-}" ]]; then
+        want="${pinned_sha256[${arch}]}"
+      else
+        echo "::error::gcsfuse ${tag} (${arch}) has no pinned sha256. Set sha256 to the sha256 of ${deb}."
+        exit 1
       fi
+
+      echo "Installing gcsfuse @ ${tag}"
+      dl="$(mktemp -d)"
+      curl -fsSL -o "${dl}/${deb}" "https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/${tag}/${deb}"
+      echo "${want}  ${dl}/${deb}" | sha256sum --check --strict
+      sudo apt install -y "${dl}/${deb}"
+      rm -rf "${dl}"
 
       gcsfuse -v

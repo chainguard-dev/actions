@@ -21,6 +21,14 @@ inputs:
       Version of the SPDX tools (eg.: 2.0.7, 1.1.8).
     default: 2.0.7
 
+  spdx-tools-sha256:
+    description: |
+      Expected sha256 of tools-java-<version>.zip. spdx/tools-java publishes
+      no checksums, so the action pins the sha256 of 2.0.7 and 1.1.8; set
+      this for any other spdx-tools-version.
+    required: false
+    default: ""
+
   download:
     description: |
       When true, the action will try to download the SPDX tools jar. Useful
@@ -41,10 +49,28 @@ runs:
     if: ${{ inputs.download == 'true' }}
     env:
       INPUTS_SPDX_TOOLS_VERSION: ${{ inputs.spdx-tools-version }}
+      INPUTS_SPDX_TOOLS_SHA256: ${{ inputs.spdx-tools-sha256 }}
     shell: bash
     run: |
-      wget --progress=dot:giga "https://github.com/spdx/tools-java/releases/download/v${INPUTS_SPDX_TOOLS_VERSION}/tools-java-${INPUTS_SPDX_TOOLS_VERSION}.zip"
-      unzip "tools-java-${INPUTS_SPDX_TOOLS_VERSION}.zip"
+      # sha256s of tools-java-<version>.zip. In each, the
+      # jar-with-dependencies matches the copy on Maven Central
+      # (org.spdx:tools-java).
+      case "${INPUTS_SPDX_TOOLS_VERSION}" in
+      2.0.7) pinned_sha256="2dc63c3399c5178058b1be8a3de6f13b9f24981cd86c4292ef98f4a7e90de36d" ;;
+      1.1.8) pinned_sha256="4fd636b2ab1ce36816f7f7681dd68d8e6baed592238bddfba26db75f14893f84" ;;
+      *)     pinned_sha256="" ;;
+      esac
+
+      zip="tools-java-${INPUTS_SPDX_TOOLS_VERSION}.zip"
+      want="${INPUTS_SPDX_TOOLS_SHA256:-${pinned_sha256}}"
+      if [[ -z "${want}" ]]; then
+        echo "::error::spdx-tools-version ${INPUTS_SPDX_TOOLS_VERSION} has no pinned sha256. Set spdx-tools-sha256 to the sha256 of ${zip}."
+        exit 1
+      fi
+
+      wget --progress=dot:giga "https://github.com/spdx/tools-java/releases/download/v${INPUTS_SPDX_TOOLS_VERSION}/${zip}"
+      echo "${want}  ${zip}" | shasum -a 256 --check --strict
+      unzip "${zip}"
   - name: Validate SBOM
     if: ${{ inputs.sbom-path != '' }}
     env:

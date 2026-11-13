@@ -1,6 +1,17 @@
 # Setup `gcsfuse`
 
-This action installs the latest `gcsfuse` binary for a particular environment.
+This action installs a pinned, sha256-verified `gcsfuse` .deb (default
+`v3.13.0`). gcsfuse publishes no checksums, so for any other version pass
+the .deb's `sha256` for the runner's arch:
+
+```yaml
+- uses: chainguard-dev/actions/setup-gcsfuse@<sha>
+  with:
+    version: v3.11.5
+    sha256: <sha256 of gcsfuse_3.11.5_amd64.deb>
+```
+
+`version: tip` and `version: latest-release` are no longer supported.
 
 ## Usage
 
