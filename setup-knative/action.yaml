@@ -79,6 +79,9 @@ runs:
   using: "composite"
 
   steps:
+    # Used to verify the signed checksums.txt of each Knative release.
+    - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
     - name: Install Knative
       id: knative
       env:
@@ -93,6 +96,62 @@ runs:
         INPUTS_SERVING_AUTOSCALER: ${{ inputs.serving-autoscaler }}
       shell: bash
       run: |
+        VERIFY_DIR="$(mktemp -d)"
+
+        # fetch_verified REPO TAG FILE downloads FILE from the knative/REPO
+        # release TAG, checks it against that release's checksums.txt (whose
+        # keyless cosign signature from Knative's release signer is checked
+        # first, once per release), and prints the verified file's path.
+        # Knative has signed its checksums since about v1.11.
+        #
+        # Callers run this as `path="$(fetch_verified ...)"`, and bash turns
+        # errexit off inside command substitution, so every step that can
+        # fail must `return 1` explicitly. Otherwise a failed signature or
+        # checksum check would fall through and still print the path.
+        function fetch_verified() {
+          local REPO="${1}" TAG="${2}" FILE="${3}"
+          local dir="${VERIFY_DIR}/${REPO}/${TAG}"
+          local base="https://github.com/knative/${REPO}/releases/download/${TAG}"
+          # -f fails on HTTP errors; --retry rides out transient
+          # release-asset blips.
+          local curl_opts=(-fsSL --retry 5 --retry-all-errors --retry-delay 2)
+
+          # A marker file, not a variable: this runs in pipeline subshells.
+          if [ ! -f "${dir}/.verified" ]; then
+            mkdir -p "${dir}" || return 1
+            local f
+            for f in checksums.txt checksums.txt.sig checksums.txt.pem; do
+              if ! curl "${curl_opts[@]}" -o "${dir}/${f}" "${base}/${f}"; then
+                echo "::error::knative/${REPO} ${TAG} has no ${f}, so it can't be verified (Knative signs releases since about v1.11)" >&2
+                return 1
+              fi
+            done
+            if ! cosign verify-blob \
+              --certificate "${dir}/checksums.txt.pem" \
+              --signature "${dir}/checksums.txt.sig" \
+              --certificate-identity signer@knative-releases.iam.gserviceaccount.com \
+              --certificate-oidc-issuer https://accounts.google.com \
+              "${dir}/checksums.txt" >&2; then
+              echo "::error::signature check failed for knative/${REPO} ${TAG} checksums.txt" >&2
+              return 1
+            fi
+            touch "${dir}/.verified" || return 1
+          fi
+
+          curl "${curl_opts[@]}" -o "${dir}/${FILE}" "${base}/${FILE}" || return 1
+          local want
+          want="$(awk -v f="${FILE}" '$2 == f { print $1 }' "${dir}/checksums.txt")" || return 1
+          if [ -z "${want}" ]; then
+            echo "::error::no checksum for ${FILE} in knative/${REPO} ${TAG} checksums.txt" >&2
+            return 1
+          fi
+          if ! echo "${want}  ${dir}/${FILE}" | shasum -a 256 --check --strict >&2; then
+            echo "::error::${FILE} from knative/${REPO} ${TAG} does not match its checksum" >&2
+            return 1
+          fi
+          echo "${dir}/${FILE}"
+        }
+
         # Eliminates the resources blocks in a release yaml
         function resource_blaster() {
           local REPO="${1}"
@@ -121,12 +180,11 @@ runs:
             REAL_KNATIVE_VERSION="knative-v${INPUTS_VERSION}"
           fi
 
-          # -f makes curl fail on HTTP errors instead of piping an error body
-          # into yq, where it would surface as a confusing YAML parse error.
-          # --retry rides out transient GitHub release-asset blips.
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-            "https://github.com/knative/${REPO}/releases/download/${REAL_KNATIVE_VERSION}/${FILE}" \
-            | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
+          # Only a verified file reaches yq and kubectl. If verification
+          # fails, kubectl gets no input and pipefail fails the step.
+          local path
+          path="$(fetch_verified "${REPO}" "${REAL_KNATIVE_VERSION}" "${FILE}")"
+          yq e 'del(.spec.template.spec.containers[]?.resources)' "${path}" \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
         }
@@ -152,6 +210,9 @@ runs:
           esac
           ISTIO_URL=${ISTIO_BASE_URL}/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-${OS}-${ARCH}.tar.gz
           wget -v "$ISTIO_URL" -O istio.tar.gz
+          # Each istio tarball has a "<sha256> <file>" .sha256 next to it.
+          wget -v "${ISTIO_URL}.sha256" -O istio.tar.gz.sha256
+          echo "$(awk '{ print $1 }' istio.tar.gz.sha256)  istio.tar.gz" | shasum -a 256 --check --strict
           tar xvzf istio.tar.gz
         }
 

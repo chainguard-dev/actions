@@ -17,18 +17,50 @@ runs:
   using: "composite"
 
   steps:
+    # Used to verify the signed checksums.txt of the Knative release.
+    - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
     - name: Install Knative
       id: knative
       env:
         INPUTS_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
-        # Eliminates the resources blocks in a release yaml
+        # Download the release's checksums.txt and check its keyless cosign
+        # signature from Knative's release signer once, up front. Knative
+        # has signed its checksums since about v1.11.
+        VERIFY_DIR="$(mktemp -d)"
+        BASE_URL="https://github.com/knative/eventing/releases/download/knative-v${INPUTS_VERSION}"
+        CURL_OPTS=(-fsSL --retry 5 --retry-all-errors --retry-delay 2)
+        for f in checksums.txt checksums.txt.sig checksums.txt.pem; do
+          if ! curl "${CURL_OPTS[@]}" -o "${VERIFY_DIR}/${f}" "${BASE_URL}/${f}"; then
+            echo "::error::knative/eventing v${INPUTS_VERSION} has no ${f}, so it can't be verified (Knative signs releases since about v1.11)"
+            exit 1
+          fi
+        done
+        cosign verify-blob \
+          --certificate "${VERIFY_DIR}/checksums.txt.pem" \
+          --signature "${VERIFY_DIR}/checksums.txt.sig" \
+          --certificate-identity signer@knative-releases.iam.gserviceaccount.com \
+          --certificate-oidc-issuer https://accounts.google.com \
+          "${VERIFY_DIR}/checksums.txt"
+
+        # Eliminates the resources blocks in a release yaml. Only a file
+        # matching the verified checksums.txt reaches yq and kubectl; on a
+        # mismatch kubectl gets no input and pipefail fails the step.
         function resource_blaster() {
           local FILE="${1}"
+          local want
 
-          curl -L -s "https://github.com/knative/eventing/releases/download/knative-v${INPUTS_VERSION}/${FILE}" \
-            | yq e 'del(.spec.template.spec.containers[]?.resources)' - \
+          curl "${CURL_OPTS[@]}" -o "${VERIFY_DIR}/${FILE}" "${BASE_URL}/${FILE}"
+          want="$(awk -v f="${FILE}" '$2 == f { print $1 }' "${VERIFY_DIR}/checksums.txt")"
+          if [ -z "${want}" ]; then
+            echo "::error::no checksum for ${FILE} in knative/eventing v${INPUTS_VERSION} checksums.txt" >&2
+            return 1
+          fi
+          echo "${want}  ${VERIFY_DIR}/${FILE}" | shasum -a 256 --check --strict >&2
+
+          yq e 'del(.spec.template.spec.containers[]?.resources)' "${VERIFY_DIR}/${FILE}" \
             `# Filter out empty objects that come out as {} b/c kubectl barfs` \
             | grep -v '^{}$'
         }
