@@ -69,9 +69,23 @@ runs:
         sudo swapoff -a
         sudo rm -f /swapfile
 
-        curl -Lo ./k3d "https://github.com/k3d-io/k3d/releases/download/v${INPUTS_K3D_VERSION}/k3d-$(uname)-amd64"
-        chmod +x ./k3d
-        sudo mv k3d /usr/local/bin
+        # Download the binary and the release's checksums.txt, and install
+        # only if the binary's sha256 matches its entry there.
+        base="https://github.com/k3d-io/k3d/releases/download/v${INPUTS_K3D_VERSION}"
+        bin="k3d-linux-amd64"
+        tmp="$(mktemp -d)"
+        curl -fsSL -o "${tmp}/${bin}" "${base}/${bin}"
+        curl -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt"
+        # Entries look like "<sha256>  _dist/k3d-linux-amd64".
+        want="$(awk -v f="${bin}" '{ n = $2; sub(".*/", "", n) } n == f { print $1 }' "${tmp}/checksums.txt")"
+        if [[ -z "${want}" ]]; then
+          echo "::error::no checksum for ${bin} in k3d v${INPUTS_K3D_VERSION} checksums.txt"
+          exit 1
+        fi
+        echo "${want}  ${tmp}/${bin}" | sha256sum --check --strict
+        chmod +x "${tmp}/${bin}"
+        sudo mv "${tmp}/${bin}" /usr/local/bin/k3d
+        rm -rf "${tmp}"
 
     - name: Create k3d cluster
       env:

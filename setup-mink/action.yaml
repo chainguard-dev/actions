@@ -21,6 +21,20 @@ runs:
         INPUTS_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
-        curl -L "https://github.com/mattmoor/mink/releases/download/v${INPUTS_VERSION}/mink_${INPUTS_VERSION}_Linux_x86_64.tar.gz" | tar xzf - -O "mink_${INPUTS_VERSION}_Linux_x86_64/mink" > ./mink
-        chmod +x ./mink
-        sudo mv mink /usr/local/bin
+        # Download the tarball and the release's checksums.txt, and extract
+        # only if the tarball's sha256 matches its entry there.
+        base="https://github.com/mattmoor/mink/releases/download/v${INPUTS_VERSION}"
+        tarball="mink_${INPUTS_VERSION}_Linux_x86_64.tar.gz"
+        tmp="$(mktemp -d)"
+        curl -fsSL -o "${tmp}/${tarball}" "${base}/${tarball}"
+        curl -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt"
+        want="$(awk -v f="${tarball}" '$2 == f { print $1 }' "${tmp}/checksums.txt")"
+        if [[ -z "${want}" ]]; then
+          echo "::error::no checksum for ${tarball} in mink v${INPUTS_VERSION} checksums.txt"
+          exit 1
+        fi
+        echo "${want}  ${tmp}/${tarball}" | sha256sum --check --strict
+        tar xzf "${tmp}/${tarball}" -C "${tmp}" "mink_${INPUTS_VERSION}_Linux_x86_64/mink"
+        chmod +x "${tmp}/mink_${INPUTS_VERSION}_Linux_x86_64/mink"
+        sudo mv "${tmp}/mink_${INPUTS_VERSION}_Linux_x86_64/mink" /usr/local/bin/mink
+        rm -rf "${tmp}"
