@@ -78,9 +78,20 @@ runs:
         sudo mkdir -p "$APK_ROOT"/{etc/apk/keys,usr/lib/apk/db,var/cache/apk}
         sudo ln -s usr/lib "$APK_ROOT/lib"
 
-        # Download extras signing key (not present in wolfi-base image)
-        curl -sSfL "$EXTRAS_REPO/chainguard-extras.rsa.pub" | sudo tee "$APK_ROOT/etc/apk/keys/chainguard-extras.rsa.pub" > /dev/null
-        echo "Downloaded Chainguard extras signing key"
+        # Download extras signing key (not present in wolfi-base image) and
+        # check it against a pinned sha256 before apk trusts it. The pin
+        # matches wolfi-dev/os chainguard-keys/chainguard-extras.rsa.pub.
+        EXTRAS_KEY_SHA256="b4880c0478da88ba3fafc9dafe61145bd6c06353bfe9eff93047dcb8dec64132"
+        EXTRAS_KEY_TMP="$(mktemp)"
+        curl -sSfL "$EXTRAS_REPO/chainguard-extras.rsa.pub" -o "$EXTRAS_KEY_TMP"
+        if ! echo "${EXTRAS_KEY_SHA256}  ${EXTRAS_KEY_TMP}" | sha256sum --check --status; then
+          echo "::error::chainguard-extras.rsa.pub from $EXTRAS_REPO does not match the pinned sha256 ${EXTRAS_KEY_SHA256}"
+          rm -f "$EXTRAS_KEY_TMP"
+          exit 1
+        fi
+        sudo install -m 0644 "$EXTRAS_KEY_TMP" "$APK_ROOT/etc/apk/keys/chainguard-extras.rsa.pub"
+        rm -f "$EXTRAS_KEY_TMP"
+        echo "Downloaded and verified Chainguard extras signing key"
 
         # Use the verified wolfi-base container to bootstrap APK into the host root
         docker run --rm -v "$APK_ROOT:$APK_ROOT" "$WOLFI_BASE_IMAGE" sh -c "
