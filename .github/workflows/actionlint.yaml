@@ -38,6 +38,6 @@ jobs:
           set -xv
           yamls=$(find . -name "*.y*ml" -not -path "*/.chainguard/source.yaml" -not -path "*/action.y*ml" -not -path "*/.github/chainguard/release.sts.yaml" -not -path "./.github/*.yml" -not -path "./.github/*.yaml" -exec echo {} +)
           echo "files=${yamls}" >> "$GITHUB_OUTPUT"
-      - uses: reviewdog/action-actionlint@78b296370c5c75abca79860e9baa9846e3286a29 # v1.84.0
+      - uses: reviewdog/action-actionlint@ae857e78c1b42b3d0a49637181b09d3d56d402b4 # v1.84.1
         with:
           actionlint_flags: ${{ steps.get_yamls.outputs.files }}
