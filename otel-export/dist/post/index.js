@@ -48349,6 +48349,11 @@ function isAnyValueInternal(val, visited) {
 	if (val instanceof Uint8Array) return true;
 	if (visited.has(val)) return false;
 	visited.add(val);
+	const isValid = isAnyValueObject(val, visited);
+	visited.delete(val);
+	return isValid;
+}
+function isAnyValueObject(val, visited) {
 	if (Array.isArray(val)) {
 		for (const item of val) if (item !== void 0 && !isAnyValueInternal(item, visited)) return false;
 		return true;
@@ -48670,7 +48675,7 @@ function getStringFromEnv(key) {
 }
 
 //#region src/version.ts
-const VERSION$3 = "3.0.0";
+const VERSION$3 = "3.1.1";
 
 //#region src/semconv.ts
 /**
@@ -49216,7 +49221,7 @@ var MetricReaderMetrics = class {
 };
 
 //#region src/version.ts
-const VERSION$2 = "3.0.0";
+const VERSION$2 = "3.1.1";
 
 //#region src/export/MetricReader.ts
 /**
@@ -51207,7 +51212,7 @@ const ATTR_SERVER_PORT = "server.port";
 const ATTR_ERROR_TYPE = "error.type";
 
 //#region src/version.ts
-const VERSION$1 = "0.300.0";
+const VERSION$1 = "0.301.2";
 
 //#region src/ExporterMetrics.ts
 const componentCounter$1 = /* @__PURE__ */ new Map();
@@ -51368,6 +51373,11 @@ const TraceExporterMetricsHelper = {
 	countItems: (request) => request.length
 };
 
+//#region src/platform/node/base64.ts
+function encodeBase64(bytes) {
+	return Buffer.from(bytes).toString("base64");
+}
+
 //#region src/common/internal.ts
 function createResource(resource, encoder) {
 	const result = {
@@ -51422,11 +51432,6 @@ function toAnyValue(value, encoder) {
 		return { kvlistValue: { values } };
 	}
 	return {};
-}
-
-//#region src/platform/node/base64.ts
-function encodeBase64(bytes) {
-	return Buffer.from(bytes).toString("base64");
 }
 
 //#region src/common/utils.ts
@@ -52746,7 +52751,7 @@ function samplingDecisionToString(decision) {
 }
 
 //#region src/version.ts
-const VERSION = "3.0.0";
+const VERSION = "3.1.1";
 
 //#region src/Tracer.ts
 const NO_ATTR_LIMITS = {
@@ -53078,14 +53083,14 @@ var BatchSpanProcessorBase = class {
 				});
 				let pendingResources = null;
 				for (let i = 0, len = spans.length; i < len; i++) {
-					const span = spans[i];
-					if (span.resource.asyncAttributesPending && span.resource.waitForAsyncAttributes) {
-						pendingResources ??= [];
-						pendingResources.push(span.resource.waitForAsyncAttributes());
+					const resource = spans[i].resource;
+					if (resource.asyncAttributesPending && resource.waitForAsyncAttributes) {
+						pendingResources ??= /* @__PURE__ */ new Set();
+						pendingResources.add(resource);
 					}
 				}
 				if (pendingResources === null) doExport();
-				else Promise.all(pendingResources).then(doExport, (err) => {
+				else Promise.all(Array.from(pendingResources, (resource) => resource.waitForAsyncAttributes?.())).then(doExport, (err) => {
 					globalErrorHandler(err);
 					reject(err);
 				});
