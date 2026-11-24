@@ -2,6 +2,10 @@
 
 This action spins up a KinD cluster with a handful of useful knobs exposed.
 
+Before creating the cluster, it raises the host's `fs.inotify.max_user_instances`
+to at least 8192 because KinD nodes share the host's per-user inotify instance
+quota. Higher existing limits and `fs.inotify.max_user_watches` are left unchanged.
+
 ## Usage
 
 ```yaml
